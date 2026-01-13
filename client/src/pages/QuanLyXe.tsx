@@ -877,7 +877,7 @@ export default function QuanLyXe() {
                   mode={viewMode === "view" ? "create" : viewMode}
                   onClose={() => {
                     setDialogOpen(false)
-                    loadData()
+                    loadData(true) // Force refresh to show new/updated vehicle
                   }}
                 />
               )}
