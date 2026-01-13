@@ -17,6 +17,7 @@ import type { Operator } from "@/features/fleet/operators/types"
 import { Eye, EyeOff, Upload } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import api from "@/lib/api"
+import { quanlyDataService } from "@/services/quanly-data.service"
 
 const vehicleSchema = z.object({
   plateNumber: z.string().min(1, "Biển số là bắt buộc"),
@@ -340,9 +341,11 @@ export function VehicleForm({
 
       if (mode === "create") {
         await vehicleService.create(submitData as VehicleInput)
+        quanlyDataService.clearCache() // Clear cache to show new vehicle
         toast.success("Thêm xe thành công!")
       } else if (vehicle) {
         await vehicleService.update(vehicle.id, submitData)
+        quanlyDataService.clearCache() // Clear cache to show updated vehicle
         toast.success("Cập nhật xe thành công!")
       }
       onClose()
