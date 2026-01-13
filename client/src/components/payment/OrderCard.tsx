@@ -36,9 +36,9 @@ interface OrderCardProps {
 }
 
 export function OrderCard({ item, isSelected, onSelect, onNavigate }: OrderCardProps) {
-  const isPaid = item.currentStatus === 'paid' || item.currentStatus === 'departed';
+  const isPaid = !!item.paymentTime || item.currentStatus === 'paid' || item.currentStatus === 'departure_ordered' || item.currentStatus === 'departed';
   const status = isPaid
-    ? (item.currentStatus === 'paid' ? statusConfig.paid : statusConfig.departed)
+    ? (item.currentStatus === 'departed' ? statusConfig.departed : statusConfig.paid)
     : statusConfig.pending;
   const StatusIcon = status.icon;
 

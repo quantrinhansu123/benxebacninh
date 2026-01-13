@@ -84,11 +84,11 @@ export const TrendStatCard = memo(function TrendStatCard({
       </div>
 
       {/* Value */}
-      <div className="mb-1">
+      <div className="mb-1 min-w-0">
         {isLoading ? (
           <div className="h-8 w-20 bg-stone-200 rounded animate-pulse" />
         ) : (
-          <p className="text-[28px] font-bold text-stone-900 leading-tight">
+          <p className="text-[28px] font-bold text-stone-900 leading-tight truncate" title={typeof value === "string" ? value : formatValue(numericValue)}>
             {typeof value === "string" ? value : formatValue(animatedValue)}
           </p>
         )}

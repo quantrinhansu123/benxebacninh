@@ -3,6 +3,7 @@
  * Provides caching, deduplication, and background refresh for API calls
  */
 
+import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
 
 interface CacheEntry<T> {
@@ -185,7 +186,7 @@ export const cacheKeys = {
   locations: () => 'locations',
 }
 
-// Hook for cached queries
+// Hook for cached queries - fixed to avoid setState during render
 export function useCachedQuery<T>(
   key: string,
   fetcher: () => Promise<T>,
@@ -193,18 +194,24 @@ export function useCachedQuery<T>(
 ) {
   const { ttl, staleTime, enabled = true } = options
   const { fetchWithCache, get: getCached, isStale } = useQueryCache()
-  
+
+  // Use ref to store latest fetcher to avoid stale closure issues
+  const fetcherRef = useRef(fetcher)
+  fetcherRef.current = fetcher
+
   const cachedData = getCached<T>(key)
   const needsFetch = enabled && (cachedData === undefined || isStale(key, staleTime || ttl || CACHE_TTL.MEDIUM))
-  
-  // Start fetch if needed (will be deduplicated)
-  if (needsFetch) {
-    fetchWithCache(key, fetcher, { ttl, staleTime })
-  }
-  
+
+  // Move fetch to useEffect to avoid setState during render
+  useEffect(() => {
+    if (needsFetch) {
+      fetchWithCache(key, () => fetcherRef.current(), { ttl, staleTime })
+    }
+  }, [needsFetch, key, fetchWithCache, ttl, staleTime])
+
   return {
     data: cachedData,
     isLoading: needsFetch && cachedData === undefined,
-    refetch: () => fetchWithCache(key, fetcher, { ttl, staleTime, forceRefresh: true }),
+    refetch: () => fetchWithCache(key, () => fetcherRef.current(), { ttl, staleTime, forceRefresh: true }),
   }
 }
