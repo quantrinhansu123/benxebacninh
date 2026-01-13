@@ -91,3 +91,4 @@ server/docs/archived/
 # Claude temp files
 tmpclaude-*
 **/tmpclaude-*
+package-lock.json
