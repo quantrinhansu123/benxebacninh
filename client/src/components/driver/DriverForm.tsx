@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -277,13 +278,23 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
     }
   }
 
-  const filteredOperators = operators.filter((operator) => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      return operator.name.toLowerCase().includes(query) || 
-             operator.code.toLowerCase().includes(query)
-    }
-    return true
+  const filteredOperators = useMemo(() => {
+    if (!searchQuery) return operators
+    const query = searchQuery.toLowerCase()
+    return operators.filter((operator) =>
+      operator.name.toLowerCase().includes(query) ||
+      operator.code.toLowerCase().includes(query)
+    )
+  }, [operators, searchQuery])
+
+  // Ref for virtualizer container
+  const operatorListRef = useRef<HTMLDivElement>(null)
+
+  const virtualizer = useVirtualizer({
+    count: filteredOperators.length,
+    getScrollElement: () => operatorListRef.current,
+    estimateSize: () => 40, // estimated row height
+    overscan: 5, // render 5 extra items above/below viewport
   })
 
   const handleOperatorToggle = (operatorId: string) => {
@@ -421,14 +432,17 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
         province: data.province || undefined,
         district: data.district || undefined,
         address: fullAddress,
-        imageUrl: data.imageUrl || undefined,
+        // Explicitly send null when image is removed to clear it in database
+        imageUrl: data.imageUrl === "" ? null : (data.imageUrl || undefined),
       }
 
       if (mode === "create") {
         await driverService.create(driverData)
+        driverService.clearCache() // Clear cache to show new data
         toast.success("Thêm lái xe thành công")
       } else if (driver) {
         await driverService.update(driver.id, driverData)
+        driverService.clearCache() // Clear cache to show updated data
         toast.success("Cập nhật lái xe thành công")
       }
       onClose()
@@ -741,7 +755,7 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
               {/* Column 2a - Operator selection */}
               <div className="space-y-2">
                 <Label>Doanh nghiệp vận tải <span className="text-red-500">*</span></Label>
-                <div className="border rounded-md p-4 space-y-2 h-[400px] overflow-y-auto">
+                <div className="border rounded-md p-4 space-y-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input
@@ -751,35 +765,58 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
-                  <div className="space-y-2">
+                  {/* Virtualized operator list */}
+                  <div
+                    ref={operatorListRef}
+                    className="h-[300px] overflow-y-auto"
+                  >
                     {filteredOperators.length === 0 ? (
                       <p className="text-sm text-gray-500 text-center py-4">
                         Không có dữ liệu
                       </p>
                     ) : (
-                      filteredOperators.map((operator) => (
-                        <div 
-                          key={operator.id}
-                          className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded"
-                        >
-                          <input 
-                            type="checkbox" 
-                            id={`operator-${operator.id}`}
-                            className="h-4 w-4"
-                            checked={selectedOperatorIds.includes(operator.id)}
-                            onChange={() => handleOperatorToggle(operator.id)}
-                          />
-                          <Label 
-                            htmlFor={`operator-${operator.id}`}
-                            className="font-normal flex-1 cursor-pointer text-sm"
-                          >
-                            {operator.name}
-                            {operator.code && (
-                              <span className="text-gray-500 ml-2">({operator.code})</span>
-                            )}
-                          </Label>
-                        </div>
-                      ))
+                      <div
+                        style={{
+                          height: `${virtualizer.getTotalSize()}px`,
+                          width: '100%',
+                          position: 'relative',
+                        }}
+                      >
+                        {virtualizer.getVirtualItems().map((virtualRow) => {
+                          const operator = filteredOperators[virtualRow.index]
+                          return (
+                            <div
+                              key={operator.id}
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: `${virtualRow.size}px`,
+                                transform: `translateY(${virtualRow.start}px)`,
+                              }}
+                              className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded"
+                            >
+                              <input
+                                type="checkbox"
+                                id={`operator-${operator.id}`}
+                                className="h-4 w-4 flex-shrink-0"
+                                checked={selectedOperatorIds.includes(operator.id)}
+                                onChange={() => handleOperatorToggle(operator.id)}
+                              />
+                              <Label
+                                htmlFor={`operator-${operator.id}`}
+                                className="font-normal flex-1 cursor-pointer text-sm truncate"
+                              >
+                                {operator.name}
+                                {operator.code && (
+                                  <span className="text-gray-500 ml-2">({operator.code})</span>
+                                )}
+                              </Label>
+                            </div>
+                          )
+                        })}
+                      </div>
                     )}
                   </div>
                   <div className="pt-2 border-t text-sm text-gray-600">

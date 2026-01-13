@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select } from "@/components/ui/select"
 import { operatorService } from "@/services/operator.service"
+import { quanlyDataService } from "@/services/quanly-data.service"
 import { Operator, OperatorInput } from "@/types"
 import { provinceService, type Province, type District } from "@/services/province.service"
 
@@ -290,6 +291,7 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
 
       if (mode === "create") {
         await operatorService.create(operatorData)
+        quanlyDataService.clearCache() // Clear cache to show new data
         toast.success("Thêm đơn vị vận tải thành công")
       } else if (operator && mode === "edit") {
         // Use legacy endpoint for Google Sheets data
@@ -298,6 +300,7 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
         } else {
           await operatorService.update(operator.id, operatorData)
         }
+        quanlyDataService.clearCache() // Clear cache to show updated data
         toast.success("Cập nhật đơn vị vận tải thành công")
       }
       onClose()

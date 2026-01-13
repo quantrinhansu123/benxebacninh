@@ -63,7 +63,7 @@ export const createDriverSchema = z.object({
   licenseNumber: z.string().min(1, 'License number is required'),
   licenseClass: z.string().min(1, 'License class is required'),
   licenseExpiryDate: z.string().min(1, 'License expiry date is required'),
-  imageUrl: z.string().url().optional().or(z.literal('')),
+  imageUrl: z.string().url().optional().or(z.literal('')).nullable(),
 })
 
 export const updateDriverSchema = createDriverSchema.partial()

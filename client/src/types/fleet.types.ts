@@ -174,7 +174,7 @@ export interface DriverInput {
   licenseNumber: string
   licenseClass: string
   licenseExpiryDate: string
-  imageUrl?: string
+  imageUrl?: string | null // null to explicitly remove image
 }
 
 // ==================== Vehicle Badge Types ====================
