@@ -35,12 +35,13 @@ import {
   PaymentSidebar,
   ZeroAmountWarningDialog,
 } from "@/components/payment";
-import { useCachedQuery, CACHE_TTL } from "@/lib/query-cache";
+import { useCachedQuery, CACHE_TTL, useQueryCache } from "@/lib/query-cache";
 
 export default function ThanhToan() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const setTitle = useUIStore((state) => state.setTitle);
+  const invalidateCache = useQueryCache((state) => state.invalidate);
 
   // Detail view state
   const [record, setRecord] = useState<DispatchRecord | null>(null);
@@ -69,7 +70,7 @@ export default function ThanhToan() {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     sevenDaysAgo.setHours(0, 0, 0, 0);
     return allDispatchRecords.filter(record => {
-      const isPaidOrDeparted = record.currentStatus === 'paid' || record.currentStatus === 'departed';
+      const isPaidOrDeparted = record.currentStatus === 'paid' || record.currentStatus === 'departure_ordered' || record.currentStatus === 'departed';
       // Use payment_time for paid/departed records, entry_time for others
       const relevantTime = isPaidOrDeparted && record.paymentTime
         ? new Date(record.paymentTime)
@@ -116,15 +117,18 @@ export default function ThanhToan() {
     return filtered;
   }, [allData, dateRange, searchQuery]);
 
-  // Calculate stats
-  const stats = useMemo(() => ({
-    total: listData.length,
-    pending: listData.filter(i => i.currentStatus !== 'paid' && i.currentStatus !== 'departed').length,
-    paid: listData.filter(i => i.currentStatus === 'paid' || i.currentStatus === 'departed').length,
-    totalAmount: listData
-      .filter(i => i.currentStatus === 'paid' || i.currentStatus === 'departed')
-      .reduce((sum, i) => sum + (i.paymentAmount || 0), 0)
-  }), [listData]);
+  // Calculate stats - check paymentTime or status for paid determination
+  const stats = useMemo(() => {
+    const isPaidItem = (i: DispatchRecord) => !!i.paymentTime || i.currentStatus === 'paid' || i.currentStatus === 'departure_ordered' || i.currentStatus === 'departed';
+    return {
+      total: listData.length,
+      pending: listData.filter(i => !isPaidItem(i)).length,
+      paid: listData.filter(i => isPaidItem(i)).length,
+      totalAmount: listData
+        .filter(i => isPaidItem(i))
+        .reduce((sum, i) => sum + (i.paymentAmount || 0), 0)
+    };
+  }, [listData]);
 
   useEffect(() => {
     if (id) {
@@ -142,7 +146,7 @@ export default function ThanhToan() {
       const newSet = new Set<string>();
       prev.forEach(itemId => {
         const item = listData.find(i => i.id === itemId);
-        if (item && item.currentStatus !== 'paid' && item.currentStatus !== 'departed') {
+        if (item && !item.paymentTime && item.currentStatus !== 'paid' && item.currentStatus !== 'departure_ordered' && item.currentStatus !== 'departed') {
           newSet.add(itemId);
         }
       });
@@ -267,6 +271,8 @@ export default function ThanhToan() {
     try {
       await dispatchService.processPayment(record.id, { paymentAmount: total, paymentMethod: 'cash' });
       console.log('[ThanhToan] Payment successful');
+      // Invalidate cache to ensure list view shows updated data
+      invalidateCache('thanhtoan-dispatch-list');
       toast.success("Thanh toán thành công!");
       navigate("/thanh-toan");
     } catch (error) {
@@ -289,12 +295,12 @@ export default function ThanhToan() {
 
   const handleCancel = async () => {
     if (!record) return;
-    
+
     const reason = window.prompt(
       "Bạn có chắc chắn muốn hủy bỏ record này?\n\nNhập lý do hủy (bắt buộc):",
       ""
     );
-    
+
     if (reason === null) return; // User clicked Cancel
     if (!reason.trim()) {
       toast.warning("Vui lòng nhập lý do hủy");
@@ -303,6 +309,8 @@ export default function ThanhToan() {
 
     try {
       await dispatchService.cancel(record.id, reason.trim());
+      // Invalidate cache to ensure list view shows updated data
+      invalidateCache('thanhtoan-dispatch-list');
       toast.success("Đã hủy bỏ record thành công");
       navigate("/thanh-toan");
     } catch (error: unknown) {
