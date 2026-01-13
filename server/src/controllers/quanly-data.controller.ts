@@ -163,9 +163,9 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         })
       }
 
-      // Filter vehicles by allowed plates (Drizzle data is array)
-      // If no badges found, return ALL vehicles (fallback for initial setup or empty badge data)
-      const shouldFilterByBadges = allowedPlates.size > 0
+      // Include ALL vehicles (removed badge-based filtering)
+      // Previous logic was too strict - excluded vehicles without badges
+      // Vehicles created manually should also appear in the list
       const vehiclesByPlate = new Map<string, any[]>()
       for (const vehicle of vehicleData) {
         const v = vehicle as any
@@ -174,9 +174,6 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
 
         // Skip if no plate number
         if (!plateNumber) continue
-
-        // If we have badges, filter by allowed plates; otherwise include all
-        if (shouldFilterByBadges && !allowedPlates.has(normalizedPlate)) continue
 
         if (!vehiclesByPlate.has(normalizedPlate)) {
           vehiclesByPlate.set(normalizedPlate, [])
@@ -264,7 +261,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
 
       const loadTime = Date.now() - startTime
       console.log(`[QuanLyData] Loaded ${badges.length} badges, ${vehicles.length} vehicles, ${operators.length} operators, ${routes.length} routes in ${loadTime}ms (source: Drizzle ORM)`)
-      console.log(`[QuanLyData] Debug: ${allowedPlates.size} allowed plates from badges, ${vehicleData.length} total vehicles in database, filter=${shouldFilterByBadges ? 'by-badges' : 'all-vehicles'}`)
+      console.log(`[QuanLyData] Debug: ${allowedPlates.size} allowed plates from badges, ${vehicleData.length} total vehicles in database, filter=all-vehicles`)
       console.log(`[QuanLyData] Debug: vehiclesByPlate unique plates = ${vehiclesByPlate.size}, final vehicles array = ${vehicles.length}`)
       
       // Log first 5 plates for debugging
