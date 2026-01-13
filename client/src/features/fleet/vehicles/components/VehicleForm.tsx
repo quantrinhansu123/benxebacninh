@@ -352,7 +352,17 @@ export function VehicleForm({
     } catch (error: any) {
       console.error("Failed to save vehicle:", error)
       console.error("Error response:", error.response?.data)
-      const errorMsg = error.response?.data?.message || error.response?.data?.error || "Có lỗi xảy ra khi lưu thông tin xe"
+
+      // Map English error messages to Vietnamese
+      const serverError = error.response?.data?.message || error.response?.data?.error || ""
+      let errorMsg = "Có lỗi xảy ra khi lưu thông tin xe"
+
+      if (error.response?.status === 409 || serverError.includes("already exists")) {
+        errorMsg = "Biển số xe đã tồn tại trong hệ thống!"
+      } else if (serverError) {
+        errorMsg = serverError
+      }
+
       toast.error(errorMsg)
     }
   }
