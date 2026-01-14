@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "react-toastify"
+import { AlertTriangle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,6 +51,10 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
   const isInitialMount = useRef(true)
   const isLoadingDistrictsRef = useRef(false)
 
+  // State for tax code duplicate warning
+  const [taxCodeWarning, setTaxCodeWarning] = useState<string | null>(null)
+  const taxCodeCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   const {
     register,
     handleSubmit,
@@ -81,6 +86,56 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
   const isTicketDelegated = watch("isTicketDelegated")
   const watchProvince = watch("province")
   const watchDistrict = watch("district")
+  const watchTaxCode = watch("taxCode")
+
+  // Check tax code for duplicates with debounce
+  const checkTaxCodeDuplicate = useCallback(async (taxCode: string) => {
+    if (!taxCode || taxCode.length < 3) {
+      setTaxCodeWarning(null)
+      return
+    }
+
+    try {
+      const result = await operatorService.checkTaxCode(taxCode, operator?.id)
+      if (result.exists) {
+        setTaxCodeWarning(`Mã số thuế đã được sử dụng bởi: ${result.operatorName}`)
+      } else {
+        setTaxCodeWarning(null)
+      }
+    } catch {
+      setTaxCodeWarning(null)
+    }
+  }, [operator?.id])
+
+  // Watch tax code changes with debounce
+  useEffect(() => {
+    if (taxCodeCheckTimeoutRef.current) {
+      clearTimeout(taxCodeCheckTimeoutRef.current)
+    }
+
+    if (watchTaxCode && watchTaxCode.length >= 3) {
+      taxCodeCheckTimeoutRef.current = setTimeout(() => {
+        checkTaxCodeDuplicate(watchTaxCode)
+      }, 500)
+    } else {
+      setTaxCodeWarning(null)
+    }
+
+    return () => {
+      if (taxCodeCheckTimeoutRef.current) {
+        clearTimeout(taxCodeCheckTimeoutRef.current)
+      }
+    }
+  }, [watchTaxCode, checkTaxCodeDuplicate])
+
+  // Load next operator code in create mode
+  useEffect(() => {
+    if (mode === "create") {
+      operatorService.getNextCode().then((code) => {
+        setValue("code", code)
+      })
+    }
+  }, [mode, setValue])
 
   // Hàm normalize tên tỉnh để tìm kiếm gần đúng
   const normalizeProvinceName = (name: string): string => {
@@ -338,14 +393,29 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div className="space-y-2">
-              <Label htmlFor="code">Mã đơn vị <span className="text-red-500">*</span></Label>
-              <Input id="code" {...register("code")} placeholder="DV001" />
+              <Label htmlFor="code">
+                Mã đơn vị <span className="text-red-500">*</span>
+                {mode === "create" && <span className="text-gray-400 text-xs ml-2">(Mã này tự sinh)</span>}
+              </Label>
+              <Input
+                id="code"
+                {...register("code")}
+                placeholder="DV001"
+                readOnly={mode === "create"}
+                className={mode === "create" ? "bg-gray-50 text-gray-600" : ""}
+              />
               {errors.code && <p className="text-sm text-red-500">{errors.code.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="taxCode">Mã số thuế <span className="text-red-500">*</span></Label>
               <Input id="taxCode" {...register("taxCode")} />
               {errors.taxCode && <p className="text-sm text-red-500">{errors.taxCode.message}</p>}
+              {taxCodeWarning && (
+                <div className="flex items-center gap-2 text-amber-600 text-sm bg-amber-50 p-2 rounded-md border border-amber-200">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <span>{taxCodeWarning}</span>
+                </div>
+              )}
             </div>
           </div>
 

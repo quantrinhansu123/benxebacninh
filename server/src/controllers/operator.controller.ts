@@ -2,7 +2,7 @@ import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
 import { operators } from '../db/schema/operators.js'
 import { vehicleBadges } from '../db/schema/vehicle-badges.js'
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, like } from 'drizzle-orm'
 import { z } from 'zod'
 
 // Cache for legacy operators
@@ -24,6 +24,80 @@ const operatorSchema = z.object({
   representativeName: z.string().optional(),
   representativePosition: z.string().optional(),
 })
+
+/**
+ * Get the next available operator code (DV001, DV002...)
+ */
+export const getNextOperatorCode = async (_req: Request, res: Response) => {
+  try {
+    if (!db) throw new Error('Database not initialized')
+
+    // Get all operators with codes starting with 'DV'
+    const existingCodes = await db
+      .select({ code: operators.code })
+      .from(operators)
+      .where(like(operators.code, 'DV%'))
+
+    // Extract numeric parts and find the max
+    let maxNum = 0
+    for (const op of existingCodes) {
+      const match = op.code.match(/^DV(\d+)$/)
+      if (match) {
+        const num = parseInt(match[1], 10)
+        if (num > maxNum) maxNum = num
+      }
+    }
+
+    // Generate next code with padding (DV001, DV002...)
+    const nextNum = maxNum + 1
+    const nextCode = `DV${String(nextNum).padStart(3, '0')}`
+
+    return res.json({ code: nextCode })
+  } catch (error) {
+    console.error('Error generating next operator code:', error)
+    return res.status(500).json({ error: 'Failed to generate next code' })
+  }
+}
+
+/**
+ * Check if a tax code already exists (for duplicate warning)
+ */
+export const checkTaxCodeExists = async (req: Request, res: Response) => {
+  try {
+    if (!db) throw new Error('Database not initialized')
+
+    const { taxCode, excludeId } = req.query
+
+    if (!taxCode || typeof taxCode !== 'string') {
+      return res.json({ exists: false })
+    }
+
+    // Check if tax code exists (optionally excluding a specific operator by ID)
+    let query = db
+      .select({ id: operators.id, name: operators.name })
+      .from(operators)
+      .where(eq(operators.taxCode, taxCode))
+
+    const results = await query
+
+    // Filter out the excluded ID if provided
+    const filtered = excludeId
+      ? results.filter(op => op.id !== excludeId)
+      : results
+
+    if (filtered.length > 0) {
+      return res.json({
+        exists: true,
+        operatorName: filtered[0].name,
+      })
+    }
+
+    return res.json({ exists: false })
+  } catch (error) {
+    console.error('Error checking tax code:', error)
+    return res.status(500).json({ error: 'Failed to check tax code' })
+  }
+}
 
 export const getAllOperators = async (req: Request, res: Response) => {
   try {

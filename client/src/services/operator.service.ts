@@ -37,6 +37,34 @@ export const operatorService = {
     return response.data
   },
 
+  /**
+   * Get next available operator code (DV001, DV002...)
+   */
+  getNextCode: async (): Promise<string> => {
+    try {
+      const response = await api.get<{ code: string }>('/operators/next-code')
+      return response.data.code
+    } catch (error) {
+      console.error('Error getting next operator code:', error)
+      return 'DV001'
+    }
+  },
+
+  /**
+   * Check if a tax code already exists
+   */
+  checkTaxCode: async (taxCode: string, excludeId?: string): Promise<{ exists: boolean; operatorName?: string }> => {
+    try {
+      const params = new URLSearchParams({ taxCode })
+      if (excludeId) params.append('excludeId', excludeId)
+      const response = await api.get<{ exists: boolean; operatorName?: string }>(`/operators/check-tax-code?${params}`)
+      return response.data
+    } catch (error) {
+      console.error('Error checking tax code:', error)
+      return { exists: false }
+    }
+  },
+
   create: async (input: OperatorInput): Promise<Operator> => {
     const response = await api.post<Operator>('/operators', input)
     return response.data
