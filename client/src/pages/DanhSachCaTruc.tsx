@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { toast } from "react-toastify"
-import { Plus, Search, Edit, Trash2, Clock, FileSpreadsheet } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Clock, FileSpreadsheet, TrendingUp, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -83,6 +83,12 @@ export default function DanhSachCaTruc() {
     }
     return true
   })
+
+  // Statistics
+  const stats = useMemo(() => ({
+    total: shifts.length,
+    filtered: filteredShifts.length,
+  }), [shifts.length, filteredShifts.length])
 
   const handleCreate = () => {
     setSelectedShift(null)
@@ -181,19 +187,103 @@ export default function DanhSachCaTruc() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="outline"
-          onClick={handleExportExcel}
-          disabled={isLoading || filteredShifts.length === 0}
-        >
-          <FileSpreadsheet className="mr-2 h-4 w-4" />
-          Xuất Excel
-        </Button>
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Thêm ca trực
-        </Button>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 shadow-lg shadow-sky-500/30">
+            <Clock className="h-8 w-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+              Danh sách ca trực
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">
+              Quản lý thời gian ca làm việc
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button onClick={loadShifts} disabled={isLoading} variant="outline" className="px-4 py-2.5 rounded-xl">
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            Làm mới
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportExcel}
+            disabled={isLoading || filteredShifts.length === 0}
+            className="px-4 py-2.5 rounded-xl"
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Xuất Excel
+          </Button>
+          <Button onClick={handleCreate} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-semibold hover:from-sky-600 hover:to-blue-700 shadow-lg shadow-sky-500/30">
+            <Plus className="mr-2 h-4 w-4" />
+            Thêm ca trực
+          </Button>
+        </div>
+      </div>
+
+      {/* Hero Stats */}
+      <div className="grid grid-cols-12 gap-4">
+        {/* Primary Stat - Hero Card */}
+        <div className="col-span-12 lg:col-span-5 bg-gradient-to-br from-sky-500 via-sky-600 to-blue-600 rounded-3xl p-8 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+          <div className="relative">
+            <div className="flex items-center gap-2 text-sky-100 mb-2">
+              <Clock className="h-5 w-5" />
+              <span className="text-sm font-medium uppercase tracking-wider">Tổng ca trực</span>
+            </div>
+            <p className="text-6xl font-bold tracking-tight">{stats.total.toLocaleString()}</p>
+            <div className="flex items-center gap-2 mt-4 text-sky-100">
+              <TrendingUp className="w-4 h-4" />
+              <span className="text-sm">Đang quản lý trong hệ thống</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary Stats */}
+        <div className="col-span-12 lg:col-span-7 grid grid-cols-2 gap-4">
+          {/* Filtered Results */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 rounded-xl bg-amber-100 group-hover:bg-amber-500 transition-colors">
+                <Search className="w-4 h-4 text-amber-600 group-hover:text-white transition-colors" />
+              </div>
+              {searchQuery && (
+                <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                  Đang lọc
+                </span>
+              )}
+            </div>
+            <p className="text-3xl font-bold text-slate-800">{stats.filtered.toLocaleString()}</p>
+            <p className="text-sm text-slate-500 mt-1">Kết quả hiển thị</p>
+            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-500"
+                style={{ width: `${stats.total > 0 ? (stats.filtered / stats.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Placeholder Info Card */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 rounded-xl bg-emerald-100 group-hover:bg-emerald-500 transition-colors">
+                <Clock className="w-4 h-4 text-emerald-600 group-hover:text-white transition-colors" />
+              </div>
+            </div>
+            <p className="text-3xl font-bold text-slate-800">{stats.total.toLocaleString()}</p>
+            <p className="text-sm text-slate-500 mt-1">Ca đang hoạt động</p>
+            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: "100%" }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Search */}

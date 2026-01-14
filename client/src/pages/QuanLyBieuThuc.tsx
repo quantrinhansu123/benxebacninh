@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { toast } from "react-toastify"
-import { Plus, Search, Edit, Eye, Trash2, RefreshCw, ChevronDown, ChevronUp, Filter } from "lucide-react"
+import { Plus, Search, Edit, Eye, Trash2, RefreshCw, ChevronDown, ChevronUp, Calculator, DollarSign, TrendingUp, CheckCircle, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -125,20 +125,139 @@ export default function QuanLyBieuThuc() {
   const quantityFormulas = filteredFormulas('quantity')
   const priceFormulas = filteredFormulas('price')
 
+  // Statistics
+  const stats = useMemo(() => ({
+    total: formulas.length,
+    quantity: quantityFormulas.length,
+    price: priceFormulas.length,
+    active: formulas.filter(f => f.isActive).length,
+    inactive: formulas.filter(f => !f.isActive).length,
+  }), [formulas, quantityFormulas.length, priceFormulas.length])
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Quản lý biểu thức</h1>
-          <p className="text-gray-600 mt-1">Quản lý biểu thức tính số lượng và tính đơn giá</p>
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/30">
+            <Calculator className="h-8 w-8 text-white" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+              Quản lý biểu thức
+            </h1>
+            <p className="text-slate-500 text-sm mt-1">
+              Quản lý biểu thức tính số lượng và tính đơn giá
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" title="Làm mới" onClick={loadFormulas}>
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" title="Lọc">
-            <Filter className="h-4 w-4" />
-          </Button>
+
+        <Button onClick={loadFormulas} disabled={isLoading} variant="outline" className="px-4 py-2.5 rounded-xl">
+          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          Làm mới
+        </Button>
+      </div>
+
+      {/* Hero Stats */}
+      <div className="grid grid-cols-12 gap-4">
+        {/* Primary Stat - Hero Card */}
+        <div className="col-span-12 lg:col-span-4 bg-gradient-to-br from-violet-500 via-violet-600 to-purple-600 rounded-3xl p-8 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+          <div className="relative">
+            <div className="flex items-center gap-2 text-violet-100 mb-2">
+              <Calculator className="h-5 w-5" />
+              <span className="text-sm font-medium uppercase tracking-wider">Tổng biểu thức</span>
+            </div>
+            <p className="text-6xl font-bold tracking-tight">{stats.total.toLocaleString()}</p>
+            <div className="flex items-center gap-2 mt-4 text-violet-100">
+              <TrendingUp className="w-4 h-4" />
+              <span className="text-sm">Đang quản lý trong hệ thống</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Secondary Stats */}
+        <div className="col-span-12 lg:col-span-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Quantity */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 rounded-xl bg-blue-100 group-hover:bg-blue-500 transition-colors">
+                <Calculator className="w-4 h-4 text-blue-600 group-hover:text-white transition-colors" />
+              </div>
+              <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+                {stats.total > 0 ? Math.round((stats.quantity / stats.total) * 100) : 0}%
+              </span>
+            </div>
+            <p className="text-3xl font-bold text-slate-800">{stats.quantity.toLocaleString()}</p>
+            <p className="text-sm text-slate-500 mt-1">Tính số lượng</p>
+            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-blue-400 to-blue-500 rounded-full transition-all duration-500"
+                style={{ width: `${stats.total > 0 ? (stats.quantity / stats.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Price */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 rounded-xl bg-green-100 group-hover:bg-green-500 transition-colors">
+                <DollarSign className="w-4 h-4 text-green-600 group-hover:text-white transition-colors" />
+              </div>
+              <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                {stats.total > 0 ? Math.round((stats.price / stats.total) * 100) : 0}%
+              </span>
+            </div>
+            <p className="text-3xl font-bold text-slate-800">{stats.price.toLocaleString()}</p>
+            <p className="text-sm text-slate-500 mt-1">Tính đơn giá</p>
+            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-green-400 to-green-500 rounded-full transition-all duration-500"
+                style={{ width: `${stats.total > 0 ? (stats.price / stats.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Active */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 rounded-xl bg-emerald-100 group-hover:bg-emerald-500 transition-colors">
+                <CheckCircle className="w-4 h-4 text-emerald-600 group-hover:text-white transition-colors" />
+              </div>
+              <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}%
+              </span>
+            </div>
+            <p className="text-3xl font-bold text-slate-800">{stats.active.toLocaleString()}</p>
+            <p className="text-sm text-slate-500 mt-1">Đang áp dụng</p>
+            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${stats.total > 0 ? (stats.active / stats.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Inactive */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 rounded-xl bg-rose-100 group-hover:bg-rose-500 transition-colors">
+                <XCircle className="w-4 h-4 text-rose-600 group-hover:text-white transition-colors" />
+              </div>
+              <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-1 rounded-full">
+                {stats.total > 0 ? Math.round((stats.inactive / stats.total) * 100) : 0}%
+              </span>
+            </div>
+            <p className="text-3xl font-bold text-slate-800">{stats.inactive.toLocaleString()}</p>
+            <p className="text-sm text-slate-500 mt-1">Ngừng áp dụng</p>
+            <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full transition-all duration-500"
+                style={{ width: `${stats.total > 0 ? (stats.inactive / stats.total) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
