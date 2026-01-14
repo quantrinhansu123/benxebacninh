@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { toast } from "react-toastify"
-import { Search, Eye, Download, Plus, Edit, Trash2, Upload, FileSpreadsheet } from "lucide-react"
+import { Search, Eye, Download, Plus, Edit, Trash2, Upload, FileSpreadsheet, Award, TrendingUp, CheckCircle, XCircle, Clock } from "lucide-react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -196,6 +196,14 @@ export default function QuanLyPhuHieuXe() {
   useEffect(() => {
     setCurrentPage(1)
   }, [searchQuery, filterStatus, filterBadgeType, filterBadgeColor])
+
+  // Stats calculations
+  const stats = useMemo(() => {
+    const active = filteredBadges.filter(b => getStatusVariant(b.status) === "active").length
+    const expired = filteredBadges.filter(b => getStatusVariant(b.status) === "inactive").length
+    const revoked = filteredBadges.filter(b => getStatusVariant(b.status) === "maintenance").length
+    return { total: filteredBadges.length, active, expired, revoked }
+  }, [filteredBadges])
 
   const handleView = (badge: VehicleBadge) => {
     setSelectedBadge(badge)
@@ -516,35 +524,133 @@ export default function QuanLyPhuHieuXe() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Quản lý phù hiệu xe</h1>
-        <div className="flex gap-2">
-          <Button onClick={handleCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            Thêm phù hiệu
-          </Button>
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-            <Upload className="mr-2 h-4 w-4" />
-            Import Excel
-          </Button>
-          <Button variant="outline" onClick={downloadTemplate}>
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Tải Template
-          </Button>
-          <Button variant="outline" onClick={handleExport}>
-            <Download className="mr-2 h-4 w-4" />
-            Xuất Excel
-          </Button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            accept=".xlsx,.xls"
-            className="hidden"
-          />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-violet-50">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-500 shadow-xl shadow-violet-500/30">
+              <Award className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+                Quản lý phù hiệu xe
+              </h1>
+              <p className="text-slate-500 text-sm mt-1">
+                Danh sách phù hiệu xe buýt và tuyến cố định
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={handleCreate} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-500 text-white font-semibold hover:from-violet-600 hover:to-purple-600 shadow-lg shadow-violet-500/30">
+              <Plus className="mr-2 h-4 w-4" />
+              Thêm phù hiệu
+            </Button>
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="rounded-xl">
+              <Upload className="mr-2 h-4 w-4" />
+              Import Excel
+            </Button>
+            <Button variant="outline" onClick={downloadTemplate} className="rounded-xl">
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Tải Template
+            </Button>
+            <Button variant="outline" onClick={handleExport} className="rounded-xl">
+              <Download className="mr-2 h-4 w-4" />
+              Xuất Excel
+            </Button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              accept=".xlsx,.xls"
+              className="hidden"
+            />
+          </div>
         </div>
-      </div>
+
+        {/* Hero Stats */}
+        <div className="grid grid-cols-12 gap-4">
+          {/* Primary Stat - Hero Card */}
+          <div className="col-span-12 lg:col-span-5 bg-gradient-to-br from-violet-500 via-violet-600 to-purple-600 rounded-3xl p-8 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+            <div className="relative">
+              <div className="flex items-center gap-2 text-violet-100 mb-2">
+                <Award className="h-5 w-5" />
+                <span className="text-sm font-medium uppercase tracking-wider">Tổng phù hiệu</span>
+              </div>
+              <p className="text-6xl font-bold tracking-tight">{stats.total.toLocaleString()}</p>
+              <div className="flex items-center gap-2 mt-4 text-violet-100">
+                <TrendingUp className="w-4 h-4" />
+                <span className="text-sm">Đang quản lý trong hệ thống</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary Stats */}
+          <div className="col-span-12 lg:col-span-7 grid grid-cols-3 gap-4">
+            {/* Active */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-xl bg-emerald-100 group-hover:bg-emerald-500 transition-colors">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 group-hover:text-white transition-colors" />
+                </div>
+                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                  {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}%
+                </span>
+              </div>
+              <p className="text-3xl font-bold text-slate-800">{stats.active.toLocaleString()}</p>
+              <p className="text-sm text-slate-500 mt-1">Còn hiệu lực</p>
+              <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
+                  style={{ width: `${stats.total > 0 ? (stats.active / stats.total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Expired */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-xl bg-rose-100 group-hover:bg-rose-500 transition-colors">
+                  <Clock className="w-4 h-4 text-rose-600 group-hover:text-white transition-colors" />
+                </div>
+                <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-1 rounded-full">
+                  {stats.total > 0 ? Math.round((stats.expired / stats.total) * 100) : 0}%
+                </span>
+              </div>
+              <p className="text-3xl font-bold text-slate-800">{stats.expired.toLocaleString()}</p>
+              <p className="text-sm text-slate-500 mt-1">Hết hạn</p>
+              <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full transition-all duration-500"
+                  style={{ width: `${stats.total > 0 ? (stats.expired / stats.total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Revoked */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-xl bg-amber-100 group-hover:bg-amber-500 transition-colors">
+                  <XCircle className="w-4 h-4 text-amber-600 group-hover:text-white transition-colors" />
+                </div>
+                <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                  {stats.total > 0 ? Math.round((stats.revoked / stats.total) * 100) : 0}%
+                </span>
+              </div>
+              <p className="text-3xl font-bold text-slate-800">{stats.revoked.toLocaleString()}</p>
+              <p className="text-sm text-slate-500 mt-1">Thu hồi</p>
+              <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full transition-all duration-500"
+                  style={{ width: `${stats.total > 0 ? (stats.revoked / stats.total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
 
       {/* Search and Filters */}
       <Card>
@@ -1135,6 +1241,7 @@ export default function QuanLyPhuHieuXe() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   )
 }

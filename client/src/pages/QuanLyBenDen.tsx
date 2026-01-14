@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { toast } from "react-toastify"
-import { Plus, Search, Edit, Eye, Trash2, MapPin } from "lucide-react"
+import { Plus, Search, Edit, Eye, Trash2, MapPin, Building, TrendingUp, CheckCircle, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -468,14 +468,123 @@ export default function QuanLyBenDen() {
     }
   }
 
+  // Stats calculations
+  const stats = useMemo(() => {
+    const active = locations.filter(l => l.isActive).length
+    const inactive = locations.length - active
+    const uniqueProvinces = new Set(locations.map(l => {
+      const parts = (l.address || "").split(",").map(s => s.trim()).filter(Boolean)
+      return parts.length > 0 ? parts[parts.length - 1] : ""
+    }).filter(Boolean)).size
+    return { total: locations.length, active, inactive, uniqueProvinces }
+  }, [locations])
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <Button onClick={handleCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Thêm bến đến
-        </Button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-teal-50">
+      <div className="max-w-[1600px] mx-auto p-6 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-teal-500 to-cyan-500 shadow-xl shadow-teal-500/30">
+              <Building className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+                Quản lý bến đến
+              </h1>
+              <p className="text-slate-500 text-sm mt-1">
+                Danh sách bến xe đến
+              </p>
+            </div>
+          </div>
+
+          <Button onClick={handleCreate} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 text-white font-semibold hover:from-teal-600 hover:to-cyan-600 shadow-lg shadow-teal-500/30">
+            <Plus className="mr-2 h-4 w-4" />
+            Thêm bến đến
+          </Button>
+        </div>
+
+        {/* Hero Stats */}
+        <div className="grid grid-cols-12 gap-4">
+          {/* Primary Stat - Hero Card */}
+          <div className="col-span-12 lg:col-span-5 bg-gradient-to-br from-teal-500 via-teal-600 to-cyan-600 rounded-3xl p-8 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+            <div className="relative">
+              <div className="flex items-center gap-2 text-teal-100 mb-2">
+                <Building className="h-5 w-5" />
+                <span className="text-sm font-medium uppercase tracking-wider">Tổng số bến</span>
+              </div>
+              <p className="text-6xl font-bold tracking-tight">{stats.total.toLocaleString()}</p>
+              <div className="flex items-center gap-2 mt-4 text-teal-100">
+                <TrendingUp className="w-4 h-4" />
+                <span className="text-sm">Đang quản lý trong hệ thống</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Secondary Stats */}
+          <div className="col-span-12 lg:col-span-7 grid grid-cols-3 gap-4">
+            {/* Active */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-xl bg-emerald-100 group-hover:bg-emerald-500 transition-colors">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 group-hover:text-white transition-colors" />
+                </div>
+                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                  {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}%
+                </span>
+              </div>
+              <p className="text-3xl font-bold text-slate-800">{stats.active.toLocaleString()}</p>
+              <p className="text-sm text-slate-500 mt-1">Đang hoạt động</p>
+              <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"
+                  style={{ width: `${stats.total > 0 ? (stats.active / stats.total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Inactive */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-xl bg-rose-100 group-hover:bg-rose-500 transition-colors">
+                  <XCircle className="w-4 h-4 text-rose-600 group-hover:text-white transition-colors" />
+                </div>
+                <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2 py-1 rounded-full">
+                  {stats.total > 0 ? Math.round((stats.inactive / stats.total) * 100) : 0}%
+                </span>
+              </div>
+              <p className="text-3xl font-bold text-slate-800">{stats.inactive.toLocaleString()}</p>
+              <p className="text-sm text-slate-500 mt-1">Ngừng hoạt động</p>
+              <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full transition-all duration-500"
+                  style={{ width: `${stats.total > 0 ? (stats.inactive / stats.total) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Provinces */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 rounded-xl bg-amber-100 group-hover:bg-amber-500 transition-colors">
+                  <MapPin className="w-4 h-4 text-amber-600 group-hover:text-white transition-colors" />
+                </div>
+              </div>
+              <p className="text-3xl font-bold text-slate-800">{stats.uniqueProvinces.toLocaleString()}</p>
+              <p className="text-sm text-slate-500 mt-1">Tỉnh/Thành phố</p>
+              <div className="mt-3 flex items-center gap-1">
+                {Array.from({ length: Math.min(5, stats.uniqueProvinces) }).map((_, i) => (
+                  <div key={i} className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 border-2 border-white -ml-2 first:ml-0" />
+                ))}
+                {stats.uniqueProvinces > 5 && (
+                  <span className="text-xs text-slate-500 ml-1">+{stats.uniqueProvinces - 5}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
       {/* Search */}
       <Card>
@@ -920,6 +1029,7 @@ export default function QuanLyBenDen() {
           </form>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   )
 }
