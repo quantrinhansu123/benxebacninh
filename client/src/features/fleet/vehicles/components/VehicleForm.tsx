@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Autocomplete } from "@/components/ui/autocomplete"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog"
 import { vehicleService } from "../api"
 import { vehicleTypeService } from "../api/vehicleTypeApi"
 import { operatorService } from "@/features/fleet/operators/api"
@@ -85,6 +92,11 @@ export function VehicleForm({
   const [vehicleBadges, setVehicleBadges] = useState<VehicleBadge[]>([])
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([])
 
+  // State for "Thêm mới" vehicle type dialog
+  const [showAddVehicleTypeDialog, setShowAddVehicleTypeDialog] = useState(false)
+  const [newVehicleTypeName, setNewVehicleTypeName] = useState("")
+  const [isCreatingVehicleType, setIsCreatingVehicleType] = useState(false)
+
   useEffect(() => {
     loadOperators()
     loadProvinces()
@@ -132,6 +144,41 @@ export function VehicleForm({
       setVehicleTypes(data)
     } catch (error) {
       console.error("Failed to load vehicle types:", error)
+    }
+  }
+
+  // Handle creating a new vehicle type
+  const handleCreateVehicleType = async () => {
+    if (!newVehicleTypeName.trim()) {
+      toast.error("Vui lòng nhập tên loại xe")
+      return
+    }
+
+    setIsCreatingVehicleType(true)
+    try {
+      const newType = await vehicleTypeService.create({ name: newVehicleTypeName.trim() })
+      setVehicleTypes(prev => [...prev, newType])
+      setValue("vehicleTypeId", newType.id)
+      setShowAddVehicleTypeDialog(false)
+      setNewVehicleTypeName("")
+      toast.success("Thêm loại xe thành công")
+    } catch (error) {
+      console.error("Failed to create vehicle type:", error)
+      toast.error("Không thể thêm loại xe. Vui lòng thử lại.")
+    } finally {
+      setIsCreatingVehicleType(false)
+    }
+  }
+
+  // Handle vehicle type dropdown change
+  const handleVehicleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value
+    if (value === "__ADD_NEW__") {
+      setShowAddVehicleTypeDialog(true)
+      // Reset the select to previous value
+      e.target.value = watch("vehicleTypeId") || ""
+    } else {
+      setValue("vehicleTypeId", value)
     }
   }
 
@@ -419,7 +466,8 @@ export function VehicleForm({
                   <Select
                     id="vehicleTypeId"
                     className="h-11"
-                    {...register("vehicleTypeId")}
+                    value={watch("vehicleTypeId") || ""}
+                    onChange={handleVehicleTypeChange}
                   >
                     <option value="">Chọn loại xe</option>
                     {vehicleTypes.map((vt) => (
@@ -427,6 +475,9 @@ export function VehicleForm({
                         {vt.name}
                       </option>
                     ))}
+                    <option value="__ADD_NEW__" className="text-blue-600 font-medium">
+                      ➕ Thêm mới...
+                    </option>
                   </Select>
                   {errors.vehicleTypeId && (
                     <p className="text-sm text-red-600">{errors.vehicleTypeId.message}</p>
@@ -733,6 +784,52 @@ export function VehicleForm({
         </Button>
         <Button type="submit" className="min-w-[100px]">Lưu</Button>
       </div>
+
+      {/* Dialog thêm loại xe mới */}
+      <Dialog open={showAddVehicleTypeDialog} onOpenChange={setShowAddVehicleTypeDialog}>
+        <DialogContent className="max-w-md">
+          <DialogClose onClose={() => setShowAddVehicleTypeDialog(false)} />
+          <DialogHeader>
+            <DialogTitle>Thêm loại xe mới</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="newVehicleTypeName">Tên loại xe</Label>
+              <Input
+                id="newVehicleTypeName"
+                value={newVehicleTypeName}
+                onChange={(e) => setNewVehicleTypeName(e.target.value)}
+                placeholder="Nhập tên loại xe..."
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    handleCreateVehicleType()
+                  }
+                }}
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowAddVehicleTypeDialog(false)
+                  setNewVehicleTypeName("")
+                }}
+              >
+                Hủy
+              </Button>
+              <Button
+                type="button"
+                onClick={handleCreateVehicleType}
+                disabled={isCreatingVehicleType || !newVehicleTypeName.trim()}
+              >
+                {isCreatingVehicleType ? "Đang thêm..." : "Thêm"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </form>
   )
 }
