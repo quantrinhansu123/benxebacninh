@@ -80,4 +80,5 @@ export interface DispatchInput {
   entryTime: string
   notes?: string
   entryShiftId?: string
+  transportOrderCode?: string
 }

@@ -9,6 +9,7 @@ import { dispatchService } from "@/services/dispatch.service";
 import type { DispatchRecord } from "@/types";
 import { formatVietnamDateTime } from "@/lib/vietnam-time";
 import { useUIStore } from "@/store/ui.store";
+import { useQueryCache } from "@/lib/query-cache";
 import type { Shift } from "@/services/shift.service";
 import {
   Table,
@@ -149,9 +150,12 @@ export function ChoNhieuXeRaBenDialog({
 
       toast.success(`Cho ${selectedRecords.size} xe ra bến thành công!`);
 
+      // Invalidate dispatch cache so XeXuatBen page gets fresh data
+      useQueryCache.getState().invalidate('dispatch');
+
       if (onSuccess) {
         console.log('[MultiExit] Calling onSuccess');
-        onSuccess();
+        await Promise.resolve(onSuccess());
       }
       onClose();
     } catch (error) {

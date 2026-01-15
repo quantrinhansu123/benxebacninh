@@ -32,7 +32,7 @@ interface EditDocumentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   warning: Warning | null
-  onSave: (data: DocumentFormData & { warningId: string }) => Promise<void>
+  onSave: (data: DocumentFormData) => Promise<void>
 }
 
 export function EditDocumentDialog({
@@ -75,10 +75,7 @@ export function EditDocumentDialog({
 
     setIsLoading(true)
     try {
-      await onSave({
-        ...data,
-        warningId: `${warning.type}-${warning.plateNumber || warning.name}`,
-      })
+      await onSave(data)
       toast.success("Cập nhật giấy tờ thành công")
       onOpenChange(false)
     } catch (error: any) {

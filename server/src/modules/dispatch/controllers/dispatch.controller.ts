@@ -104,6 +104,7 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
       entryTime: entryTimeForDB,
       entryBy: userId || null,
       entryShiftId: input.entryShiftId || null,
+      transportOrderCode: input.transportOrderCode || null,
       status: DISPATCH_STATUS.ENTERED,
       notes: input.notes || null,
       ...buildDenormalizedFields(denormData),

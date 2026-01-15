@@ -185,6 +185,13 @@ export function useChoXeVaoBenForm({
   const handleVehicleSelect = (id: string) => {
     setHasUserModified(true);  // Mark as user-modified to prevent reset from editRecord
     setVehicleId(id);
+    // Auto-generate transport order code when vehicle is selected
+    if (id && !transportOrderCode) {
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+      const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      setTransportOrderCode(`LVC-${dateStr}-${randomSuffix}`);
+    }
   };
 
   const handleRefreshTransportOrder = async () => {
@@ -273,6 +280,7 @@ export function useChoXeVaoBenForm({
         scheduleId: confirmPassengerDrop ? scheduleId || undefined : undefined,
         entryTime: entryTimeISO,
         entryShiftId,
+        transportOrderCode: transportOrderCode || undefined,
       };
 
       const result = await dispatchService.create(dispatchData);

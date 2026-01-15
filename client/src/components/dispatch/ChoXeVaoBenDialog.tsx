@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { CapPhepDialog } from "./CapPhepDialog";
 import { FormHeader, VehicleEntryForm, TransportOrderPreview } from "./entry";
@@ -53,6 +54,32 @@ export function ChoXeVaoBenDialog({
     handleClose,
     handlePermitDialogClose,
   } = useChoXeVaoBenForm({ open, editRecord, onSuccess, onClose });
+
+  // Handle browser back button - close dialog instead of navigating away
+  const closedViaBackButtonRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) return;
+    // Don't add history state if permit dialog is showing (let it handle back button)
+    if (showPermitDialog) return;
+
+    closedViaBackButtonRef.current = false;
+    window.history.pushState({ choXeVaoBenDialogOpen: true }, "");
+
+    const handlePopState = () => {
+      closedViaBackButtonRef.current = true;
+      handleClose();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      if (!closedViaBackButtonRef.current && window.history.state?.choXeVaoBenDialogOpen === true) {
+        window.history.replaceState(null, "");
+      }
+    };
+  }, [open, showPermitDialog, handleClose]);
 
   if (!open) return null;
 
@@ -118,6 +145,7 @@ export function ChoXeVaoBenDialog({
           open={showPermitDialog}
           onClose={handlePermitDialogClose}
           onSuccess={handlePermitDialogClose}
+          skipHistoryManagement
         />
       )}
     </div>,

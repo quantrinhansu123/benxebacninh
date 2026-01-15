@@ -206,16 +206,30 @@ export default function QuanLyXe() {
     setDialogOpen(true)
   }
 
-  const handleEdit = (vehicle: Vehicle) => {
-    setSelectedVehicle(vehicle)
-    setViewMode("edit")
-    setDialogOpen(true)
+  const handleEdit = async (vehicle: Vehicle) => {
+    try {
+      // Fetch full vehicle details for edit mode (list only has summary data)
+      const fullVehicle = await vehicleService.getById(vehicle.id)
+      setSelectedVehicle(fullVehicle)
+      setViewMode("edit")
+      setDialogOpen(true)
+    } catch (error) {
+      console.error("Failed to load vehicle details:", error)
+      toast.error("Không thể tải thông tin xe. Vui lòng thử lại.")
+    }
   }
 
-  const handleView = (vehicle: Vehicle) => {
-    setSelectedVehicle(vehicle)
-    setViewMode("view")
-    setDialogOpen(true)
+  const handleView = async (vehicle: Vehicle) => {
+    try {
+      // Fetch full vehicle details for view mode
+      const fullVehicle = await vehicleService.getById(vehicle.id)
+      setSelectedVehicle(fullVehicle)
+      setViewMode("view")
+      setDialogOpen(true)
+    } catch (error) {
+      console.error("Failed to load vehicle details:", error)
+      toast.error("Không thể tải thông tin xe. Vui lòng thử lại.")
+    }
   }
 
   const handleDelete = (vehicle: Vehicle) => {

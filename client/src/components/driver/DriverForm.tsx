@@ -92,7 +92,14 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
           licenseNumber: driver.licenseNumber,
           licenseClass: driver.licenseClass,
           licenseExpiryDate: driver.licenseExpiryDate
-            ? new Date(driver.licenseExpiryDate).toISOString().split("T")[0]
+            ? (() => {
+                // Use local date to avoid timezone issues
+                const d = new Date(driver.licenseExpiryDate)
+                const year = d.getFullYear()
+                const month = String(d.getMonth() + 1).padStart(2, '0')
+                const day = String(d.getDate()).padStart(2, '0')
+                return `${year}-${month}-${day}`
+              })()
             : "",
           province: driver.province || "",
           district: driver.district || "",
@@ -559,7 +566,11 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
                       onDateChange={(date) => {
                         setLicenseExpiryDate(date || null)
                         if (date) {
-                          const dateString = date.toISOString().split("T")[0]
+                          // Use local date to avoid timezone issues (toISOString converts to UTC)
+                          const year = date.getFullYear()
+                          const month = String(date.getMonth() + 1).padStart(2, '0')
+                          const day = String(date.getDate()).padStart(2, '0')
+                          const dateString = `${year}-${month}-${day}`
                           setValue("licenseExpiryDate", dateString)
                         }
                       }}

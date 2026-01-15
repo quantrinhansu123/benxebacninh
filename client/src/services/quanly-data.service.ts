@@ -46,6 +46,7 @@ export interface QuanLyRoute {
   startPoint: string
   endPoint: string
   distance: string
+  routeType: string
 }
 
 export interface QuanLyData {

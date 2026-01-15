@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "react-toastify";
 import { operatorService } from "@/services/operator.service";
 import { quanlyDataService } from "@/services/quanly-data.service";
@@ -17,7 +17,7 @@ export function useOperatorManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterTicketDelegated, setFilterTicketDelegated] = useState("");
-  const [filterProvince, setFilterProvince] = useState<"all" | "bac_ninh" | "ngoai_bac_ninh">("all");
+  const [filterProvince, setFilterProvince] = useState<"all" | "bac_ninh" | "ngoai_bac_ninh" | "chua_phan_loai">("all");
   const [quickFilter, setQuickFilter] = useState<"all" | "active" | "inactive">("all");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedOperator, setSelectedOperator] = useState<Operator | null>(null);
@@ -31,6 +31,28 @@ export function useOperatorManagement() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [operatorToDelete, setOperatorToDelete] = useState<OperatorWithSource | null>(null);
   const setTitle = useUIStore((state) => state.setTitle);
+
+  // Handle browser back button for dialog
+  const openDialogWithHistory = useCallback(() => {
+    window.history.pushState({ operatorDialog: true }, "");
+  }, []);
+
+  const closeDialogFromHistory = useCallback(() => {
+    setDialogOpen(false);
+  }, []);
+
+  // Listen for popstate event (browser back button)
+  useEffect(() => {
+    const handlePopState = () => {
+      // Close dialog when back button pressed while dialog is open
+      if (dialogOpen) {
+        closeDialogFromHistory();
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [dialogOpen, closeDialogFromHistory]);
 
   useEffect(() => {
     setTitle("Quản lý Đơn vị vận tải");
@@ -55,14 +77,17 @@ export function useOperatorManagement() {
     const active = operators.filter((o) => o.isActive).length;
     const inactive = operators.length - active;
     const delegated = operators.filter((o) => o.isTicketDelegated).length;
-    
+
     // Check if province contains "Bắc Ninh" (handles variations like "Tỉnh Bắc Ninh", "Bắc Ninh", etc.)
-    const isBacNinh = (province: string | undefined) => 
+    const isBacNinh = (province: string | undefined) =>
       province && province.toLowerCase().includes("bắc ninh");
-    
+
+    // Count operators with valid province data
     const bacNinh = operators.filter((o) => isBacNinh(o.province)).length;
-    const ngoaiBacNinh = operators.filter((o) => o.province && !isBacNinh(o.province)).length;
-    return { total: operators.length, active, inactive, delegated, bacNinh, ngoaiBacNinh };
+    const ngoaiBacNinh = operators.filter((o) => o.province && o.province.trim() !== '' && !isBacNinh(o.province)).length;
+    const chuaPhanLoai = operators.filter((o) => !o.province || o.province.trim() === '').length;
+
+    return { total: operators.length, active, inactive, delegated, bacNinh, ngoaiBacNinh, chuaPhanLoai };
   }, [operators]);
 
   const filteredOperators = useMemo(() => {
@@ -72,10 +97,12 @@ export function useOperatorManagement() {
 
       // Province filter - check if province contains "Bắc Ninh"
       const isBacNinh = operator.province && operator.province.toLowerCase().includes("bắc ninh");
+      const hasNoProvince = !operator.province || operator.province.trim() === '';
       if (filterProvince === "bac_ninh" && !isBacNinh) return false;
       if (filterProvince === "ngoai_bac_ninh") {
-        if (!operator.province || isBacNinh) return false;
+        if (hasNoProvince || isBacNinh) return false;
       }
+      if (filterProvince === "chua_phan_loai" && !hasNoProvince) return false;
 
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -114,18 +141,21 @@ export function useOperatorManagement() {
     setSelectedOperator(null);
     setViewMode("create");
     setDialogOpen(true);
+    openDialogWithHistory();
   };
 
   const handleView = (operator: Operator) => {
     setSelectedOperator(operator);
     setViewMode("view");
     setDialogOpen(true);
+    openDialogWithHistory();
   };
 
   const handleEdit = (operator: OperatorWithSource) => {
     setSelectedOperator(operator);
     setViewMode("edit");
     setDialogOpen(true);
+    openDialogWithHistory();
   };
 
   const handleDelete = (operator: OperatorWithSource) => {
@@ -161,8 +191,25 @@ export function useOperatorManagement() {
 
   const handleSaveSuccess = () => {
     setDialogOpen(false);
+    // Go back in history to remove the pushed state
+    if (window.history.state?.operatorDialog) {
+      window.history.back();
+    }
     loadOperators(true); // Force refresh after save
   };
+
+  // Wrapper to handle dialog close with history management
+  const handleDialogOpenChange = useCallback((open: boolean) => {
+    if (!open && dialogOpen) {
+      // Dialog being closed normally (via X button or outside click)
+      setDialogOpen(false);
+      if (window.history.state?.operatorDialog) {
+        window.history.back();
+      }
+    } else {
+      setDialogOpen(open);
+    }
+  }, [dialogOpen]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -208,7 +255,7 @@ export function useOperatorManagement() {
     setDisplayMode,
     // Dialog states
     dialogOpen,
-    setDialogOpen,
+    setDialogOpen: handleDialogOpenChange,
     viewMode,
     selectedOperator,
     detailDialogOpen,

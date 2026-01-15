@@ -106,10 +106,33 @@ export default function Dashboard() {
     setVehicleHistoryOpen(true);
   };
 
-  const handleSaveDocument = async () => {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    await handleRefresh();
-  };
+  const handleSaveDocument = async (data: {
+    documentNumber: string
+    issueDate: string
+    expiryDate: string
+    issuingAuthority?: string
+    notes?: string
+  }) => {
+    if (!selectedWarning || !selectedWarning.plateNumber) {
+      throw new Error('Không có thông tin xe được chọn')
+    }
+
+    // Call API to update document
+    await dashboardService.updateVehicleDocument(
+      selectedWarning.plateNumber,
+      selectedWarning.document,
+      {
+        documentNumber: data.documentNumber,
+        issueDate: data.issueDate,
+        expiryDate: data.expiryDate,
+        issuingAuthority: data.issuingAuthority,
+        notes: data.notes,
+      }
+    )
+
+    // Refresh dashboard data
+    await handleRefresh()
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">

@@ -113,19 +113,30 @@ export default function ThanhToan() {
       );
     }
 
-    // Filter by order type (Bug G1 fix)
+    // Filter by order type - matches actual database route_type values:
+    // "Liên tỉnh", "Tuyến vận tải liên tỉnh", "Tuyến vận tải nội tỉnh", "Intercity", etc.
     if (orderType !== 'all') {
       filtered = filtered.filter(record => {
         const tripType = record.route?.routeType || '';
         const tripTypeLower = tripType.toLowerCase();
 
         switch (orderType) {
-          case 'thanh-toan-chuyen':
-            return tripTypeLower.includes('chuyến') || tripTypeLower.includes('chuyen');
-          case 'thanh-toan-dinh-ky':
-            return tripTypeLower.includes('định kỳ') || tripTypeLower.includes('dinh ky');
-          case 'thanh-toan-vang-lai':
-            return tripTypeLower.includes('vãng lai') || tripTypeLower.includes('vang lai');
+          case 'lien-tinh':
+            // Matches: "Liên tỉnh", "Tuyến vận tải liên tỉnh", "Intercity"
+            return tripTypeLower.includes('liên tỉnh') ||
+                   tripTypeLower.includes('lien tinh') ||
+                   tripTypeLower.includes('intercity');
+          case 'noi-tinh':
+            // Matches: "Tuyến vận tải nội tỉnh", "Nội tỉnh"
+            return tripTypeLower.includes('nội tỉnh') ||
+                   tripTypeLower.includes('noi tinh');
+          case 'khac':
+            // Other types: "Đã công bố", "Tuyến mới", etc.
+            return !tripTypeLower.includes('liên tỉnh') &&
+                   !tripTypeLower.includes('lien tinh') &&
+                   !tripTypeLower.includes('intercity') &&
+                   !tripTypeLower.includes('nội tỉnh') &&
+                   !tripTypeLower.includes('noi tinh');
           default:
             return true;
         }
@@ -410,10 +421,10 @@ export default function ThanhToan() {
                 </div>
                 <div className="w-full lg:w-48">
                   <Select value={orderType} onChange={(e) => setOrderType(e.target.value)} className="w-full">
-                    <option value="all">Tất cả loại</option>
-                    <option value="thanh-toan-chuyen">Thanh toán chuyến</option>
-                    <option value="thanh-toan-dinh-ky">Thanh toán định kỳ</option>
-                    <option value="thanh-toan-vang-lai">Vãng lai</option>
+                    <option value="all">Tất cả loại tuyến</option>
+                    <option value="lien-tinh">Liên tỉnh</option>
+                    <option value="noi-tinh">Nội tỉnh</option>
+                    <option value="khac">Loại khác</option>
                   </Select>
                 </div>
               </div>

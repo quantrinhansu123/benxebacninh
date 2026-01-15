@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { FileText, X, XCircle, CheckCircle, Calendar } from "lucide-react";
 import { format } from "date-fns";
@@ -27,6 +27,8 @@ interface CapPhepDialogProps {
   onSuccess?: () => void;
   open?: boolean;
   readOnly?: boolean;
+  /** Skip history pushState when dialog is nested inside another dialog */
+  skipHistoryManagement?: boolean;
 }
 
 export function CapPhepDialog({
@@ -35,6 +37,7 @@ export function CapPhepDialog({
   onSuccess,
   open = true,
   readOnly = false,
+  skipHistoryManagement = false,
 }: CapPhepDialogProps) {
   const [isAnimating, setIsAnimating] = useState(false);
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
@@ -54,6 +57,41 @@ export function CapPhepDialog({
     }
     return () => { document.body.style.overflow = "unset"; };
   }, [open]);
+
+  // Handle browser back button - prevent navigation, just close dialog
+  // Use a ref to track if dialog was closed via back button
+  const closedViaBackButtonRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) return;
+    // Skip history management when nested inside another dialog
+    if (skipHistoryManagement) return;
+
+    // Reset the ref when dialog opens
+    closedViaBackButtonRef.current = false;
+
+    // Push a dummy state so we can intercept back button
+    window.history.pushState({ capPhepDialogOpen: true }, "");
+
+    const handlePopState = () => {
+      // User pressed back button - close dialog instead of navigating
+      closedViaBackButtonRef.current = true;
+      setIsAnimating(false);
+      setTimeout(onClose, 300);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // Only clean up history state if dialog closed normally (not via back button)
+      // and our state is still on top
+      if (!closedViaBackButtonRef.current && window.history.state?.capPhepDialogOpen === true) {
+        // Use replaceState to remove our dummy state without triggering navigation
+        window.history.replaceState(null, "");
+      }
+    };
+  }, [open, onClose, skipHistoryManagement]);
 
   const handleClose = () => {
     setIsAnimating(false);

@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { vehicleService } from "@/services/vehicle.service"
 
 interface VehicleHistoryEntry {
   id: string
@@ -35,63 +36,61 @@ interface VehicleHistoryTableProps {
 
 const ITEMS_PER_PAGE = 10
 
-const mockHistoryData: VehicleHistoryEntry[] = [
-  {
-    id: "1",
-    vehiclePlateNumber: "30A-12345",
-    changeType: "document_update",
-    fieldChanged: "Đăng kiểm",
-    oldValue: "15/12/2024",
-    newValue: "15/06/2025",
-    changedBy: "Nguyễn Văn A",
-    changedAt: "2024-12-15T10:30:00Z",
-    notes: "Gia hạn đăng kiểm"
-  },
-  {
-    id: "2", 
-    vehiclePlateNumber: "29B-67890",
-    changeType: "vehicle_info",
-    fieldChanged: "Số ghế",
-    oldValue: "45",
-    newValue: "47",
-    changedBy: "Trần Thị B",
-    changedAt: "2024-12-14T14:20:00Z",
-    notes: "Cập nhật sau sửa chữa"
-  },
-  {
-    id: "3",
-    vehiclePlateNumber: "30A-12345", 
-    changeType: "status_change",
-    fieldChanged: "Trạng thái",
-    oldValue: "Hoạt động",
-    newValue: "Bảo trì",
-    changedBy: "Lê Văn C",
-    changedAt: "2024-12-13T09:15:00Z",
-    notes: "Xe vào bảo trì định kỳ"
-  },
-  {
-    id: "4",
-    vehiclePlateNumber: "51C-11111",
-    changeType: "document_update", 
-    fieldChanged: "Bảo hiểm",
-    oldValue: "20/11/2024",
-    newValue: "20/11/2025",
-    changedBy: "Phạm Thị D",
-    changedAt: "2024-12-12T16:45:00Z",
-    notes: "Gia hạn bảo hiểm"
-  },
-  {
-    id: "5",
-    vehiclePlateNumber: "29B-67890",
-    changeType: "vehicle_info",
-    fieldChanged: "Màu xe", 
-    oldValue: "Xanh",
-    newValue: "Trắng",
-    changedBy: "Hoàng Văn E",
-    changedAt: "2024-12-11T11:30:00Z",
-    notes: "Sơn lại xe"
+// Map document type to Vietnamese display name
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  registration: "Đăng ký",
+  inspection: "Đăng kiểm",
+  insurance: "Bảo hiểm",
+  operation_permit: "Giấy phép kinh doanh",
+  emblem: "Phù hiệu",
+}
+
+// Transform API audit log to VehicleHistoryEntry
+function transformAuditLogToEntry(log: any): VehicleHistoryEntry {
+  const oldValues = log.oldValues || {}
+  const newValues = log.newValues || {}
+
+  // Determine what field changed based on old/new values
+  let fieldChanged = "Giấy tờ"
+  let oldValue = ""
+  let newValue = ""
+  let notes = ""
+
+  // Check for document type in values
+  const docType = newValues.documentType || oldValues.documentType
+  if (docType && DOCUMENT_TYPE_LABELS[docType]) {
+    fieldChanged = DOCUMENT_TYPE_LABELS[docType]
   }
-]
+
+  // Prioritize expiry date changes
+  if (oldValues.expiryDate || newValues.expiryDate) {
+    oldValue = oldValues.expiryDate ? format(new Date(oldValues.expiryDate), "dd/MM/yyyy") : "-"
+    newValue = newValues.expiryDate ? format(new Date(newValues.expiryDate), "dd/MM/yyyy") : "-"
+  } else if (oldValues.issueDate || newValues.issueDate) {
+    fieldChanged += " (Ngày cấp)"
+    oldValue = oldValues.issueDate ? format(new Date(oldValues.issueDate), "dd/MM/yyyy") : "-"
+    newValue = newValues.issueDate ? format(new Date(newValues.issueDate), "dd/MM/yyyy") : "-"
+  } else if (oldValues.documentNumber || newValues.documentNumber) {
+    fieldChanged += " (Số giấy tờ)"
+    oldValue = oldValues.documentNumber || "-"
+    newValue = newValues.documentNumber || "-"
+  }
+
+  // Notes from values
+  notes = newValues.notes || oldValues.notes || ""
+
+  return {
+    id: log.id,
+    vehiclePlateNumber: log.vehiclePlateNumber || "-",
+    changeType: "document_update",
+    fieldChanged,
+    oldValue,
+    newValue,
+    changedBy: log.userName || "Không xác định",
+    changedAt: log.createdAt,
+    notes,
+  }
+}
 
 export function VehicleHistoryTable({ open, onOpenChange }: VehicleHistoryTableProps) {
   const [historyData, setHistoryData] = useState<VehicleHistoryEntry[]>([])
@@ -109,11 +108,13 @@ export function VehicleHistoryTable({ open, onOpenChange }: VehicleHistoryTableP
   const loadHistoryData = async () => {
     setIsLoading(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      setHistoryData(mockHistoryData)
+      // Fetch real data from API
+      const logs = await vehicleService.getAllDocumentAuditLogs()
+      const entries = logs.map(transformAuditLogToEntry)
+      setHistoryData(entries)
     } catch (error) {
       console.error("Failed to load history data:", error)
+      setHistoryData([])
     } finally {
       setIsLoading(false)
     }

@@ -6,8 +6,8 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../../../middleware/auth.js';
 import { db } from '../../../db/drizzle.js';
-import { vehicles, vehicleDocuments, operators, vehicleTypes, auditLogs, users } from '../../../db/schema/index.js';
-import { eq, and, inArray, desc } from 'drizzle-orm';
+import { vehicles, vehicleDocuments, operators, vehicleTypes, auditLogs, users, vehicleBadges } from '../../../db/schema/index.js';
+import { eq, and, inArray, desc, or } from 'drizzle-orm';
 import { syncVehicleChanges } from '../../../utils/denormalization-sync.js';
 import { validateCreateVehicle, validateUpdateVehicle } from '../fleet-validation.js';
 import { mapVehicleToAPI, mapAuditLogToAPI } from '../fleet-mappers.js';
@@ -304,50 +304,70 @@ export const getAllDocumentAuditLogs = async (_req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
 
-    // Get all audit logs for vehicle_documents in one query
+    // Get all audit logs for both vehicle_documents and vehicle_badges
     const auditLogsData = await db
       .select()
       .from(auditLogs)
-      .where(eq(auditLogs.tableName, 'vehicle_documents'))
+      .where(or(
+        eq(auditLogs.tableName, 'vehicle_documents'),
+        eq(auditLogs.tableName, 'vehicle_badges')
+      ))
       .orderBy(desc(auditLogs.createdAt))
       .limit(500);
 
     if (!auditLogsData || auditLogsData.length === 0) return res.json([]);
 
+    // Separate logs by table type
+    const docLogs = auditLogsData.filter(log => log.tableName === 'vehicle_documents');
+    const badgeLogs = auditLogsData.filter(log => log.tableName === 'vehicle_badges');
+
     // Get unique vehicle_document IDs
-    const docIds = [...new Set(auditLogsData.map((log) => log.recordId))];
+    const docIds = [...new Set(docLogs.map((log) => log.recordId))];
 
     // Fetch vehicle_documents to get vehicle_id
-    const vehicleDocs = await db
+    const vehicleDocs = docIds.length > 0 ? await db
       .select({ id: vehicleDocuments.id, vehicleId: vehicleDocuments.vehicleId })
       .from(vehicleDocuments)
-      .where(inArray(vehicleDocuments.id, docIds));
+      .where(inArray(vehicleDocuments.id, docIds)) : [];
 
     const docToVehicleMap = new Map(
       vehicleDocs.map((doc) => [doc.id, doc.vehicleId])
     );
 
-    // Get unique vehicle IDs
+    // Get unique vehicle IDs from documents
     const vehicleIds = [...new Set(
       vehicleDocs.map((doc) => doc.vehicleId).filter(Boolean)
     )] as string[];
 
     // Fetch vehicles to get plate numbers
-    const vehiclesData = await db
+    const vehiclesData = vehicleIds.length > 0 ? await db
       .select({ id: vehicles.id, plateNumber: vehicles.plateNumber })
       .from(vehicles)
-      .where(inArray(vehicles.id, vehicleIds));
+      .where(inArray(vehicles.id, vehicleIds)) : [];
 
     const vehicleMap = new Map(
       vehiclesData.map((v) => [v.id, v.plateNumber])
     );
 
+    // Get unique badge IDs for plate number lookup
+    const badgeIds = [...new Set(badgeLogs.map((log) => log.recordId))];
+
+    // Fetch badges to get plate numbers directly
+    const badgesData = badgeIds.length > 0 ? await db
+      .select({ id: vehicleBadges.id, plateNumber: vehicleBadges.plateNumber })
+      .from(vehicleBadges)
+      .where(inArray(vehicleBadges.id, badgeIds)) : [];
+
+    const badgeMap = new Map(
+      badgesData.map((b) => [b.id, b.plateNumber])
+    );
+
     // Fetch users for names
     const userIds = [...new Set(auditLogsData.map((log) => log.userId).filter(Boolean))] as string[];
-    const usersData = await db
+    const usersData = userIds.length > 0 ? await db
       .select({ id: users.id, fullName: users.name, username: users.email })
       .from(users)
-      .where(inArray(users.id, userIds));
+      .where(inArray(users.id, userIds)) : [];
 
     const userMap = new Map(
       usersData.map((u) => [u.id, u.fullName || u.username || 'Không xác định'])
@@ -355,8 +375,28 @@ export const getAllDocumentAuditLogs = async (_req: Request, res: Response) => {
 
     // Format response
     const formattedLogs = auditLogsData.map((log) => {
-      const vehicleId = docToVehicleMap.get(log.recordId);
-      const plateNumber = vehicleId ? vehicleMap.get(vehicleId) : null;
+      let plateNumber: string | null = null;
+
+      if (log.tableName === 'vehicle_documents') {
+        const vehicleId = docToVehicleMap.get(log.recordId);
+        plateNumber = vehicleId ? vehicleMap.get(vehicleId) || null : null;
+      } else if (log.tableName === 'vehicle_badges') {
+        // For badges, get plate number from badge record or from newValues/oldValues
+        plateNumber = badgeMap.get(log.recordId) || null;
+        if (!plateNumber) {
+          const newVals = log.newValues as any;
+          const oldVals = log.oldValues as any;
+          plateNumber = newVals?.plateNumber || oldVals?.plateNumber || null;
+        }
+      }
+
+      // Add documentType for badges to display correctly in history table
+      const newValues = log.newValues as any;
+      const oldValues = log.oldValues as any;
+      if (log.tableName === 'vehicle_badges') {
+        if (newValues) newValues.documentType = 'emblem';
+        if (oldValues) oldValues.documentType = 'emblem';
+      }
 
       return {
         id: log.id,
@@ -364,8 +404,8 @@ export const getAllDocumentAuditLogs = async (_req: Request, res: Response) => {
         userName: log.userId ? userMap.get(log.userId) || 'Không xác định' : 'Không xác định',
         action: log.action,
         recordId: log.recordId,
-        oldValues: log.oldValues,
-        newValues: log.newValues,
+        oldValues: oldValues,
+        newValues: newValues,
         createdAt: log.createdAt,
         vehiclePlateNumber: plateNumber || '-',
       };

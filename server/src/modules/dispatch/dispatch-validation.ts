@@ -31,6 +31,7 @@ export const createDispatchSchema = z.object({
   ),
   notes: z.string().optional(),
   entryShiftId: z.string().min(1).optional(),
+  transportOrderCode: z.string().optional(),
 })
 
 /**

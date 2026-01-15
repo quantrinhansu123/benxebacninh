@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
-import { vehicleBadges, vehicles, dispatchRecords } from '../db/schema/index.js'
+import { vehicleBadges, vehicles, dispatchRecords, auditLogs } from '../db/schema/index.js'
 import { eq, ne, ilike, and } from 'drizzle-orm'
 
 // Constants
@@ -48,34 +48,36 @@ const normalizePlate = (plate: string): string => {
 
 // Helper function to map Supabase/Firebase data to VehicleBadge format
 // Supports both Supabase (snake_case) and old format (Vietnamese field names)
+// Also supports Drizzle camelCase output
 const mapFirebaseDataToBadge = (data: any, activePlates?: Set<string>) => {
-  // Supabase uses snake_case, Firebase uses Vietnamese names
+  // Drizzle uses camelCase, Supabase uses snake_case, Firebase uses Vietnamese names
   const status = data.status || data.TrangThai || ''
-  const vehicleRef = data.plate_number || data.BienSoXe || data.vehicle_id || ''
-  const vehicleId = data.vehicle_id || ''
+  // Support both camelCase (Drizzle) and snake_case (raw DB) for plateNumber
+  const vehicleRef = data.plateNumber || data.plate_number || data.BienSoXe || data.vehicle_id || ''
+  const vehicleId = data.vehicleId || data.vehicle_id || ''
 
   // Extract metadata fields (stored in JSONB)
   const metadata = (data.metadata as any) || {}
 
   return {
     id: data.id || data.ID_PhuHieu || '',
-    badge_number: data.badge_number || data.SoPhuHieu || '',
-    license_plate_sheet: data.plate_number || vehicleRef,
-    badge_type: data.badge_type || data.LoaiPH || '',
+    badge_number: data.badgeNumber || data.badge_number || data.SoPhuHieu || '',
+    license_plate_sheet: data.plateNumber || data.plate_number || vehicleRef,
+    badge_type: data.badgeType || data.badge_type || data.LoaiPH || '',
     badge_color: metadata.badgeColor || data.badge_color || data.MauPhuHieu || '',
-    issue_date: data.issue_date || data.NgayCap || '',
-    expiry_date: data.expiry_date || data.NgayHetHan || '',
+    issue_date: data.issueDate || data.issue_date || data.NgayCap || '',
+    expiry_date: data.expiryDate || data.expiry_date || data.NgayHetHan || '',
     status: status,
     file_code: metadata.fileCode || data.file_code || data.MaHoSo || '',
     issue_type: metadata.issueType || data.issue_type || data.LoaiCap || '',
     business_license_ref: data.business_license_ref || data.Ref_GPKD || '',
-    issuing_authority_ref: data.operator_id || data.Ref_DonViCapPhuHieu || '',
+    issuing_authority_ref: data.operatorId || data.operator_id || data.Ref_DonViCapPhuHieu || '',
     vehicle_id: vehicleId,
-    route_id: data.route_id || data.Ref_Tuyen || '',
-    bus_route_ref: data.bus_route_ref || data.TuyenDuong || '',
+    route_id: data.routeId || data.route_id || data.Ref_Tuyen || '',
+    bus_route_ref: data.routeCode || data.bus_route_ref || data.TuyenDuong || '',
     vehicle_type: metadata.vehicleType || data.vehicle_type || data.LoaiXe || '',
     notes: metadata.notes || data.notes || data.GhiChu || '',
-    created_at: data.created_at || data.synced_at || new Date().toISOString(),
+    created_at: data.createdAt || data.created_at || data.synced_at || new Date().toISOString(),
     created_by: data.created_by || data.User || '',
     email_notification_sent: data.email_notification_sent || data.GuiEmailbao || false,
     notification_ref: data.notification_ref || data.Ref_ThongBao || '',
@@ -370,6 +372,27 @@ export const createVehicleBadge = async (req: Request, res: Response): Promise<v
 
     console.log('[CREATE BADGE] Created badge:', data)
 
+    // Create audit log for tracking
+    try {
+      await db.insert(auditLogs).values({
+        tableName: 'vehicle_badges',
+        recordId: data.id,
+        action: 'INSERT',
+        userId: (req as any).user?.id || null,
+        oldValues: null,
+        newValues: {
+          badgeNumber: data.badgeNumber,
+          plateNumber: data.plateNumber,
+          issueDate: data.issueDate,
+          expiryDate: data.expiryDate,
+          metadata: data.metadata,
+        },
+      })
+      console.log('[CREATE BADGE] Audit log created')
+    } catch (auditError) {
+      console.error('[CREATE BADGE] Failed to create audit log:', auditError)
+    }
+
     // Invalidate cache
     invalidateBadgesCache()
 
@@ -461,6 +484,9 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
     if (bus_route_ref !== undefined) updateData.routeCode = bus_route_ref
     if (Object.keys(metadata).length > 0) updateData.metadata = metadata
 
+    // Always update timestamp
+    updateData.updatedAt = new Date()
+
     // Update in Drizzle
     if (!db) throw new Error('Database not initialized')
 
@@ -478,6 +504,34 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
     }
 
     console.log('[UPDATE BADGE] Updated badge:', data)
+
+    // Create audit log for tracking changes
+    try {
+      await db.insert(auditLogs).values({
+        tableName: 'vehicle_badges',
+        recordId: id,
+        action: 'UPDATE',
+        userId: (req as any).user?.id || null,
+        oldValues: {
+          badgeNumber: currentBadge.badgeNumber,
+          plateNumber: currentBadge.plateNumber,
+          issueDate: currentBadge.issueDate,
+          expiryDate: currentBadge.expiryDate,
+          metadata: currentBadge.metadata,
+        },
+        newValues: {
+          badgeNumber: data.badgeNumber,
+          plateNumber: data.plateNumber,
+          issueDate: data.issueDate,
+          expiryDate: data.expiryDate,
+          metadata: data.metadata,
+        },
+      })
+      console.log('[UPDATE BADGE] Audit log created')
+    } catch (auditError) {
+      console.error('[UPDATE BADGE] Failed to create audit log:', auditError)
+      // Don't fail update if audit logging fails
+    }
 
     // Invalidate cache
     invalidateBadgesCache()
@@ -502,10 +556,40 @@ export const deleteVehicleBadge = async (req: Request, res: Response): Promise<v
 
     const { id } = req.params
 
+    // Get badge before delete for audit log
+    const [currentBadge] = await db
+      .select()
+      .from(vehicleBadges)
+      .where(eq(vehicleBadges.id, id))
+      .limit(1)
+
     // Delete from Drizzle
     await db
       .delete(vehicleBadges)
       .where(eq(vehicleBadges.id, id))
+
+    // Create audit log if badge existed
+    if (currentBadge) {
+      try {
+        await db.insert(auditLogs).values({
+          tableName: 'vehicle_badges',
+          recordId: id,
+          action: 'DELETE',
+          userId: (req as any).user?.id || null,
+          oldValues: {
+            badgeNumber: currentBadge.badgeNumber,
+            plateNumber: currentBadge.plateNumber,
+            issueDate: currentBadge.issueDate,
+            expiryDate: currentBadge.expiryDate,
+            metadata: currentBadge.metadata,
+          },
+          newValues: null,
+        })
+        console.log('[DELETE BADGE] Audit log created')
+      } catch (auditError) {
+        console.error('[DELETE BADGE] Failed to create audit log:', auditError)
+      }
+    }
 
     // Invalidate cache
     invalidateBadgesCache()

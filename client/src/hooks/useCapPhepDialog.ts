@@ -164,7 +164,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
         id: r.id,
         routeName: r.name || `${r.startPoint} - ${r.endPoint}`,
         routeCode: r.code,
-        routeType: '',
+        routeType: r.routeType || '',
         distanceKm: r.distance ? parseFloat(r.distance) : undefined,
         destinationId: null,
         destination: { id: null, name: r.endPoint, code: '' },

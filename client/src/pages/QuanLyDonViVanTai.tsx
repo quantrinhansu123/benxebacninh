@@ -225,12 +225,13 @@ export default function QuanLyDonViVanTai() {
                 </Label>
                 <select
                   value={filterProvince}
-                  onChange={(e) => setFilterProvince(e.target.value as "all" | "bac_ninh" | "ngoai_bac_ninh")}
+                  onChange={(e) => setFilterProvince(e.target.value as "all" | "bac_ninh" | "ngoai_bac_ninh" | "chua_phan_loai")}
                   className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-400 transition-all"
                 >
-                  <option value="all">Tất cả tỉnh/thành</option>
+                  <option value="all">Tất cả tỉnh/thành ({stats.bacNinh + stats.ngoaiBacNinh + stats.chuaPhanLoai})</option>
                   <option value="bac_ninh">Trong Bắc Ninh ({stats.bacNinh})</option>
                   <option value="ngoai_bac_ninh">Ngoài Bắc Ninh ({stats.ngoaiBacNinh})</option>
+                  <option value="chua_phan_loai">Chưa phân loại ({stats.chuaPhanLoai})</option>
                 </select>
               </div>
             </div>

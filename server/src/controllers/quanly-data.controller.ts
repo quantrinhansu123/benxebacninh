@@ -83,6 +83,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           departureStation: routesTable.departureStation,
           arrivalStation: routesTable.arrivalStation,
           distanceKm: routesTable.distanceKm,
+          routeType: routesTable.routeType,
         }).from(routesTable),
       ])
 
@@ -252,6 +253,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           startPoint: r.departureStation || '',
           endPoint: r.arrivalStation || '',
           distance: r.distanceKm || '',
+          routeType: r.routeType || '',
         })
       }
       

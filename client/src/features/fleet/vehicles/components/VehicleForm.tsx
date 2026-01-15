@@ -131,7 +131,28 @@ export function VehicleForm({
 
   const loadVehicleBadges = async () => {
     try {
-      const data = await vehicleBadgeService.getAll()
+      // Try dedicated endpoint first
+      let data = await vehicleBadgeService.getAll()
+
+      // Fallback to quanlyDataService if dedicated endpoint returns empty
+      // (this covers cases where dedicated API has issues or data is cached empty)
+      if (!data || data.length === 0) {
+        const quanlyData = await quanlyDataService.getAll(['badges'])
+        if (quanlyData.badges && quanlyData.badges.length > 0) {
+          // Map quanly badges to vehicleBadge format
+          data = quanlyData.badges.map(b => ({
+            id: b.id,
+            badge_number: b.badge_number,
+            license_plate_sheet: b.license_plate_sheet,
+            badge_type: b.badge_type,
+            badge_color: b.badge_color,
+            issue_date: b.issue_date,
+            expiry_date: b.expiry_date,
+            status: b.status,
+          })) as VehicleBadge[]
+        }
+      }
+
       setVehicleBadges(data)
     } catch (error) {
       console.error("Failed to load vehicle badges:", error)
@@ -190,23 +211,48 @@ export function VehicleForm({
     }))
   }, [operators])
 
+  // Get display name for selected operator (for edit mode when options haven't loaded)
+  const selectedOperatorName = useMemo(() => {
+    if (!vehicle?.operatorId) return undefined
+    // If we have the operator in our loaded list, use its name
+    const op = operators.find(o => o.id === vehicle.operatorId)
+    if (op) return op.name
+    // Otherwise use the operatorName from vehicle if available
+    return (vehicle as any).operatorName || undefined
+  }, [vehicle, operators])
+
   // Convert vehicle badges to plate number autocomplete options
   const plateNumberOptions = useMemo(() => {
     // Get unique plate numbers and include badge info in label
     const uniquePlates = new Map<string, VehicleBadge>()
+
+    // Helper to validate plate number format (exclude UNKNOWN_ and UUID-like values)
+    const isValidPlateNumber = (plate: string): boolean => {
+      if (!plate || plate.trim() === '') return false
+      // Filter out UNKNOWN_ prefix
+      if (plate.startsWith('UNKNOWN_')) return false
+      // Filter out UUID-like patterns (contains only hex chars and dashes, 36 chars)
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(plate)) return false
+      return true
+    }
+
     vehicleBadges.forEach(badge => {
-      if (badge.license_plate_sheet && !uniquePlates.has(badge.license_plate_sheet)) {
-        uniquePlates.set(badge.license_plate_sheet, badge)
+      const plate = badge.license_plate_sheet
+      if (plate && isValidPlateNumber(plate) && !uniquePlates.has(plate)) {
+        uniquePlates.set(plate, badge)
       }
     })
-    
+
     return Array.from(uniquePlates.entries()).map(([plate, badge]) => ({
       value: plate,
-      label: badge.badge_type 
+      label: badge.badge_type
         ? `${plate} (${badge.badge_type}${badge.badge_color ? ' - ' + badge.badge_color : ''})`
         : plate
     }))
   }, [vehicleBadges])
+
+  // Flag to show hint when no badge options available
+  const showPlateNumberHint = vehicleBadges.length === 0
 
   // Helper function to format date for input type="date"
   const formatDateForInput = (dateString: string | undefined | null): string => {
@@ -360,6 +406,30 @@ export function VehicleForm({
     }
   }, [watchedVehicleTypeId, vehicleTypes, mode, setValue])
 
+  // Re-apply form values when operators load (for edit mode)
+  // This ensures the Autocomplete can find the matching option
+  useEffect(() => {
+    if (vehicle && mode === "edit" && operators.length > 0 && vehicle.operatorId) {
+      const operatorId = String(vehicle.operatorId)
+      const currentValue = watch("operatorId")
+      // Only set if not already set correctly
+      if (!currentValue || currentValue !== operatorId) {
+        setValue("operatorId", operatorId)
+      }
+    }
+  }, [vehicle, mode, operators, setValue, watch])
+
+  // Re-apply vehicleTypeId when vehicleTypes load (for edit mode)
+  useEffect(() => {
+    if (vehicle && mode === "edit" && vehicleTypes.length > 0 && vehicle.vehicleTypeId) {
+      const vehicleTypeId = String(vehicle.vehicleTypeId)
+      const currentValue = watch("vehicleTypeId")
+      if (!currentValue || currentValue !== vehicleTypeId) {
+        setValue("vehicleTypeId", vehicleTypeId)
+      }
+    }
+  }, [vehicle, mode, vehicleTypes, setValue, watch])
+
   const onSubmit = async (data: VehicleFormData) => {
     try {
       // Clean up data: remove undefined values for optional fields
@@ -452,6 +522,7 @@ export function VehicleForm({
                         onChange={field.onChange}
                         placeholder="Chọn hoặc nhập tên nhà xe..."
                         className="h-11"
+                        displayValue={selectedOperatorName}
                       />
                     )}
                   />
@@ -503,11 +574,17 @@ export function VehicleForm({
                         onChange={field.onChange}
                         placeholder="Nhập hoặc chọn biển số..."
                         className="h-11"
+                        displayValue={mode === "edit" && vehicle?.plateNumber ? vehicle.plateNumber : undefined}
                       />
                     )}
                   />
                   {errors.plateNumber && (
                     <p className="text-sm text-red-600">{errors.plateNumber.message}</p>
+                  )}
+                  {showPlateNumberHint && mode === "create" && (
+                    <p className="text-xs text-gray-500">
+                      Nhập biển số xe trực tiếp. Nếu có phù hiệu đăng ký, biển số sẽ hiển thị để chọn.
+                    </p>
                   )}
                 </div>
 

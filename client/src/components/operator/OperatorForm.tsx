@@ -18,15 +18,15 @@ import { provinceService, type Province, type District } from "@/services/provin
 const operatorSchema = z.object({
   name: z.string().min(1, "Tên đơn vị là bắt buộc"),
   code: z.string().min(1, "Mã đơn vị là bắt buộc"),
-  taxCode: z.string().min(1, "Mã số thuế là bắt buộc"),
+  taxCode: z.string().optional(),
   isTicketDelegated: z.boolean().optional(),
-  province: z.string().min(1, "Tỉnh/Thành phố là bắt buộc"),
-  district: z.string().min(1, "Quận/Huyện là bắt buộc"),
-  address: z.string().min(1, "Địa chỉ là bắt buộc"),
-  phone: z.string().min(1, "Số điện thoại là bắt buộc"),
-  email: z.string().email("Email không hợp lệ").min(1, "Email là bắt buộc"),
-  representativeName: z.string().min(1, "Người đại diện là bắt buộc"),
-  representativePosition: z.string().min(1, "Chức vụ là bắt buộc"),
+  province: z.string().optional(),
+  district: z.string().optional(),
+  address: z.string().optional(),
+  phone: z.string().optional(),
+  email: z.string().email("Email không hợp lệ").optional().or(z.literal("")),
+  representativeName: z.string().optional(),
+  representativePosition: z.string().optional(),
 })
 
 type OperatorFormData = z.infer<typeof operatorSchema>
