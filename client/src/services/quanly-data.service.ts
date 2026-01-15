@@ -34,6 +34,7 @@ export interface QuanLyOperator {
   email: string
   address: string
   representativeName: string
+  taxCode: string
   isActive: boolean
   source: string
 }

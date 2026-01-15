@@ -3,12 +3,20 @@
  * Handles all PostgreSQL operations for vehicle records via Supabase
  */
 import { vehicles, operators, vehicleTypes } from '../../../db/schema'
-import { DrizzleRepository, eq, and, desc } from '../../../shared/database/drizzle-repository'
+import { DrizzleRepository, eq, and, desc, sql } from '../../../shared/database/drizzle-repository'
 import { VehicleAPI, mapVehicle } from '../../../shared/mappers/entity-mappers'
 
 // Infer types from schema
 type Vehicle = typeof vehicles.$inferSelect
 type NewVehicle = typeof vehicles.$inferInsert
+
+/**
+ * Normalize plate number: remove dots, dashes, spaces, convert to uppercase
+ * Examples: "98H-036.55" -> "98H03655", "51B 123.45" -> "51B12345"
+ */
+const normalizePlateNumber = (plate: string): string => {
+  return (plate || '').replace(/[.\-\s]/g, '').toUpperCase()
+}
 
 /**
  * Vehicle Repository class - extends DrizzleRepository for common CRUD
@@ -238,15 +246,19 @@ class DrizzleVehicleRepository extends DrizzleRepository<
   }
 
   /**
-   * Find vehicle by plate number
+   * Find vehicle by plate number (using normalized comparison)
    */
   async findByPlateNumber(plateNumber: string): Promise<VehicleAPI | null> {
     const database = this.getDb()
+    const normalizedInput = normalizePlateNumber(plateNumber)
+
+    // Use SQL to normalize DB values for comparison
+    const normalizedPlateExpr = sql<string>`UPPER(REPLACE(REPLACE(REPLACE(${vehicles.plateNumber}, '.', ''), '-', ''), ' ', ''))`
 
     const [result] = await database
       .select()
       .from(vehicles)
-      .where(eq(vehicles.plateNumber, plateNumber))
+      .where(sql`${normalizedPlateExpr} = ${normalizedInput}`)
       .limit(1)
 
     if (!result) return null
@@ -255,26 +267,34 @@ class DrizzleVehicleRepository extends DrizzleRepository<
   }
 
   /**
-   * Check if plate number exists
+   * Check if plate number exists (using normalized comparison)
+   * Prevents duplicates like "98H03655" and "98H-036.55"
    */
   async plateNumberExists(plateNumber: string, excludeId?: string): Promise<boolean> {
     const database = this.getDb()
+    const normalizedInput = normalizePlateNumber(plateNumber)
 
-    const conditions = [eq(vehicles.plateNumber, plateNumber)]
+    // Use SQL to normalize DB values for comparison
+    const normalizedPlateExpr = sql<string>`UPPER(REPLACE(REPLACE(REPLACE(${vehicles.plateNumber}, '.', ''), '-', ''), ' ', ''))`
+
+    const baseCondition = sql`${normalizedPlateExpr} = ${normalizedInput}`
+
+    let query
     if (excludeId) {
-      conditions.push(eq(vehicles.id, excludeId))
+      query = database
+        .select({ id: vehicles.id })
+        .from(vehicles)
+        .where(and(baseCondition, sql`${vehicles.id} != ${excludeId}`))
+        .limit(1)
+    } else {
+      query = database
+        .select({ id: vehicles.id })
+        .from(vehicles)
+        .where(baseCondition)
+        .limit(1)
     }
 
-    const [result] = await database
-      .select({ id: vehicles.id })
-      .from(vehicles)
-      .where(excludeId ? and(...conditions) : conditions[0])
-      .limit(1)
-
-    if (excludeId) {
-      return result === undefined
-    }
-
+    const [result] = await query
     return result !== undefined
   }
 
@@ -304,10 +324,13 @@ class DrizzleVehicleRepository extends DrizzleRepository<
   }): Promise<VehicleAPI> {
     const database = this.getDb()
 
+    // Normalize plate number before saving (remove dots, dashes, spaces)
+    const normalizedPlate = normalizePlateNumber(data.plateNumber)
+
     const [vehicle] = await database
       .insert(vehicles)
       .values({
-        plateNumber: data.plateNumber,
+        plateNumber: normalizedPlate,
         vehicleTypeId: data.vehicleTypeId || null,
         operatorId: data.operatorId || null,
         seatCount: data.seatCapacity,
@@ -358,7 +381,8 @@ class DrizzleVehicleRepository extends DrizzleRepository<
 
     const updateData: Partial<NewVehicle> = {}
 
-    if (data.plateNumber !== undefined) updateData.plateNumber = data.plateNumber
+    // Normalize plate number when updating
+    if (data.plateNumber !== undefined) updateData.plateNumber = normalizePlateNumber(data.plateNumber)
     if (data.vehicleTypeId !== undefined) updateData.vehicleTypeId = data.vehicleTypeId || null
     if (data.operatorId !== undefined) updateData.operatorId = data.operatorId || null
     if (data.seatCapacity !== undefined) updateData.seatCount = data.seatCapacity

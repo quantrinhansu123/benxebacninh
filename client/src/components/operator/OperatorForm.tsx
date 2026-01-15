@@ -244,10 +244,10 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
     isLoadingDistrictsRef.current = false
   }, [useApiV2, setValue])
 
-  // Reset form khi operator thay đổi
+  // Reset form khi operator thay đổi hoặc mode thay đổi
   useEffect(() => {
     if (operator && mode === "edit") {
-      reset({
+      const formData = {
         name: operator.name,
         code: operator.code,
         taxCode: operator.taxCode || "",
@@ -259,8 +259,9 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
         email: operator.email || "",
         representativeName: operator.representativeName || "",
         representativePosition: operator.representativePosition || "",
-      })
-    } else if (!operator && mode === "create") {
+      }
+      reset(formData)
+    } else if (mode === "create") {
       reset({
         isTicketDelegated: false,
         province: "",
@@ -361,12 +362,29 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
       onClose()
     } catch (error: any) {
       console.error("Failed to save operator:", error)
-      
+      console.error("Error response:", error.response?.data)
+
       // Handle specific error messages from backend
-      const errorMessage = error.response?.data?.error || error.message
-      
-      if (errorMessage?.includes("already exists") || errorMessage?.includes("duplicate key")) {
-        toast.error("Mã đơn vị đã tồn tại. Vui lòng sử dụng mã khác.")
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message
+      const statusCode = error.response?.status
+
+      if (errorMessage?.includes("already exists") || errorMessage?.includes("duplicate") || statusCode === 409) {
+        toast.error("Mã đơn vị hoặc mã số thuế đã tồn tại. Vui lòng kiểm tra lại.")
+      } else if (statusCode === 404) {
+        toast.error("Không tìm thấy đơn vị vận tải. Vui lòng làm mới trang.")
+      } else if (statusCode === 400) {
+        // Map common validation errors to Vietnamese
+        if (errorMessage?.includes('email')) {
+          toast.error("Email không hợp lệ. Vui lòng kiểm tra lại.")
+        } else if (errorMessage?.includes('phone')) {
+          toast.error("Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.")
+        } else if (errorMessage?.includes('required')) {
+          toast.error("Vui lòng điền đầy đủ các trường bắt buộc.")
+        } else {
+          toast.error("Dữ liệu không hợp lệ. Vui lòng kiểm tra lại các trường nhập liệu.")
+        }
+      } else if (statusCode === 500 || statusCode >= 500) {
+        toast.error("Lỗi hệ thống. Vui lòng thử lại sau hoặc liên hệ quản trị viên.")
       } else {
         toast.error(errorMessage || "Có lỗi xảy ra. Vui lòng thử lại.")
       }

@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { uploadImage } from '../controllers/upload.controller.js';
+import { uploadImage, checkStorageHealth } from '../controllers/upload.controller.js';
 import { upload } from '../middleware/upload.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
+
+// Health check endpoint (no auth required for monitoring)
+router.get('/health', checkStorageHealth);
 
 // Protect upload route
 router.use(authenticate);

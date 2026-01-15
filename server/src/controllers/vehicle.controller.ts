@@ -2,7 +2,7 @@ import { Request, Response } from 'express'
 import { AuthRequest } from '../middleware/auth.js'
 import { db } from '../db/drizzle.js'
 import { vehicles, vehicleDocuments, operators, vehicleTypes, auditLogs, users } from '../db/schema/index.js'
-import { eq, inArray, and, desc } from 'drizzle-orm'
+import { eq, inArray, and, desc, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { syncVehicleChanges } from '../utils/denormalization-sync.js'
 import { cachedData } from '../services/cached-data.service.js'
@@ -854,35 +854,28 @@ export const lookupVehicleByPlate = async (req: Request, res: Response) => {
 
     // Fallback: direct DB query if not found in cache
     if (!vehicle) {
-      // Query directly by plate_number (exact match or with common variations)
-      const plateVariations = [
-        plate,
-        plate.replace(/[.\-\s]/g, ''),
-        plate.toUpperCase(),
-        plate.replace(/[.\-\s]/g, '').toUpperCase(),
-      ]
+      // Use normalized plate comparison (single query instead of multiple variations)
+      const normalizedPlate = plate.replace(/[.\-\s]/g, '').toUpperCase()
+      const normalizedPlateExpr = sql<string>`UPPER(REPLACE(REPLACE(REPLACE(${vehicles.plateNumber}, '.', ''), '-', ''), ' ', ''))`
 
-      for (const p of plateVariations) {
-        const results = await db.select({
-          id: vehicles.id,
-          plateNumber: vehicles.plateNumber,
-          seatCount: vehicles.seatCount,
-          bedCapacity: vehicles.bedCapacity,
-          operatorName: vehicles.operatorName,
-        }).from(vehicles).where(eq(vehicles.plateNumber, p)).limit(1)
+      const results = await db.select({
+        id: vehicles.id,
+        plateNumber: vehicles.plateNumber,
+        seatCount: vehicles.seatCount,
+        bedCapacity: vehicles.bedCapacity,
+        operatorName: vehicles.operatorName,
+      }).from(vehicles).where(sql`${normalizedPlateExpr} = ${normalizedPlate}`).limit(1)
 
-        if (results.length > 0) {
-          const v = results[0]
-          vehicle = {
-            id: v.id,
-            plateNumber: v.plateNumber || '',
-            seatCapacity: v.seatCount || 0,
-            bedCapacity: v.bedCapacity || 0,
-            operatorName: v.operatorName || '',
-            vehicleType: '',
-            source: 'legacy' as const,
-          }
-          break
+      if (results.length > 0) {
+        const v = results[0]
+        vehicle = {
+          id: v.id,
+          plateNumber: v.plateNumber || '',
+          seatCapacity: v.seatCount || 0,
+          bedCapacity: v.bedCapacity || 0,
+          operatorName: v.operatorName || '',
+          vehicleType: '',
+          source: 'legacy' as const,
         }
       }
     }

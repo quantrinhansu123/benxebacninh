@@ -1,14 +1,7 @@
 import { useState, useMemo } from "react"
 import { Label } from "@/components/ui/label"
 import { Driver } from "@/types"
-import { format, isValid, parseISO } from "date-fns"
-
-// Helper function to safely format dates
-const formatDate = (dateString: string | undefined | null): string => {
-  if (!dateString) return "N/A"
-  const date = typeof dateString === 'string' ? parseISO(dateString) : new Date(dateString)
-  return isValid(date) ? format(date, "dd/MM/yyyy") : "N/A"
-}
+import { formatDateOnly } from "@/lib/date-utils"
 
 // Parse address string to extract components
 const parseAddress = (addressValue?: string) => {
@@ -113,7 +106,7 @@ export function DriverView({ driver }: { driver: Driver }) {
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-600">Hạn hiệu lực GPLX</Label>
                 <p className="text-base font-medium text-gray-900">
-                  {formatDate(driver.licenseExpiryDate)}
+                  {formatDateOnly(driver.licenseExpiryDate)}
                 </p>
               </div>
             </div>

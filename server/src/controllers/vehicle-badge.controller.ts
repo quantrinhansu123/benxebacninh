@@ -3,11 +3,15 @@ import { db } from '../db/drizzle.js'
 import { vehicleBadges, vehicles, dispatchRecords } from '../db/schema/index.js'
 import { eq, ne, ilike, and } from 'drizzle-orm'
 
-// In-memory cache for vehicle badges (refresh every 30 minutes for production)
+// Constants
+const BADGE_CACHE_CONFIG = {
+  TTL: 30 * 60 * 1000, // 30 minutes - badges don't change often
+} as const
+
+// In-memory cache for vehicle badges
 let badgesCache: any[] | null = null
 let badgesCacheTime: number = 0
-const CACHE_TTL = 30 * 60 * 1000 // 30 minutes - badges don't change often
-let cacheLoading: Promise<any[]> | null = null // Prevent multiple simultaneous loads
+let cacheLoading: Promise<any[]> | null = null // Prevent race conditions
 
 // Helper function to get active dispatch vehicle plates (vehicles currently in operation)
 const getActiveDispatchPlates = async (): Promise<Set<string>> => {
@@ -50,24 +54,27 @@ const mapFirebaseDataToBadge = (data: any, activePlates?: Set<string>) => {
   const vehicleRef = data.plate_number || data.BienSoXe || data.vehicle_id || ''
   const vehicleId = data.vehicle_id || ''
 
+  // Extract metadata fields (stored in JSONB)
+  const metadata = (data.metadata as any) || {}
+
   return {
     id: data.id || data.ID_PhuHieu || '',
     badge_number: data.badge_number || data.SoPhuHieu || '',
     license_plate_sheet: data.plate_number || vehicleRef,
     badge_type: data.badge_type || data.LoaiPH || '',
-    badge_color: data.badge_color || data.MauPhuHieu || '',
+    badge_color: metadata.badgeColor || data.badge_color || data.MauPhuHieu || '',
     issue_date: data.issue_date || data.NgayCap || '',
     expiry_date: data.expiry_date || data.NgayHetHan || '',
     status: status,
-    file_code: data.file_code || data.MaHoSo || '',
-    issue_type: data.issue_type || data.LoaiCap || '',
+    file_code: metadata.fileCode || data.file_code || data.MaHoSo || '',
+    issue_type: metadata.issueType || data.issue_type || data.LoaiCap || '',
     business_license_ref: data.business_license_ref || data.Ref_GPKD || '',
     issuing_authority_ref: data.operator_id || data.Ref_DonViCapPhuHieu || '',
     vehicle_id: vehicleId,
     route_id: data.route_id || data.Ref_Tuyen || '',
     bus_route_ref: data.bus_route_ref || data.TuyenDuong || '',
-    vehicle_type: data.vehicle_type || data.LoaiXe || '',
-    notes: data.notes || data.GhiChu || '',
+    vehicle_type: metadata.vehicleType || data.vehicle_type || data.LoaiXe || '',
+    notes: metadata.notes || data.notes || data.GhiChu || '',
     created_at: data.created_at || data.synced_at || new Date().toISOString(),
     created_by: data.created_by || data.User || '',
     email_notification_sent: data.email_notification_sent || data.GuiEmailbao || false,
@@ -95,7 +102,7 @@ let vehiclePlateCacheTime: number = 0
 // Helper to load vehicle plate numbers for resolving badge vehicle_id
 const loadVehiclePlates = async (): Promise<Map<string, string>> => {
   const now = Date.now()
-  if (vehiclePlateCache && (now - vehiclePlateCacheTime) < CACHE_TTL) {
+  if (vehiclePlateCache && (now - vehiclePlateCacheTime) < BADGE_CACHE_CONFIG.TTL) {
     return vehiclePlateCache
   }
 
@@ -129,7 +136,7 @@ const loadBadgesFromDB = async (): Promise<any[]> => {
   const now = Date.now()
 
   // Return cached data if valid
-  if (badgesCache && (now - badgesCacheTime) < CACHE_TTL) {
+  if (badgesCache && (now - badgesCacheTime) < BADGE_CACHE_CONFIG.TTL) {
     return badgesCache
   }
 
@@ -192,21 +199,17 @@ export const getAllVehicleBadges = async (req: Request, res: Response): Promise<
     // Load from cache
     let badges = await loadBadgesFromDB()
 
-    // Apply filters
-    if (status) {
-      badges = badges.filter(badge => badge.status === status)
-    }
-    if (badgeType) {
-      badges = badges.filter(badge => badge.badge_type === badgeType)
-    }
-    if (badgeColor) {
-      badges = badges.filter(badge => badge.badge_color === badgeColor)
-    }
-    if (vehicleId) {
-      badges = badges.filter(badge => badge.vehicle_id === vehicleId)
-    }
-    if (routeId) {
-      badges = badges.filter(badge => badge.route_id === routeId)
+    // Apply all filters in single pass for efficiency (W3 fix)
+    const hasFilters = status || badgeType || badgeColor || vehicleId || routeId
+    if (hasFilters) {
+      badges = badges.filter(badge => {
+        if (status && badge.status !== status) return false
+        if (badgeType && badge.badge_type !== badgeType) return false
+        if (badgeColor && badge.badge_color !== badgeColor) return false
+        if (vehicleId && badge.vehicle_id !== vehicleId) return false
+        if (routeId && badge.route_id !== routeId) return false
+        return true
+      })
     }
 
     // Server-side pagination
@@ -303,6 +306,9 @@ export const createVehicleBadge = async (req: Request, res: Response): Promise<v
   try {
     if (!db) throw new Error('Database not initialized')
 
+    // Log request body for debugging
+    console.log('[CREATE BADGE] Request body:', JSON.stringify(req.body, null, 2))
+
     const {
       badge_number,
       license_plate_sheet,
@@ -311,6 +317,11 @@ export const createVehicleBadge = async (req: Request, res: Response): Promise<v
       expiry_date,
       status,
       bus_route_ref,
+      badge_color,
+      file_code,
+      issue_type,
+      vehicle_type,
+      notes,
     } = req.body
 
     // Validate required fields
@@ -333,6 +344,14 @@ export const createVehicleBadge = async (req: Request, res: Response): Promise<v
       return
     }
 
+    // Build metadata object for fields not in schema
+    const metadata: any = {}
+    if (badge_color) metadata.badgeColor = badge_color
+    if (file_code) metadata.fileCode = file_code
+    if (issue_type) metadata.issueType = issue_type
+    if (vehicle_type) metadata.vehicleType = vehicle_type
+    if (notes) metadata.notes = notes
+
     // Create new badge in Drizzle
     const [data] = await db
       .insert(vehicleBadges)
@@ -344,9 +363,12 @@ export const createVehicleBadge = async (req: Request, res: Response): Promise<v
         expiryDate: expiry_date || null,
         status: status || 'active',
         routeCode: bus_route_ref || null,
+        metadata: Object.keys(metadata).length > 0 ? metadata : null,
         source: 'manual',
       })
       .returning()
+
+    console.log('[CREATE BADGE] Created badge:', data)
 
     // Invalidate cache
     invalidateBadgesCache()
@@ -369,6 +391,9 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
   try {
     if (!db) throw new Error('Database not initialized')
 
+    // Log request body for debugging
+    console.log('[UPDATE BADGE] Request body:', JSON.stringify(req.body, null, 2))
+
     const { id } = req.params
     const {
       badge_number,
@@ -378,6 +403,11 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
       expiry_date,
       status,
       bus_route_ref,
+      badge_color,
+      file_code,
+      issue_type,
+      vehicle_type,
+      notes,
     } = req.body
 
     // Check for duplicate badge number (excluding current badge)
@@ -399,6 +429,27 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
       }
     }
 
+    // Get current badge to preserve existing metadata
+    const [currentBadge] = await db
+      .select()
+      .from(vehicleBadges)
+      .where(eq(vehicleBadges.id, id))
+      .limit(1)
+
+    if (!currentBadge) {
+      res.status(404).json({ error: 'Vehicle badge not found' })
+      return
+    }
+
+    // Build metadata object for fields not in schema
+    const currentMetadata = (currentBadge.metadata as any) || {}
+    const metadata: any = { ...currentMetadata }
+    if (badge_color !== undefined) metadata.badgeColor = badge_color
+    if (file_code !== undefined) metadata.fileCode = file_code
+    if (issue_type !== undefined) metadata.issueType = issue_type
+    if (vehicle_type !== undefined) metadata.vehicleType = vehicle_type
+    if (notes !== undefined) metadata.notes = notes
+
     // Build update data
     const updateData: any = {}
     if (badge_number !== undefined) updateData.badgeNumber = badge_number
@@ -408,6 +459,7 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
     if (expiry_date !== undefined) updateData.expiryDate = expiry_date
     if (status !== undefined) updateData.status = status
     if (bus_route_ref !== undefined) updateData.routeCode = bus_route_ref
+    if (Object.keys(metadata).length > 0) updateData.metadata = metadata
 
     // Update in Drizzle
     if (!db) throw new Error('Database not initialized')
@@ -424,6 +476,8 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
       res.status(404).json({ error: 'Vehicle badge not found' })
       return
     }
+
+    console.log('[UPDATE BADGE] Updated badge:', data)
 
     // Invalidate cache
     invalidateBadgesCache()

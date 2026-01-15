@@ -29,14 +29,10 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { vehicleService, VehicleForm, VehicleView } from "@/features/fleet/vehicles"
-import { type VehicleBadge } from "@/services/vehicle-badge.service"
 import { quanlyDataService } from "@/services/quanly-data.service"
 import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { format, isValid, parseISO } from "date-fns"
-
-// Allowed badge types for filtering (same as QuanLyPhuHieuXe)
-const ALLOWED_BADGE_TYPES = ["Buýt", "Tuyến cố định"]
 
 // Helper functions
 const getVehicleTypeName = (vehicle: Vehicle): string => {
@@ -92,11 +88,10 @@ const QuickFilter = ({ label, count, active, onClick }: {
   </button>
 )
 
-const ITEMS_PER_PAGE = 20
+const ITEMS_PER_PAGE = 50
 
 export default function QuanLyXe() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
-  const [badges, setBadges] = useState<VehicleBadge[]>([])
   const [operatorCount, setOperatorCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterVehicleType, setFilterVehicleType] = useState("")
@@ -122,35 +117,22 @@ export default function QuanLyXe() {
   const loadData = async (forceRefresh = false) => {
     setIsLoading(true)
     try {
-      // Use optimized unified endpoint - single request for all data (include operators for stats)
-      const data = await quanlyDataService.getAll(['badges', 'vehicles', 'operators'], forceRefresh)
-      
-      // Debug: log sample vehicle from API response
-      if (data.vehicles && data.vehicles.length > 0) {
-        console.log('[QuanLyXe] Sample vehicle from API:', data.vehicles[0])
-      }
-      
+      // Use optimized unified endpoint - single request for vehicles and operators
+      const data = await quanlyDataService.getAll(['vehicles', 'operators'], forceRefresh)
+
       // Convert to expected formats
       const vehicleData: Vehicle[] = (data.vehicles || []).map(v => ({
         id: v.id,
         plateNumber: v.plateNumber,
         seatCapacity: v.seatCapacity,
         operatorName: v.operatorName || '',
-        vehicleTypeName: v.vehicleType || '',  // Use vehicleTypeName for helper compatibility
+        vehicleTypeName: v.vehicleType || '',
         inspectionExpiryDate: v.inspectionExpiryDate,
         isActive: v.isActive,
-        source: 'badge',  // Mark as badge so frontend filter passes them through
       } as any))
-      
-      const badgeData: VehicleBadge[] = (data.badges || []).map(b => ({
-        ...b,
-        vehicle_id: b.license_plate_sheet,
-        operational_status: 'trong_ben' as const,
-      } as any))
-      
+
       setVehicles(vehicleData)
-      setBadges(badgeData)
-      setOperatorCount((data.operators || []).length)  // Use operators count from same data source
+      setOperatorCount((data.operators || []).length)
     } catch (error) {
       console.error("Failed to load data:", error)
       toast.error("Không thể tải danh sách xe. Vui lòng thử lại sau.")
@@ -159,51 +141,26 @@ export default function QuanLyXe() {
     }
   }
 
-  // Get plate numbers from badges with allowed types (Buýt, Tuyến cố định)
-  const allowedPlateNumbers = useMemo(() => {
-    const plates = new Set<string>()
-    badges.forEach(badge => {
-      if (ALLOWED_BADGE_TYPES.includes(badge.badge_type || "")) {
-        plates.add(badge.license_plate_sheet.toUpperCase().replace(/\s+/g, ""))
-      }
-    })
-    return plates
-  }, [badges])
-
-  // Filter vehicles by: badge source OR plate matches Buýt/Tuyến cố định badges
-  const vehiclesWithAllowedTypes = useMemo(() => {
-    return vehicles.filter((vehicle: Vehicle & { source?: string }) => {
-      // Badge vehicles are already filtered by backend (Buýt/Tuyến cố định only)
-      if (vehicle.source === "badge") {
-        return true
-      }
-      
-      // For legacy/db vehicles, check if plate matches allowed badges
-      const plateNormalized = (vehicle.plateNumber || "").toUpperCase().replace(/\s+/g, "")
-      return allowedPlateNumbers.has(plateNormalized)
-    })
-  }, [vehicles, allowedPlateNumbers])
-
-  // Get unique vehicle types and operators for filter options (from filtered vehicles only)
-  const vehicleTypes = useMemo(() => 
-    Array.from(new Set(vehiclesWithAllowedTypes.map(getVehicleTypeName).filter(Boolean))).sort(),
-    [vehiclesWithAllowedTypes]
+  // Get unique vehicle types and operators for filter options
+  const vehicleTypes = useMemo(() =>
+    Array.from(new Set(vehicles.map(getVehicleTypeName).filter(Boolean))).sort(),
+    [vehicles]
   )
-  const operatorNames = useMemo(() => 
-    Array.from(new Set(vehiclesWithAllowedTypes.map(getOperatorName).filter(Boolean))).sort(),
-    [vehiclesWithAllowedTypes]
+  const operatorNames = useMemo(() =>
+    Array.from(new Set(vehicles.map(getOperatorName).filter(Boolean))).sort(),
+    [vehicles]
   )
 
-  // Stats calculations (from filtered vehicles only)
+  // Stats calculations
   const stats = useMemo(() => {
-    const active = vehiclesWithAllowedTypes.filter(v => v.isActive).length
-    const inactive = vehiclesWithAllowedTypes.length - active
+    const active = vehicles.filter(v => v.isActive).length
+    const inactive = vehicles.length - active
     // Use operatorCount from same data source as Đơn vị vận tải page for consistency
-    return { total: vehiclesWithAllowedTypes.length, active, inactive, uniqueOperators: operatorCount }
-  }, [vehiclesWithAllowedTypes, operatorCount])
+    return { total: vehicles.length, active, inactive, uniqueOperators: operatorCount }
+  }, [vehicles, operatorCount])
 
   const filteredVehicles = useMemo(() => {
-    return vehiclesWithAllowedTypes.filter((vehicle: Vehicle) => {
+    return vehicles.filter((vehicle: Vehicle) => {
       const vehicleTypeName = getVehicleTypeName(vehicle)
       const operatorName = getOperatorName(vehicle)
 
@@ -230,7 +187,7 @@ export default function QuanLyXe() {
 
       return true
     })
-  }, [vehiclesWithAllowedTypes, searchQuery, filterVehicleType, filterOperator, filterStatus, quickFilter])
+  }, [vehicles, searchQuery, filterVehicleType, filterOperator, filterStatus, quickFilter])
 
   // Pagination
   const totalPages = Math.ceil(filteredVehicles.length / ITEMS_PER_PAGE)

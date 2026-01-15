@@ -113,9 +113,28 @@ export default function ThanhToan() {
       );
     }
 
+    // Filter by order type (Bug G1 fix)
+    if (orderType !== 'all') {
+      filtered = filtered.filter(record => {
+        const tripType = record.route?.routeType || '';
+        const tripTypeLower = tripType.toLowerCase();
+
+        switch (orderType) {
+          case 'thanh-toan-chuyen':
+            return tripTypeLower.includes('chuyến') || tripTypeLower.includes('chuyen');
+          case 'thanh-toan-dinh-ky':
+            return tripTypeLower.includes('định kỳ') || tripTypeLower.includes('dinh ky');
+          case 'thanh-toan-vang-lai':
+            return tripTypeLower.includes('vãng lai') || tripTypeLower.includes('vang lai');
+          default:
+            return true;
+        }
+      });
+    }
+
     filtered.sort((a, b) => new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime());
     return filtered;
-  }, [allData, dateRange, searchQuery]);
+  }, [allData, dateRange, searchQuery, orderType]);
 
   // Calculate stats - check paymentTime or status for paid determination
   const stats = useMemo(() => {
@@ -155,6 +174,8 @@ export default function ThanhToan() {
   }, [listData]);
 
   const loadListData = async () => {
+    // Clear cache first to force fresh data (Bug G2 fix)
+    invalidateCache('thanhtoan-dispatch-list');
     await refetchList();
   };
 

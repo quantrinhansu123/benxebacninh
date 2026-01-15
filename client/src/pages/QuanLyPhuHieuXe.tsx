@@ -96,7 +96,7 @@ export default function QuanLyPhuHieuXe() {
     notes: "",
   })
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
+  const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
 
   useEffect(() => {
@@ -823,7 +823,7 @@ export default function QuanLyPhuHieuXe() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">
-                Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredBadges.length)} của {filteredBadges.length} phù hiệu
+                Hiển thị {startIndex + 1}-{Math.min(endIndex, filteredBadges.length)} trong tổng số {filteredBadges.length.toLocaleString()} phù hiệu
               </div>
               <div className="flex items-center gap-2">
                 <Button

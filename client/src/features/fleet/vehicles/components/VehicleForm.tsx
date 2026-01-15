@@ -303,7 +303,7 @@ export function VehicleForm({
 
   // Reset form values when vehicle prop changes (for edit mode)
   useEffect(() => {
-    if (vehicle) {
+    if (vehicle && mode === "edit") {
       const operatorId = vehicle.operatorId ? String(vehicle.operatorId) : ""
       const vehicleTypeId = vehicle.vehicleTypeId ? String(vehicle.vehicleTypeId) : ""
 
@@ -331,7 +331,7 @@ export function VehicleForm({
       reset(formValues)
       setVehicleImage(vehicle.imageUrl || null)
 
-    } else {
+    } else if (!vehicle && mode === "create") {
       // Reset to default for create mode
       reset({
         operatorId: "",
@@ -341,7 +341,7 @@ export function VehicleForm({
       })
       setVehicleImage(null)
     }
-  }, [vehicle, reset, setValue, operators.length])
+  }, [vehicle, mode, reset])
 
   // Watch vehicleTypeId and auto-fill seat/bed capacity when changed (only in create mode)
   const watchedVehicleTypeId = watch("vehicleTypeId")

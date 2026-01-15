@@ -26,16 +26,9 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { driverService } from "@/services/driver.service"
 import type { Driver } from "@/types"
-import { format, isValid, parseISO } from "date-fns"
 import { useUIStore } from "@/store/ui.store"
 import { DriverDialog } from "@/components/driver/DriverDialog"
-
-// Helper function to safely format dates
-const formatDate = (dateString: string | undefined | null): string => {
-  if (!dateString) return "N/A"
-  const date = typeof dateString === 'string' ? parseISO(dateString) : new Date(dateString)
-  return isValid(date) ? format(date, "dd/MM/yyyy") : "N/A"
-}
+import { formatDateOnly } from "@/lib/date-utils"
 
 // Avatar color based on name hash
 const getAvatarColor = (name: string) => {
@@ -96,7 +89,7 @@ const QuickFilter = ({ label, count, active, onClick }: {
   </button>
 )
 
-const ITEMS_PER_PAGE = 20
+const ITEMS_PER_PAGE = 50
 
 export default function QuanLyLaiXe() {
   const [drivers, setDrivers] = useState<Driver[]>([])
@@ -568,7 +561,7 @@ export default function QuanLyLaiXe() {
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center gap-2 text-slate-600">
                             <Calendar className="h-4 w-4 text-slate-400" />
-                            <span className="text-sm">{formatDate(driver.licenseExpiryDate)}</span>
+                            <span className="text-sm">{formatDateOnly(driver.licenseExpiryDate)}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center">
@@ -694,7 +687,7 @@ export default function QuanLyLaiXe() {
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Calendar className="h-4 w-4 text-slate-400" />
-                      <span className="text-slate-600">Hạn: {formatDate(driver.licenseExpiryDate)}</span>
+                      <span className="text-slate-600">Hạn: {formatDateOnly(driver.licenseExpiryDate)}</span>
                     </div>
                   </div>
 

@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import {
   Search,
   FileCheck,
@@ -17,6 +16,7 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
+import { useSmartNavigation } from "@/lib/navigation-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -47,7 +47,7 @@ import { cn } from "@/lib/utils";
 import type { DispatchRecord } from "@/types";
 
 export default function DieuDo() {
-  const navigate = useNavigate();
+  const { navigateWithReturn } = useSmartNavigation();
   const {
     records,
     searchQuery,
@@ -91,7 +91,7 @@ export default function DieuDo() {
       );
     } else if (status === "permit-issued") {
       buttons.push(
-        <ActionButton key="payment" icon={Banknote} onClick={(e) => { e.stopPropagation(); navigate(`/thanh-toan/${record.id}`); }} title="Thanh toán" variant="warning" />,
+        <ActionButton key="payment" icon={Banknote} onClick={(e) => { e.stopPropagation(); navigateWithReturn(`/thanh-toan/${record.id}`); }} title="Thanh toán" variant="warning" />,
         <ActionButton key="document" icon={FileText} onClick={(e) => { e.stopPropagation(); handleOpenPermitReadOnly(record); }} title="Xem tài liệu" variant="info" />
       );
     } else if (status === "paid") {
@@ -160,7 +160,7 @@ export default function DieuDo() {
                 vehicleStatus={getVehicleStatus(record, status)}
                 onClick={() => {
                   if (status === "in-station") handleAction(record, "permit");
-                  else if (status === "permit-issued") navigate(`/thanh-toan/${record.id}`);
+                  else if (status === "permit-issued") navigateWithReturn(`/thanh-toan/${record.id}`);
                   else if (status === "paid") handleAction(record, "depart");
                 }}
                 actionButtons={getActionButtons(record, status)}

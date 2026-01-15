@@ -10,7 +10,7 @@ export interface OperatorWithSource extends Operator {
   vehicleCount?: number;
 }
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 50;
 
 export function useOperatorManagement() {
   const [operators, setOperators] = useState<OperatorWithSource[]>([]);
@@ -159,6 +159,11 @@ export function useOperatorManagement() {
     setDetailDialogOpen(true);
   };
 
+  const handleSaveSuccess = () => {
+    setDialogOpen(false);
+    loadOperators(true); // Force refresh after save
+  };
+
   const clearFilters = () => {
     setSearchQuery("");
     setFilterStatus("");
@@ -221,5 +226,6 @@ export function useOperatorManagement() {
     handleDelete,
     confirmDelete,
     handleRowClick,
+    handleSaveSuccess,
   };
 }

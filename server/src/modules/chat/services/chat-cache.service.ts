@@ -69,6 +69,7 @@ class ChatCacheService {
   private lastRefresh: Date | null = null
   private refreshInterval: NodeJS.Timeout | null = null
   private isWarming = false
+  private warmingPromise: Promise<void> | null = null
 
   async preWarm(): Promise<void> {
     // Skip heavy data loading at startup to avoid connection pool exhaustion
@@ -80,9 +81,19 @@ class ChatCacheService {
   // Actual data loading (called on first query)
   async loadDataIfNeeded(): Promise<void> {
     if (this.cache.size > 0) return // Already loaded
-    if (this.isWarming) return
-    this.isWarming = true
 
+    // If already warming, wait for it to complete (fix race condition)
+    if (this.isWarming && this.warmingPromise) {
+      await this.warmingPromise
+      return
+    }
+
+    this.isWarming = true
+    this.warmingPromise = this.doLoadData()
+    await this.warmingPromise
+  }
+
+  private async doLoadData(): Promise<void> {
     console.log('[ChatCache] Loading data on first query...')
     const startTime = Date.now()
 
@@ -124,6 +135,7 @@ class ChatCacheService {
       }
     } finally {
       this.isWarming = false
+      this.warmingPromise = null
     }
   }
 

@@ -9,12 +9,25 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 let supabase: SupabaseClient | null = null
 
+/**
+ * Validate environment variables for Supabase
+ */
+function validateEnvironment(): void {
+  if (!supabaseUrl || supabaseUrl.trim() === '') {
+    console.error('[Storage] SUPABASE_URL is not set or empty')
+    throw new Error('SUPABASE_URL environment variable is required')
+  }
+  if (!supabaseServiceKey || supabaseServiceKey.trim() === '') {
+    console.error('[Storage] SUPABASE_SERVICE_ROLE_KEY is not set or empty')
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is required')
+  }
+  console.log('[Storage] Environment variables validated successfully')
+}
+
 function getSupabaseClient(): SupabaseClient {
   if (!supabase) {
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('[Storage] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set')
-    }
-    supabase = createClient(supabaseUrl, supabaseServiceKey)
+    validateEnvironment()
+    supabase = createClient(supabaseUrl!, supabaseServiceKey!)
   }
   return supabase
 }
@@ -22,6 +35,52 @@ function getSupabaseClient(): SupabaseClient {
 const BUCKET_NAME = 'dispatch-images'
 
 export const storageService = {
+  /**
+   * Check storage health and configuration
+   * @returns Health status object
+   */
+  async checkHealth(): Promise<{
+    ok: boolean
+    hasRequiredBucket: boolean
+    error?: string
+  }> {
+    try {
+      validateEnvironment()
+      const client = getSupabaseClient()
+
+      // List all buckets to verify connection and check for required bucket
+      const { data: buckets, error } = await client.storage.listBuckets()
+
+      if (error) {
+        console.error('[Storage] Health check error:', error)
+        return {
+          ok: false,
+          hasRequiredBucket: false,
+          error: error.message
+        }
+      }
+
+      const hasRequiredBucket = buckets?.some(b => b.name === BUCKET_NAME) ?? false
+
+      if (!hasRequiredBucket) {
+        console.warn(`[Storage] Required bucket '${BUCKET_NAME}' not found`)
+      }
+
+      return {
+        ok: true,
+        hasRequiredBucket
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Storage] Health check failed:', message)
+      return {
+        ok: false,
+        hasRequiredBucket: false,
+        error: message
+      }
+    }
+  },
+
   /**
    * Upload file to Supabase Storage
    * @param file - Express Multer file object

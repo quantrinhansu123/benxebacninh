@@ -73,6 +73,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           email: operatorsTable.email,
           address: operatorsTable.address,
           representative: operatorsTable.representative,
+          taxCode: operatorsTable.taxCode,
           isActive: operatorsTable.isActive,
           source: operatorsTable.source,
         }).from(operatorsTable),
@@ -230,6 +231,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           email: o.email || '',
           address: o.address || '',
           representativeName: o.representative || '',
+          taxCode: o.taxCode || '',
           isActive: o.isActive !== false,
           source: o.source || 'drizzle',
         })
@@ -256,7 +258,13 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
       // Sort data
       badges.sort((a, b) => b.badge_number.localeCompare(a.badge_number))
       vehicles.sort((a, b) => a.plateNumber.localeCompare(b.plateNumber))
-      operators.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+      // Sort operators: those with taxCode first, then by name
+      operators.sort((a, b) => {
+        const aHasTax = a.taxCode ? 1 : 0
+        const bHasTax = b.taxCode ? 1 : 0
+        if (bHasTax !== aHasTax) return bHasTax - aHasTax // Has tax first
+        return a.name.localeCompare(b.name, 'vi')
+      })
       routes.sort((a, b) => a.code.localeCompare(b.code))
 
       const loadTime = Date.now() - startTime

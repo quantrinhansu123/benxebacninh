@@ -132,23 +132,31 @@ export function ChoNhieuXeRaBenDialog({
 
     setIsLoading(true);
     try {
+      console.log('[MultiExit] Processing:', selectedRecords.size);
       const exitShiftId = getShiftIdFromCurrentShift();
-      const promises = Array.from(selectedRecords).map((recordId) =>
-        dispatchService.recordExit(
+      const promises = Array.from(selectedRecords).map((recordId) => {
+        console.log('[MultiExit] Exit for:', recordId);
+        return dispatchService.recordExit(
           recordId,
           exitTime.toISOString(),
           passengerCount,
           exitShiftId
-        )
-      );
+        );
+      });
 
-      await Promise.all(promises);
+      const results = await Promise.all(promises);
+      console.log('[MultiExit] Results:', results);
+
       toast.success(`Cho ${selectedRecords.size} xe ra bến thành công!`);
-      if (onSuccess) onSuccess();
+
+      if (onSuccess) {
+        console.log('[MultiExit] Calling onSuccess');
+        onSuccess();
+      }
       onClose();
     } catch (error) {
-      console.error("Failed to record exit:", error);
-      toast.error("Không thể cho xe ra bến. Vui lòng thử lại sau.");
+      console.error('[MultiExit] Failed:', error);
+      toast.error(`Không thể cho xe ra bến: ${error instanceof Error ? error.message : 'Unknown'}`);
     } finally {
       setIsLoading(false);
     }

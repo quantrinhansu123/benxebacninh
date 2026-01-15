@@ -187,8 +187,25 @@ export function useChoXeVaoBenForm({
     setVehicleId(id);
   };
 
-  const handleRefreshTransportOrder = () => {
-    toast.info("Chức năng làm mới lệnh vận chuyển đang được phát triển");
+  const handleRefreshTransportOrder = async () => {
+    if (!vehicleId || !routeId) {
+      toast.warning("Vui lòng chọn xe và tuyến trước");
+      return;
+    }
+
+    try {
+      // Generate code format: LVC-YYYYMMDD-XXXX
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+      const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const code = `LVC-${dateStr}-${randomSuffix}`;
+
+      setTransportOrderCode(code);
+      toast.success("Đã tạo mã lệnh vận chuyển");
+    } catch (error) {
+      console.error("Failed to generate code:", error);
+      toast.error("Không thể tạo mã lệnh vận chuyển");
+    }
   };
 
   const handleConfirmPassengerDropChange = (checked: boolean) => {
@@ -274,6 +291,14 @@ export function useChoXeVaoBenForm({
       if (performPermitAfterEntry) {
         try {
           const fullRecord = await dispatchService.getById(updatedRecord.id);
+
+          // Auto-generate transport order code if not already set
+          if (!transportOrderCode) {
+            const dateStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+            const autoCode = `LVC-${dateStr}-${fullRecord.id.slice(-4).toUpperCase()}`;
+            setTransportOrderCode(autoCode);
+          }
+
           setPermitDispatchRecord(fullRecord);
           setShowPermitDialog(true);
         } catch (error) {

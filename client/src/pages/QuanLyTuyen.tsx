@@ -34,7 +34,7 @@ export default function QuanLyTuyen() {
   const [selectedRoute, setSelectedRoute] = useState<LegacyRoute | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 20
+  const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
 
   useEffect(() => {
@@ -46,6 +46,8 @@ export default function QuanLyTuyen() {
     setIsLoading(true)
     try {
       const data = await routeService.getLegacy(forceRefresh)
+      console.log('[QuanLyTuyen] Loaded routes:', data.length)
+      console.log('[QuanLyTuyen] Sample route type:', data[0]?.routeType)
       setRoutes(data)
     } catch (error) {
       console.error("Failed to load routes:", error)
@@ -361,6 +363,7 @@ export default function QuanLyTuyen() {
               <TableHead className="text-center">Tỉnh đi</TableHead>
               <TableHead className="text-center">Bến đến</TableHead>
               <TableHead className="text-center">Tỉnh đến</TableHead>
+              <TableHead className="text-center w-[100px]">Loại tuyến</TableHead>
               <TableHead className="text-center w-[80px]">Cự ly (km)</TableHead>
               <TableHead className="text-center w-[100px]">Chuyến/tháng</TableHead>
               <TableHead className="text-center w-[120px]">Tình trạng</TableHead>
@@ -370,14 +373,14 @@ export default function QuanLyTuyen() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8">
+                <TableCell colSpan={10} className="text-center py-8">
                   <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
                   Đang tải...
                 </TableCell>
               </TableRow>
             ) : paginatedRoutes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                   Không có dữ liệu
                 </TableCell>
               </TableRow>
@@ -389,6 +392,7 @@ export default function QuanLyTuyen() {
                   <TableCell className="text-center text-gray-600">{route.departureProvince || "N/A"}</TableCell>
                   <TableCell className="text-center">{route.arrivalStation || "N/A"}</TableCell>
                   <TableCell className="text-center text-gray-600">{route.arrivalProvince || "N/A"}</TableCell>
+                  <TableCell className="text-center text-sm">{route.routeType || "N/A"}</TableCell>
                   <TableCell className="text-center">{route.distanceKm || "N/A"}</TableCell>
                   <TableCell className="text-center">{route.totalTripsMonth || "N/A"}</TableCell>
                   <TableCell className="text-center">
@@ -416,7 +420,7 @@ export default function QuanLyTuyen() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t">
             <p className="text-sm text-gray-500">
-              Trang {currentPage} / {totalPages} ({filteredRoutes.length.toLocaleString()} tuyến)
+              Hiển thị {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredRoutes.length)} trong tổng số {filteredRoutes.length.toLocaleString()} tuyến
             </p>
             <div className="flex items-center gap-2">
               <Button
