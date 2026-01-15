@@ -21,6 +21,7 @@ import { DatePicker } from "@/components/DatePicker"
 import { driverService } from "@/services/driver.service"
 import { operatorService } from "@/services/operator.service"
 import api from "@/lib/api"
+import { prepareImageForUpload } from "@/lib/image-compression"
 import { Driver, DriverInput, Operator } from "@/types"
 import { provinceService, type Province, type District, type Ward } from "@/services/province.service"
 
@@ -325,17 +326,24 @@ export function DriverForm({ driver, mode, onClose }: DriverFormProps) {
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Kích thước ảnh không được vượt quá 5MB')
+    // Increased limit since compression will reduce size
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Kích thước ảnh không được vượt quá 10MB')
       return
     }
 
     setUploading(true)
-    const formData = new FormData()
-    formData.append('image', file)
-
     try {
+      // Compress image before upload
+      const { file: compressedFile, error } = await prepareImageForUpload(file)
+      if (error) {
+        toast.error(error)
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('image', compressedFile)
+
       const response = await api.post<{ url: string }>('/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',

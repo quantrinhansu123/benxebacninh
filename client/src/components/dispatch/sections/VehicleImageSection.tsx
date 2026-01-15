@@ -3,6 +3,7 @@ import { Camera, Upload, Car, X, Loader2, Image } from "lucide-react";
 import { toast } from "react-toastify";
 import { GlassCard, SectionHeader } from "@/components/shared/styled-components";
 import api from "@/lib/api";
+import { prepareImageForUpload } from "@/lib/image-compression";
 
 interface VehicleImageSectionProps {
   vehicleImageUrl?: string | null;
@@ -18,6 +19,7 @@ export function VehicleImageSection({
   onEntryImageUpdated,
 }: VehicleImageSectionProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(entryImageUrl || null);
   const [activeTab, setActiveTab] = useState<"entry" | "vehicle">("entry");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,15 +33,27 @@ export function VehicleImageSection({
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Kích thước ảnh không được vượt quá 5MB");
+    // Increased limit since compression will reduce size
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Kích thước ảnh không được vượt quá 10MB");
       return;
     }
 
     setIsUploading(true);
     try {
+      // Step 1: Compress image client-side first
+      setUploadStatus("Đang nén ảnh...");
+      const { file: compressedFile, error } = await prepareImageForUpload(file);
+
+      if (error) {
+        toast.error(error);
+        return;
+      }
+
+      // Step 2: Upload compressed image (server will further optimize)
+      setUploadStatus("Đang tải lên...");
       const formData = new FormData();
-      formData.append("image", file);
+      formData.append("image", compressedFile);
 
       const uploadResponse = await api.post<{ url: string }>("/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -59,6 +73,7 @@ export function VehicleImageSection({
       toast.error("Không thể upload ảnh. Vui lòng thử lại.");
     } finally {
       setIsUploading(false);
+      setUploadStatus("");
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -126,7 +141,7 @@ export function VehicleImageSection({
               <div className="p-4 rounded-2xl bg-blue-50 mb-4">
                 <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />
               </div>
-              <p className="text-gray-700 font-semibold text-lg">Đang tải ảnh...</p>
+              <p className="text-gray-700 font-semibold text-lg">{uploadStatus || "Đang tải ảnh..."}</p>
             </div>
           ) : currentImage ? (
             <>

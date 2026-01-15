@@ -24,6 +24,7 @@ import type { Operator } from "@/features/fleet/operators/types"
 import { Eye, EyeOff, Upload } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
 import api from "@/lib/api"
+import { prepareImageForUpload } from "@/lib/image-compression"
 import { quanlyDataService } from "@/services/quanly-data.service"
 
 const vehicleSchema = z.object({
@@ -279,17 +280,23 @@ export function VehicleForm({
           return
         }
 
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          toast.error('Kích thước ảnh không được vượt quá 5MB')
+        // Increased limit since compression will reduce size
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error('Kích thước ảnh không được vượt quá 10MB')
           return
         }
 
         setIsUploading(true)
         try {
-          // Upload to Cloudinary via backend
+          // Compress image before upload
+          const { file: compressedFile, error } = await prepareImageForUpload(file)
+          if (error) {
+            toast.error(error)
+            return
+          }
+
           const formData = new FormData()
-          formData.append('image', file) // Changed from 'file' to 'image'
+          formData.append('image', compressedFile)
 
           const response = await api.post<{ url: string }>('/upload', formData, {
             headers: {

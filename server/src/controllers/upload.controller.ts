@@ -1,9 +1,11 @@
 /**
  * Upload Controller
  * Handles file uploads using Supabase Storage
+ * Includes server-side image compression for egress optimization
  */
 import { Request, Response } from 'express'
 import { storageService } from '../services/storage.service.js'
+import { imageCompressionService } from '../services/image-compression.service.js'
 import fs from 'fs'
 
 /**
@@ -77,8 +79,22 @@ export const uploadImage = async (req: Request, res: Response): Promise<Response
     }
 
     console.log('[Upload] Uploading to Supabase storage...')
-    // Upload to Supabase Storage
-    const imageUrl = await storageService.upload(req.file, 'entries')
+
+    // Compress image before upload (target: ~50KB)
+    console.log('[Upload] Compressing image...')
+    const compressedFile = await imageCompressionService.compressUploadedFile(req.file, {
+      maxWidth: 1200,
+      maxHeight: 1200,
+      targetSizeKB: 50,
+      quality: 65
+    })
+    console.log('[Upload] Compression complete:', {
+      originalSize: `${(req.file.size / 1024).toFixed(1)}KB`,
+      compressedSize: `${(compressedFile.size / 1024).toFixed(1)}KB`
+    })
+
+    // Upload compressed image to Supabase Storage
+    const imageUrl = await storageService.upload(compressedFile, 'entries')
 
     console.log('[Upload] Upload successful:', imageUrl)
     return res.status(200).json({
