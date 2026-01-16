@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Menu, Bell, Home, Edit } from "lucide-react"
+import { Menu, Home, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { UserDropdown } from "./UserDropdown"
 import { useUIStore } from "@/store/ui.store"
@@ -43,11 +43,6 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" aria-label="Notifications">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500" />
-          </Button>
-
           <UserDropdown
             variant="desktop"
             homeLink="/"

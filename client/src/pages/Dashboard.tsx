@@ -183,8 +183,8 @@ export default function Dashboard() {
             subtitle="Toàn bộ hoạt động"
             trend={{
               direction: "up",
-              value: "+8%",
-              description: "tuần này",
+              value: "",
+              description: "Hôm nay",
             }}
             isLoading={isLoading}
           />
@@ -192,11 +192,11 @@ export default function Dashboard() {
             category="Đã xuất bến"
             categoryColor="green"
             value={stats.vehiclesDepartedToday}
-            subtitle="So với hôm qua"
+            subtitle="Đã rời bến"
             trend={{
               direction: "up",
-              value: "+23%",
-              description: "hiệu quả",
+              value: "",
+              description: "Hôm nay",
             }}
             isLoading={isLoading}
           />
@@ -219,8 +219,8 @@ export default function Dashboard() {
             subtitle="VNĐ trong ngày"
             trend={{
               direction: "up",
-              value: "+12%",
-              description: "so với hôm qua",
+              value: "",
+              description: "Hôm nay",
             }}
             isLoading={isLoading}
             isCurrency

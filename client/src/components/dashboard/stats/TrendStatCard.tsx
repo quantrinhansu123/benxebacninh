@@ -64,6 +64,15 @@ export const TrendStatCard = memo(function TrendStatCard({
 
   const formatValue = (val: number) => {
     if (isCurrency) {
+      // Format large currency values with abbreviations
+      if (val >= 1_000_000_000) {
+        const billions = val / 1_000_000_000;
+        return `${billions.toFixed(billions % 1 === 0 ? 0 : 2)} tỷ`;
+      }
+      if (val >= 1_000_000) {
+        const millions = val / 1_000_000;
+        return `${millions.toFixed(millions % 1 === 0 ? 0 : 1)} triệu`;
+      }
       return new Intl.NumberFormat("vi-VN").format(val);
     }
     return val.toLocaleString("vi-VN");
