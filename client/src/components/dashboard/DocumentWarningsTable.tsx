@@ -22,7 +22,7 @@ interface DocumentWarningsTableProps {
   onViewHistory: (warning: Warning) => void
 }
 
-const ITEMS_PER_PAGE = 10
+const ITEMS_PER_PAGE = 50
 
 export function DocumentWarningsTable({
   warnings,
