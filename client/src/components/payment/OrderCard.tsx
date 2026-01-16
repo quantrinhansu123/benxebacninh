@@ -28,6 +28,36 @@ const statusConfig = {
   }
 };
 
+const routeTypeConfig = {
+  'lien-tinh': {
+    label: 'Liên tỉnh',
+    bg: 'bg-blue-100',
+    text: 'text-blue-700',
+  },
+  'noi-tinh': {
+    label: 'Nội tỉnh',
+    bg: 'bg-orange-100',
+    text: 'text-orange-700',
+  },
+  'khac': {
+    label: 'Khác',
+    bg: 'bg-gray-100',
+    text: 'text-gray-600',
+  },
+};
+
+const getRouteType = (routeType?: string): keyof typeof routeTypeConfig => {
+  if (!routeType) return 'khac';
+  const lower = routeType.toLowerCase();
+  if (lower.includes('liên tỉnh') || lower.includes('lien tinh') || lower.includes('intercity')) {
+    return 'lien-tinh';
+  }
+  if (lower.includes('nội tỉnh') || lower.includes('noi tinh')) {
+    return 'noi-tinh';
+  }
+  return 'khac';
+};
+
 interface OrderCardProps {
   item: DispatchRecord;
   isSelected: boolean;
@@ -41,6 +71,8 @@ export function OrderCard({ item, isSelected, onSelect, onNavigate }: OrderCardP
     ? (item.currentStatus === 'departed' ? statusConfig.departed : statusConfig.paid)
     : statusConfig.pending;
   const StatusIcon = status.icon;
+  const routeType = getRouteType(item.route?.routeType);
+  const routeConfig = routeTypeConfig[routeType];
 
   return (
     <div
@@ -52,7 +84,7 @@ export function OrderCard({ item, isSelected, onSelect, onNavigate }: OrderCardP
     >
       {/* Selection checkbox */}
       {!isPaid && (
-        <div className="absolute top-4 left-4 z-10">
+        <div className="absolute top-3 left-3 z-10">
           <Checkbox
             checked={isSelected}
             onChange={onSelect}
@@ -63,11 +95,11 @@ export function OrderCard({ item, isSelected, onSelect, onNavigate }: OrderCardP
 
       {/* Status indicator */}
       <div className={cn(
-        "absolute top-0 right-0 px-3 py-1.5 rounded-bl-xl rounded-tr-xl",
+        "absolute top-0 right-0 px-2.5 py-1 rounded-bl-xl rounded-tr-xl",
         status.bg
       )}>
-        <div className="flex items-center gap-1.5">
-          <StatusIcon className={cn("w-3.5 h-3.5", status.text)} />
+        <div className="flex items-center gap-1">
+          <StatusIcon className={cn("w-3 h-3", status.text)} />
           <span className={cn("text-xs font-semibold", status.text)}>
             {status.label}
           </span>
@@ -75,18 +107,18 @@ export function OrderCard({ item, isSelected, onSelect, onNavigate }: OrderCardP
       </div>
 
       <div
-        className="p-5 cursor-pointer"
+        className="p-4 cursor-pointer"
         onClick={onNavigate}
       >
         {/* Header */}
-        <div className="flex items-start gap-4 mb-4">
+        <div className="flex items-start gap-3 mb-3">
           <div className={cn(
-            "flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center",
+            "flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center",
             "bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md"
           )}>
-            <Bus className="w-6 h-6" />
+            <Bus className="w-5 h-5" />
           </div>
-          <div className="flex-1 min-w-0 pt-1">
+          <div className="flex-1 min-w-0 pt-0.5">
             <p className="font-bold text-gray-900 text-lg">
               {item.vehiclePlateNumber}
             </p>
@@ -97,7 +129,7 @@ export function OrderCard({ item, isSelected, onSelect, onNavigate }: OrderCardP
         </div>
 
         {/* Details */}
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm">
             <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
             <span className="text-gray-600 truncate">
@@ -126,8 +158,15 @@ export function OrderCard({ item, isSelected, onSelect, onNavigate }: OrderCardP
         </div>
 
         {/* Footer */}
-        <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
+            {/* Route Type Badge */}
+            <span className={cn(
+              "text-xs font-medium px-2 py-0.5 rounded-full",
+              routeConfig.bg, routeConfig.text
+            )}>
+              {routeConfig.label}
+            </span>
             <User className="w-4 h-4 text-gray-400" />
             <span className="text-sm text-gray-500">{item.entryBy || 'N/A'}</span>
           </div>

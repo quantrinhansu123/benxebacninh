@@ -5,13 +5,10 @@ import {
   ChevronDown,
   RefreshCw,
   FileSpreadsheet,
-  Clock,
   Receipt,
   Banknote,
-  CheckCircle2,
   AlertCircle,
   Search,
-  Wallet,
   FileText,
   X,
 } from "lucide-react";
@@ -28,7 +25,7 @@ import * as XLSX from "xlsx";
 import { DatePickerRange } from "@/components/DatePickerRange";
 import { type DateRange } from "react-day-picker";
 import {
-  PaymentStatsCard,
+  PaymentStatsCards,
   OrderCard,
   VehicleInfoCard,
   ServicesCard,
@@ -401,12 +398,7 @@ export default function ThanhToan() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <PaymentStatsCard title="Tổng đơn hàng" value={stats.total} subtitle="Trong khoảng thời gian" icon={Receipt} gradient="from-blue-500 to-indigo-600" />
-            <PaymentStatsCard title="Chờ thanh toán" value={stats.pending} subtitle="Cần xử lý" icon={Clock} gradient="from-amber-500 to-orange-500" />
-            <PaymentStatsCard title="Đã thanh toán" value={stats.paid} subtitle="Hoàn thành" icon={CheckCircle2} gradient="from-emerald-500 to-teal-500" />
-            <PaymentStatsCard title="Tổng doanh thu" value={`${(stats.totalAmount / 1000000).toFixed(1)}M`} subtitle={`${stats.totalAmount.toLocaleString('vi-VN')}đ`} icon={Wallet} gradient="from-violet-500 to-purple-600" />
-          </div>
+          <PaymentStatsCards stats={stats} />
 
           {/* Filters */}
           <Card className="border-0 shadow-sm">
