@@ -55,28 +55,55 @@ export function convertVietnamToUTC(vietnamISOString: string): string {
 }
 
 /**
- * Convert Vietnam time ISO string (with +07:00) to UTC ISO string for database storage.
- * This preserves the Vietnam time value by storing it as UTC with +7 hours offset.
- * 
- * @param vietnamISOString - ISO string with +07:00 (e.g., "2024-12-25T14:30:00+07:00")
- * @returns UTC ISO string representing the same moment (e.g., "2024-12-25T07:30:00.000Z")
- * 
+ * Convert time ISO string to UTC ISO string for database storage.
+ * Handles both formats:
+ * - UTC format (ends with Z): "2024-12-25T07:30:00.000Z" → already UTC, just return as-is
+ * - Vietnam format (+07:00): "2024-12-25T14:30:00+07:00" → preserve VN time as fake UTC
+ *
+ * IMPORTANT: This function now auto-detects the input format:
+ * - If input ends with 'Z' (UTC): The time is already in UTC, return as-is
+ * - If input has +07:00 offset: Convert to preserve Vietnam time value
+ *
+ * @param isoString - ISO string (either UTC or with +07:00 offset)
+ * @returns UTC ISO string for database storage
+ *
  * @example
- * convertVietnamISOToUTCForStorage("2024-12-25T14:30:00+07:00")
- * // Returns: "2024-12-25T14:30:00.000Z" (stored as UTC but represents VN time)
+ * // Frontend sends UTC (from .toISOString())
+ * convertVietnamISOToUTCForStorage("2024-12-25T05:30:00.000Z")
+ * // Returns: "2024-12-25T05:30:00.000Z" (unchanged - already UTC)
+ *
+ * @example
+ * // Frontend sends Vietnam time with offset
+ * convertVietnamISOToUTCForStorage("2024-12-25T12:30:00+07:00")
+ * // Returns: "2024-12-25T12:30:00.000Z" (VN time preserved as fake UTC)
  */
-export function convertVietnamISOToUTCForStorage(vietnamISOString: string): string {
-  // Parse the Vietnam time string
-  const date = new Date(vietnamISOString)
-  
-  // Get the UTC components (which represent Vietnam time after parsing)
-  // When we parse "2024-12-25T14:30:00+07:00", JavaScript converts to UTC
-  // So we need to add 7 hours back to preserve the Vietnam time value
-  const vietnamTimeMs = date.getTime() + VIETNAM_TIMEZONE_OFFSET_MS
-  const preservedDate = new Date(vietnamTimeMs)
-  
-  // Return as UTC ISO string (this represents Vietnam time stored as UTC+7)
-  return preservedDate.toISOString()
+export function convertVietnamISOToUTCForStorage(isoString: string): string {
+  // Check if input is already in UTC format (ends with Z)
+  if (isoString.endsWith('Z')) {
+    // Already UTC - return as-is, no conversion needed
+    return isoString
+  }
+
+  // Check if input has Vietnam timezone offset (+07:00)
+  if (isoString.includes('+07:00') || isoString.includes('+07')) {
+    // Parse the Vietnam time string
+    const date = new Date(isoString)
+
+    // When we parse "2024-12-25T14:30:00+07:00", JavaScript converts to UTC
+    // So we need to add 7 hours back to preserve the Vietnam time value as fake UTC
+    const vietnamTimeMs = date.getTime() + VIETNAM_TIMEZONE_OFFSET_MS
+    const preservedDate = new Date(vietnamTimeMs)
+
+    // Return as UTC ISO string (this represents Vietnam time stored as UTC+7)
+    return preservedDate.toISOString()
+  }
+
+  // Fallback: treat as local time and convert
+  const date = new Date(isoString)
+  if (isNaN(date.getTime())) {
+    throw new Error(`Invalid date string: ${isoString}`)
+  }
+  return date.toISOString()
 }
 
 /**
