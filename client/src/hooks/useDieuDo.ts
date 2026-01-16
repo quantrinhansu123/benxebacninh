@@ -32,16 +32,19 @@ export function useDieuDo() {
   const setTitle = useUIStore((state) => state.setTitle);
 
   // Restore dialog state from URL params
+  // FIX: Require BOTH dispatchId AND action to prevent fallback to "permit"
   useEffect(() => {
     const dispatchId = searchParams.get("dispatch");
     const action = searchParams.get("action") as DialogType | null;
     const readonly = searchParams.get("readonly") === "true";
 
-    if (dispatchId && records.length > 0) {
+    // Only open dialog if BOTH dispatchId and action are present
+    // This prevents race condition when closing dialog (params being cleared)
+    if (dispatchId && action && records.length > 0) {
       const record = records.find((r) => r.id === dispatchId);
       if (record) {
         setSelectedRecord(record);
-        setDialogType(action || "permit");
+        setDialogType(action);
         setIsReadOnly(readonly);
         setDialogOpen(true);
       }
@@ -117,7 +120,8 @@ export function useDieuDo() {
       params.set("dispatch", record.id);
       params.set("action", type);
       if (readonly) params.set("readonly", "true");
-      setSearchParams(params, { replace: true });
+      // Push to history stack so Back button closes dialog instead of navigating away
+    setSearchParams(params);
     } else {
       setSearchParams({}, { replace: true });
     }

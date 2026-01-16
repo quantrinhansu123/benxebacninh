@@ -54,20 +54,19 @@ export default function XeXuatBen() {
     try {
       const data = await dispatchService.getAll();
       
-      // Filter to only show TODAY's records
-      // This allows multiple trips per vehicle in a single day
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      const todayRecords = data.filter(record => {
+      // Filter to show LAST 7 DAYS records (consistent with ThanhToan page)
+      // This allows viewing historical departed vehicles
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+
+      const recentRecords = data.filter(record => {
         const entryTime = new Date(record.entryTime);
-        return entryTime >= today && entryTime < tomorrow;
+        return entryTime >= sevenDaysAgo;
       });
       
       // Chỉ lấy các xe đã được cấp lệnh hoặc đã xuất bến
-      const filtered = todayRecords.filter((item) =>
+      const filtered = recentRecords.filter((item) =>
         ["departure_ordered", "departed"].includes(item.currentStatus)
       );
       setRecords(filtered);

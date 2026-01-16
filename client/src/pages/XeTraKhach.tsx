@@ -54,21 +54,21 @@ export default function XeTraKhach() {
     try {
       const data = await dispatchService.getAll();
       
-      // Filter to only show TODAY's records
-      // This allows multiple trips per vehicle in a single day
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      const todayRecords = data.filter(record => {
+      // Filter to show LAST 7 DAYS records (consistent with ThanhToan and XeXuatBen)
+      // This allows viewing historical passenger drop records
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+
+      const recentRecords = data.filter(record => {
         const entryTime = new Date(record.entryTime);
-        return entryTime >= today && entryTime < tomorrow;
+        return entryTime >= sevenDaysAgo;
       });
-      
-      // Chỉ lấy các xe đã trả khách
-      const filtered = todayRecords.filter((item) =>
-        item.currentStatus === "passengers_dropped"
+
+      // Lấy tất cả xe có thời gian trả khách (đã từng trả khách)
+      // Không filter theo currentStatus vì xe có thể đã chuyển sang trạng thái khác
+      const filtered = recentRecords.filter((item) =>
+        item.passengerDropTime != null
       );
       setRecords(filtered);
     } catch (error) {
