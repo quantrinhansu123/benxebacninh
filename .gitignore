@@ -87,8 +87,12 @@ docs/
 .factory/
 client/docs/archived/
 server/docs/archived/
+project-memory.md
 
 # Claude temp files
 tmpclaude-*
 **/tmpclaude-*
 package-lock.json
+repomix-output.xml
+
+.mcp.json
