@@ -220,15 +220,21 @@ export class DashboardService {
     }
 
     // Add vehicle badges expiry dates
+    // Include badges both with and without vehicleId (use badge.plateNumber directly)
     for (const badge of vehicleBadgesData) {
-      if (badge.expiryDate && badge.vehicleId) {
-        const vehicle = vehiclesMap[badge.vehicleId];
-        vehicleExpiryDocs.push({
-          vehicleId: badge.vehicleId,
-          plateNumber: vehicle?.plateNumber || badge.plateNumber,
-          documentType: 'emblem',
-          expiryDate: badge.expiryDate,
-        });
+      if (badge.expiryDate) {
+        // Try to get plate number from linked vehicle, fallback to badge's plate number
+        const vehicle = badge.vehicleId ? vehiclesMap[badge.vehicleId] : undefined;
+        const plateNumber = vehicle?.plateNumber || badge.plateNumber;
+
+        if (plateNumber) {
+          vehicleExpiryDocs.push({
+            vehicleId: badge.vehicleId || badge.id,
+            plateNumber,
+            documentType: 'emblem',
+            expiryDate: badge.expiryDate,
+          });
+        }
       }
     }
 

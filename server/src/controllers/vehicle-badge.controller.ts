@@ -1,7 +1,8 @@
 import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
 import { vehicleBadges, vehicles, dispatchRecords, auditLogs } from '../db/schema/index.js'
-import { eq, ne, ilike, and } from 'drizzle-orm'
+import { eq, ne, and, sql } from 'drizzle-orm'
+import { dashboardService } from '../services/dashboard.service.js'
 
 // Constants
 const BADGE_CACHE_CONFIG = {
@@ -278,11 +279,16 @@ export const getVehicleBadgeByPlateNumber = async (req: Request, res: Response):
     // Get active dispatch plates to compute operational_status
     const activePlates = await getActiveDispatchPlates()
 
-    // Get data from Drizzle - search by plate_number
+    // Normalize plate number for comparison (remove dots, dashes, spaces)
+    const normalizedPlate = plateNumber.replace(/[.\-\s]/g, '').toUpperCase()
+
+    // Use normalized exact match to avoid matching similar plates
+    const normalizedPlateExpr = sql<string>`UPPER(REPLACE(REPLACE(REPLACE(${vehicleBadges.plateNumber}, '.', ''), '-', ''), ' ', ''))`
+
     const results = await db
       .select()
       .from(vehicleBadges)
-      .where(ilike(vehicleBadges.plateNumber, `%${plateNumber}%`))
+      .where(sql`${normalizedPlateExpr} = ${normalizedPlate}`)
       .limit(1)
 
     const data = results[0]
@@ -533,8 +539,11 @@ export const updateVehicleBadge = async (req: Request, res: Response): Promise<v
       // Don't fail update if audit logging fails
     }
 
-    // Invalidate cache
+    // Invalidate badge cache
     invalidateBadgesCache()
+
+    // Invalidate dashboard cache since warnings depend on badge expiry dates
+    dashboardService.clearCache()
 
     // Return mapped badge
     const updatedBadge = mapFirebaseDataToBadge(data)
