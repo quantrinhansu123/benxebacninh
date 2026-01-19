@@ -61,6 +61,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
 
   // Prevent multiple initializations
   const isInitializedRef = useRef(false);
+  const routeAutoFilledRef = useRef(false);
 
 
   const loadSchedules = useCallback(async (rid: string) => {
@@ -139,6 +140,25 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     }
   }, [departureDate, cachedDispatchRecords]);
 
+  // Helper: Get last dispatch by vehicle plate number for route auto-fill
+  const getLastDispatchByVehicle = useCallback((vehiclePlateNumber: string) => {
+    if (!cachedDispatchRecords || !vehiclePlateNumber) return null;
+
+    const lastDispatch = cachedDispatchRecords
+      .filter(dr =>
+        dr.vehiclePlateNumber === vehiclePlateNumber &&
+        dr.currentStatus === 'departed' &&
+        dr.routeId
+      )
+      .sort((a, b) => {
+        const timeA = a.exitTime ? new Date(a.exitTime).getTime() : 0;
+        const timeB = b.exitTime ? new Date(b.exitTime).getTime() : 0;
+        return timeB - timeA;
+      })[0];
+
+    return lastDispatch;
+  }, [cachedDispatchRecords]);
+
   const loadInitialData = useCallback(async () => {
     try {
       // Use unified endpoint - 1 request instead of 4, with frontend caching
@@ -174,13 +194,14 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       const vehiclesData = (quanlyData.vehicles || []).map((v: QuanLyVehicle) => ({
         id: v.id,
         plateNumber: v.plateNumber,
-        seatCapacity: v.seatCapacity,
+        seatCapacity: v.seatCapacity || 0,
+        bedCapacity: v.bedCapacity || 0,
         operatorName: v.operatorName,
         vehicleType: v.vehicleType,
         isActive: v.isActive,
         source: v.source,
-        operatorId: null,
-        operator: { id: null, name: v.operatorName, code: '' },
+        operatorId: v.operatorId || null,
+        operator: { id: v.operatorId || null, name: v.operatorName, code: '' },
       })) as unknown as Vehicle[];
 
       // Map operators from quanly-data format
@@ -547,6 +568,29 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       }
     }
   }, [selectedVehicle, record.seatCount]);
+
+  // Auto-fill routeId from last dispatch of the same vehicle
+  useEffect(() => {
+    // Prevent re-triggering if already auto-filled
+    if (routeAutoFilledRef.current) return;
+
+    // Only auto-fill if:
+    // 1. Have vehicle plate number
+    // 2. routeId is empty (no existing value)
+    // 3. cachedDispatchRecords is loaded
+    if (
+      record.vehiclePlateNumber &&
+      !routeId &&
+      cachedDispatchRecords &&
+      cachedDispatchRecords.length > 0
+    ) {
+      const lastDispatch = getLastDispatchByVehicle(record.vehiclePlateNumber);
+      if (lastDispatch?.routeId) {
+        routeAutoFilledRef.current = true;
+        setRouteId(lastDispatch.routeId);
+      }
+    }
+  }, [record.vehiclePlateNumber, cachedDispatchRecords, getLastDispatchByVehicle]); // Note: routeId not in deps to avoid loop
 
   // Compute busy vehicle plates from active dispatch records
   const busyVehiclePlates = useMemo(() => {

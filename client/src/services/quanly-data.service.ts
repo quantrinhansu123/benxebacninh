@@ -19,6 +19,8 @@ export interface QuanLyVehicle {
   id: string
   plateNumber: string
   seatCapacity: number
+  bedCapacity?: number
+  operatorId?: string | null
   operatorName: string
   vehicleType: string
   inspectionExpiryDate: string
