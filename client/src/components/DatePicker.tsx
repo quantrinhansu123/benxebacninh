@@ -73,6 +73,17 @@ export function DateTimePicker({
     date ? format(date, "HH:mm") : "00:00"
   );
 
+  // Sync timeValue when date prop changes (e.g., when editing a record)
+  // Only update if the formatted time is different to prevent unnecessary state updates
+  React.useEffect(() => {
+    if (date) {
+      const formattedTime = format(date, "HH:mm");
+      if (formattedTime !== timeValue) {
+        setTimeValue(formattedTime);
+      }
+    }
+  }, [date, timeValue]);
+
   const handleDateSelect = (selectedDate: Date | undefined) => {
     if (selectedDate) {
       const [hours, minutes] = timeValue.split(":");

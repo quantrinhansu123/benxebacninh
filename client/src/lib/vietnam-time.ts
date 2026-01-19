@@ -100,30 +100,8 @@ export function formatVietnamDateTime(
   if (!dateString) return "-"
 
   try {
-    // Strategy: Extract time components directly from ISO string
-    // Database stores Vietnam time, we just need to display it as-is
-    
-    // Try to match ISO format: YYYY-MM-DDTHH:mm:ss (with optional timezone)
-    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
-    
-    if (match) {
-      const [, year, month, day, hours, minutes, seconds] = match
-      // Create date with extracted values (treating them as Vietnam time)
-      const vnDate = new Date(
-        parseInt(year), 
-        parseInt(month) - 1, 
-        parseInt(day), 
-        parseInt(hours), 
-        parseInt(minutes), 
-        parseInt(seconds)
-      )
-      
-      if (!isNaN(vnDate.getTime())) {
-        return format(vnDate, formatString)
-      }
-    }
-    
-    // Fallback: If dateString ends with Z (UTC), convert to Vietnam time
+    // IMPORTANT: Check for UTC format FIRST (ends with 'Z')
+    // Database stores time in UTC, so we need to convert to Vietnam time (UTC+7)
     if (dateString.endsWith('Z')) {
       const utcDate = new Date(dateString)
       if (!isNaN(utcDate.getTime())) {
@@ -132,23 +110,44 @@ export function formatVietnamDateTime(
         const tempDate = new Date(vnTimeMs)
         // Create new date with the Vietnam time values
         const vnDate = new Date(
-          tempDate.getUTCFullYear(), 
-          tempDate.getUTCMonth(), 
+          tempDate.getUTCFullYear(),
+          tempDate.getUTCMonth(),
           tempDate.getUTCDate(),
-          tempDate.getUTCHours(), 
-          tempDate.getUTCMinutes(), 
+          tempDate.getUTCHours(),
+          tempDate.getUTCMinutes(),
           tempDate.getUTCSeconds()
         )
         return format(vnDate, formatString)
       }
     }
-    
+
+    // For dates with +07:00 offset, extract components directly
+    // These are already in Vietnam time, just need to format
+    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
+
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match
+      // Create date with extracted values (treating them as Vietnam time)
+      const vnDate = new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hours),
+        parseInt(minutes),
+        parseInt(seconds)
+      )
+
+      if (!isNaN(vnDate.getTime())) {
+        return format(vnDate, formatString)
+      }
+    }
+
     // Last fallback: try parsing directly
     const dateObj = new Date(dateString)
     if (!isNaN(dateObj.getTime())) {
       return format(dateObj, formatString)
     }
-    
+
     console.warn("Could not parse date string:", dateString)
     return "-"
   } catch (error) {
@@ -213,27 +212,50 @@ export function isValidISODateString(dateString: string): boolean {
 
 /**
  * Parse database time string to Date object for form editing.
- * Database stores Vietnam time as "fake UTC" (e.g., "15:22Z" means 15:22 Vietnam).
- * This function extracts the time components directly to create correct local Date.
+ * Database stores time in UTC format (ends with Z).
+ * This function converts UTC to Vietnam time (UTC+7) for correct display in forms.
  *
- * @param dateString - ISO date string from database
- * @returns Date object representing the correct local time for form input
+ * @param dateString - ISO date string from database (UTC format with Z suffix)
+ * @returns Date object representing the correct Vietnam time for form input
  *
  * @example
- * parseDatabaseTimeForEdit("2024-12-29T15:22:00.000Z")
- * // Returns: Date object showing 15:22 (not 22:22)
+ * parseDatabaseTimeForEdit("2024-12-29T08:22:00.000Z")
+ * // Returns: Date object showing 15:22 (Vietnam time = UTC + 7 hours)
  */
 export function parseDatabaseTimeForEdit(dateString: string | undefined | null): Date {
   if (!dateString) return new Date()
 
   try {
-    // Extract time components directly from ISO string
-    // Database stores Vietnam time as UTC, we need to preserve the values
-    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
+    // Parse the ISO string
+    const utcDate = new Date(dateString)
 
+    if (isNaN(utcDate.getTime())) {
+      console.error("Invalid date string:", dateString)
+      return new Date()
+    }
+
+    // If the date is in UTC format (ends with Z), convert to Vietnam time
+    if (dateString.endsWith('Z')) {
+      // Add 7 hours to convert UTC to Vietnam time
+      const vietnamTimeMs = utcDate.getTime() + VIETNAM_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000
+      const vietnamDate = new Date(vietnamTimeMs)
+
+      // Create a local Date with Vietnam time values
+      // This ensures the form displays the correct Vietnam time
+      return new Date(
+        vietnamDate.getUTCFullYear(),
+        vietnamDate.getUTCMonth(),
+        vietnamDate.getUTCDate(),
+        vietnamDate.getUTCHours(),
+        vietnamDate.getUTCMinutes(),
+        vietnamDate.getUTCSeconds()
+      )
+    }
+
+    // For dates with +07:00 offset, extract components directly
+    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
     if (match) {
       const [, year, month, day, hours, minutes, seconds] = match
-      // Create local Date with extracted values (treating them as local Vietnam time)
       return new Date(
         parseInt(year),
         parseInt(month) - 1,
