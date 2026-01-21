@@ -26,6 +26,39 @@ import { Select } from "@/components/ui/select"
 import { vehicleBadgeService, type VehicleBadge, type CreateVehicleBadgeInput } from "@/services/vehicle-badge.service"
 import { quanlyDataService } from "@/services/quanly-data.service"
 import { useUIStore } from "@/store/ui.store"
+import { DatePicker } from "@/components/DatePicker"
+
+// Helper function to convert dd/MM/yyyy string to Date object
+const parseDateString = (dateStr: string | undefined | null): Date | null => {
+  if (!dateStr) return null
+
+  // If already ISO format (YYYY-MM-DD), parse directly
+  if (dateStr.includes('-') && dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+    const date = new Date(dateStr)
+    return isNaN(date.getTime()) ? null : date
+  }
+
+  // If dd/MM/yyyy format
+  if (dateStr.includes('/')) {
+    const parts = dateStr.split('/')
+    if (parts.length === 3) {
+      const [day, month, year] = parts
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+      return isNaN(date.getTime()) ? null : date
+    }
+  }
+
+  return null
+}
+
+// Helper function to convert Date to ISO string (YYYY-MM-DD)
+const formatDateToISO = (date: Date | null): string => {
+  if (!date) return ""
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 // Helper function to format date
 const formatDate = (dateString: string | undefined | null): string => {
@@ -81,13 +114,18 @@ export default function QuanLyPhuHieuXe() {
   const [importData, setImportData] = useState<CreateVehicleBadgeInput[]>([])
   const [isImporting, setIsImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [formData, setFormData] = useState<CreateVehicleBadgeInput>({
+
+  // Form state with Date objects for date fields
+  const [formData, setFormData] = useState<Omit<CreateVehicleBadgeInput, 'issue_date' | 'expiry_date'> & {
+    issue_date: Date | null
+    expiry_date: Date | null
+  }>({
     badge_number: "",
     license_plate_sheet: "",
     badge_type: "",
     badge_color: "",
-    issue_date: "",
-    expiry_date: "",
+    issue_date: null,
+    expiry_date: null,
     status: "Còn hiệu lực",
     file_code: "",
     issue_type: "Cấp mới",
@@ -95,6 +133,7 @@ export default function QuanLyPhuHieuXe() {
     vehicle_type: "",
     notes: "",
   })
+
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
@@ -217,8 +256,8 @@ export default function QuanLyPhuHieuXe() {
       license_plate_sheet: "",
       badge_type: "",
       badge_color: "",
-      issue_date: "",
-      expiry_date: "",
+      issue_date: null,
+      expiry_date: null,
       status: "Còn hiệu lực",
       file_code: "",
       issue_type: "Cấp mới",
@@ -237,8 +276,8 @@ export default function QuanLyPhuHieuXe() {
       license_plate_sheet: badge.license_plate_sheet,
       badge_type: badge.badge_type || "",
       badge_color: badge.badge_color || "",
-      issue_date: badge.issue_date || "",
-      expiry_date: badge.expiry_date || "",
+      issue_date: parseDateString(badge.issue_date),
+      expiry_date: parseDateString(badge.expiry_date),
       status: badge.status || "Còn hiệu lực",
       file_code: badge.file_code || "",
       issue_type: badge.issue_type || "Cấp mới",
@@ -271,20 +310,40 @@ export default function QuanLyPhuHieuXe() {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.badge_number || !formData.license_plate_sheet) {
       toast.error("Vui lòng nhập số phù hiệu và biển số xe")
       return
     }
 
+    // Validate date logic: issue_date must be before expiry_date
+    if (formData.issue_date && formData.expiry_date) {
+      if (formData.issue_date >= formData.expiry_date) {
+        toast.error("Ngày cấp phải nhỏ hơn ngày hết hạn")
+        return
+      }
+      const yearDiff = formData.expiry_date.getFullYear() - formData.issue_date.getFullYear()
+      if (yearDiff > 10) {
+        toast.error("Thời hạn phù hiệu không được vượt quá 10 năm")
+        return
+      }
+    }
+
     setIsSubmitting(true)
     try {
+      // Convert Date objects to ISO strings for API
+      const submitData: CreateVehicleBadgeInput = {
+        ...formData,
+        issue_date: formatDateToISO(formData.issue_date),
+        expiry_date: formatDateToISO(formData.expiry_date),
+      }
+
       if (formMode === "create") {
-        await vehicleBadgeService.create(formData)
+        await vehicleBadgeService.create(submitData)
         toast.success("Thêm phù hiệu mới thành công")
       } else {
         if (!selectedBadge) return
-        await vehicleBadgeService.update(selectedBadge.id, formData)
+        await vehicleBadgeService.update(selectedBadge.id, submitData)
         toast.success("Cập nhật phù hiệu thành công")
       }
       setFormDialogOpen(false)
@@ -1054,20 +1113,18 @@ export default function QuanLyPhuHieuXe() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="issue_date">Ngày cấp</Label>
-                <Input
-                  id="issue_date"
-                  value={formData.issue_date}
-                  onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
-                  placeholder="DD/MM/YYYY"
+                <DatePicker
+                  date={formData.issue_date}
+                  onDateChange={(date) => setFormData({ ...formData, issue_date: date || null })}
+                  placeholder="Chọn ngày cấp"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="expiry_date">Ngày hết hạn</Label>
-                <Input
-                  id="expiry_date"
-                  value={formData.expiry_date}
-                  onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
-                  placeholder="DD/MM/YYYY"
+                <DatePicker
+                  date={formData.expiry_date}
+                  onDateChange={(date) => setFormData({ ...formData, expiry_date: date || null })}
+                  placeholder="Chọn ngày hết hạn"
                 />
               </div>
               <div className="space-y-2">
