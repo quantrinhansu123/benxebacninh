@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X, Building2, Truck, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,53 @@ export function OperatorDetailDialog({
     formatCurrency,
     resetTab,
   } = useOperatorDetail(operator, open);
+
+  // Handle browser back button - close dialog instead of navigating away
+  const closedViaBackButtonRef = useRef(false);
+  const historyPushedRef = useRef(false);
+
+  // Use ref for callbacks to avoid effect re-runs when parent re-renders
+  const onCloseRef = useRef(onClose);
+  const resetTabRef = useRef(resetTab);
+  onCloseRef.current = onClose;
+  resetTabRef.current = resetTab;
+
+  useEffect(() => {
+    if (!open) {
+      // Reset refs when dialog closes
+      historyPushedRef.current = false;
+      return;
+    }
+
+    // Prevent duplicate pushState (React StrictMode runs effects twice)
+    if (historyPushedRef.current) return;
+
+    closedViaBackButtonRef.current = false;
+    historyPushedRef.current = true;
+
+    // Push state with current URL - back button will close dialog and stay on same page
+    window.history.pushState({ operatorDetailDialogOpen: true }, "", window.location.href);
+
+    const handlePopState = () => {
+      // Back button pressed - close dialog (browser already navigated, but URL is same)
+      closedViaBackButtonRef.current = true;
+      historyPushedRef.current = false;
+      resetTabRef.current();
+      onCloseRef.current();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // If closed via X button (not back button), clean up the pushed history state
+      if (!closedViaBackButtonRef.current && historyPushedRef.current) {
+        historyPushedRef.current = false;
+        // Note: We don't call history.back() here to avoid triggering popstate
+        // The extra history entry will be cleaned up naturally on next navigation
+      }
+    };
+  }, [open]); // Only depend on `open`, use refs for callbacks
 
   const handleClose = () => {
     resetTab();

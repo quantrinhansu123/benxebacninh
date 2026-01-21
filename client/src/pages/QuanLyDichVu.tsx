@@ -19,6 +19,7 @@ import { ServiceDialog } from "@/components/service/ServiceDialog"
 import { serviceService } from "@/services/service.service"
 import type { Service } from "@/types"
 import { useUIStore } from "@/store/ui.store"
+import { useDialogHistory } from "@/hooks/useDialogHistory"
 
 export default function QuanLyDichVu() {
   const [services, setServices] = useState<Service[]>([])
@@ -29,6 +30,9 @@ export default function QuanLyDichVu() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"create" | "edit" | "view">("create")
   const setTitle = useUIStore((state) => state.setTitle)
+
+  // Handle browser back button for dialog
+  const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "serviceDialogOpen")
 
   useEffect(() => {
     setTitle("Quản lý dịch vụ")
@@ -383,7 +387,7 @@ export default function QuanLyDichVu() {
       {/* Dialog */}
       <ServiceDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         viewMode={viewMode}
         selectedService={selectedService}
         onSuccess={loadServices}

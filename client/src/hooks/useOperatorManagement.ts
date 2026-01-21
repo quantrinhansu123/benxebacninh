@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { toast } from "react-toastify";
 import { operatorService } from "@/services/operator.service";
 import { quanlyDataService } from "@/services/quanly-data.service";
@@ -32,27 +32,41 @@ export function useOperatorManagement() {
   const [operatorToDelete, setOperatorToDelete] = useState<OperatorWithSource | null>(null);
   const setTitle = useUIStore((state) => state.setTitle);
 
-  // Handle browser back button for dialog
-  const openDialogWithHistory = useCallback(() => {
-    window.history.pushState({ operatorDialog: true }, "");
-  }, []);
+  // Refs for history management
+  const historyPushedRef = useRef(false);
+  const closedViaBackButtonRef = useRef(false);
 
-  const closeDialogFromHistory = useCallback(() => {
-    setDialogOpen(false);
-  }, []);
-
-  // Listen for popstate event (browser back button)
+  // Handle browser back button for OperatorDialog
   useEffect(() => {
+    if (!dialogOpen) {
+      historyPushedRef.current = false;
+      return;
+    }
+
+    // Prevent duplicate pushState (React StrictMode runs effects twice)
+    if (historyPushedRef.current) return;
+
+    closedViaBackButtonRef.current = false;
+    historyPushedRef.current = true;
+
+    // Push state with current URL - back button will close dialog and stay on same page
+    window.history.pushState({ operatorDialog: true }, "", window.location.href);
+
     const handlePopState = () => {
-      // Close dialog when back button pressed while dialog is open
-      if (dialogOpen) {
-        closeDialogFromHistory();
-      }
+      // Back button pressed - close dialog
+      closedViaBackButtonRef.current = true;
+      historyPushedRef.current = false;
+      setDialogOpen(false);
     };
 
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [dialogOpen, closeDialogFromHistory]);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // Note: We don't call history.back() here to avoid triggering popstate
+      // The extra history entry will be cleaned up naturally on next navigation
+    };
+  }, [dialogOpen]);
 
   useEffect(() => {
     setTitle("Quản lý Đơn vị vận tải");
@@ -141,21 +155,21 @@ export function useOperatorManagement() {
     setSelectedOperator(null);
     setViewMode("create");
     setDialogOpen(true);
-    openDialogWithHistory();
+    // History management is handled automatically by the useEffect
   };
 
   const handleView = (operator: Operator) => {
     setSelectedOperator(operator);
     setViewMode("view");
     setDialogOpen(true);
-    openDialogWithHistory();
+    // History management is handled automatically by the useEffect
   };
 
   const handleEdit = (operator: OperatorWithSource) => {
     setSelectedOperator(operator);
     setViewMode("edit");
     setDialogOpen(true);
-    openDialogWithHistory();
+    // History management is handled automatically by the useEffect
   };
 
   const handleDelete = (operator: OperatorWithSource) => {
@@ -190,26 +204,15 @@ export function useOperatorManagement() {
   };
 
   const handleSaveSuccess = () => {
+    // Just close the dialog - history cleanup is handled automatically by the useEffect
     setDialogOpen(false);
-    // Go back in history to remove the pushed state
-    if (window.history.state?.operatorDialog) {
-      window.history.back();
-    }
     loadOperators(true); // Force refresh after save
   };
 
-  // Wrapper to handle dialog close with history management
+  // Wrapper to handle dialog close - history cleanup is handled automatically by the useEffect
   const handleDialogOpenChange = useCallback((open: boolean) => {
-    if (!open && dialogOpen) {
-      // Dialog being closed normally (via X button or outside click)
-      setDialogOpen(false);
-      if (window.history.state?.operatorDialog) {
-        window.history.back();
-      }
-    } else {
-      setDialogOpen(open);
-    }
-  }, [dialogOpen]);
+    setDialogOpen(open);
+  }, []);
 
   const clearFilters = () => {
     setSearchQuery("");

@@ -27,6 +27,7 @@ import { useUIStore } from "@/store/ui.store"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { useDialogHistory } from "@/hooks/useDialogHistory"
 
 const shiftSchema = z.object({
   name: z.string().min(1, "Tên ca trực là bắt buộc"),
@@ -44,6 +45,9 @@ export default function DanhSachCaTruc() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"create" | "edit">("create")
   const setTitle = useUIStore((state) => state.setTitle)
+
+  // Handle browser back button for dialog
+  const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "shiftDialogOpen")
 
   const {
     register,
@@ -364,7 +368,7 @@ export default function DanhSachCaTruc() {
       </Card>
 
       {/* Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>

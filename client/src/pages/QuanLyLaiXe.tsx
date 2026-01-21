@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react"
 import { toast } from "react-toastify"
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Eye, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Eye,
+  Trash2,
   Users,
   UserCheck,
   UserX,
@@ -29,6 +29,7 @@ import type { Driver } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { DriverDialog } from "@/components/driver/DriverDialog"
 import { formatDateOnly } from "@/lib/date-utils"
+import { useDialogHistory } from "@/hooks/useDialogHistory"
 
 // Avatar color based on name hash
 const getAvatarColor = (name: string) => {
@@ -108,6 +109,9 @@ export default function QuanLyLaiXe() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null)
   const setTitle = useUIStore((state) => state.setTitle)
+
+  // Handle browser back button for dialog
+  const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "driverDialogOpen")
 
   useEffect(() => {
     setTitle("Quản lý lái xe")
@@ -774,7 +778,7 @@ export default function QuanLyLaiXe() {
         {/* Driver Dialog */}
         <DriverDialog
           open={dialogOpen}
-          onOpenChange={setDialogOpen}
+          onOpenChange={handleDialogOpenChange}
           mode={viewMode}
           driver={selectedDriver}
           onSuccess={loadDrivers}

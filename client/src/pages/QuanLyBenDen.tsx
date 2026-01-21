@@ -29,6 +29,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { STATION_TYPES } from "@/constants/vietnam-locations"
 import { provinceService, type Province, type District, type Ward } from "@/services/province.service"
+import { useDialogHistory } from "@/hooks/useDialogHistory"
 
 const locationSchema = z.object({
   code: z.string().min(1, "Mã bến là bắt buộc"),
@@ -53,6 +54,9 @@ export default function QuanLyBenDen() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"create" | "edit" | "view">("create")
   const setTitle = useUIStore((state) => state.setTitle)
+
+  // Handle browser back button for dialog
+  const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "locationDialogOpen")
 
   const [useApiV2, setUseApiV2] = useState(false) // false = v1 (trước sáp nhập), true = v2 (sau sáp nhập)
   const [provinces, setProvinces] = useState<Province[]>([])
@@ -386,7 +390,7 @@ export default function QuanLyBenDen() {
   }
 
   const handleDialogClose = (open: boolean) => {
-    setDialogOpen(open)
+    handleDialogOpenChange(open)
     if (!open) {
       setSelectedLocation(null)
       setDistricts([])

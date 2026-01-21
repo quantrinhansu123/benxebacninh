@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { 
   FileText, X, Truck, Plus, Camera, Shield, 
@@ -52,6 +52,14 @@ export function CapPhepDialogRedesign({
 
   const hook = useCapPhepDialog(record, onClose, onSuccess);
 
+  // Handle browser back button - close dialog instead of navigating away
+  const closedViaBackButtonRef = useRef(false);
+  const historyPushedRef = useRef(false);
+
+  // Use ref for callbacks to avoid effect re-runs when parent re-renders
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (open) {
       setIsAnimating(true);
@@ -60,6 +68,37 @@ export function CapPhepDialogRedesign({
       document.body.style.overflow = "unset";
     }
     return () => { document.body.style.overflow = "unset"; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      historyPushedRef.current = false;
+      return;
+    }
+
+    // Prevent duplicate pushState (React StrictMode runs effects twice)
+    if (historyPushedRef.current) return;
+
+    closedViaBackButtonRef.current = false;
+    historyPushedRef.current = true;
+
+    // Push state with current URL - back button will close dialog and stay on same page
+    window.history.pushState({ capPhepDialogRedesignOpen: true }, "", window.location.href);
+
+    const handlePopState = () => {
+      // User pressed back button - close dialog instead of navigating
+      closedViaBackButtonRef.current = true;
+      historyPushedRef.current = false;
+      setIsAnimating(false);
+      setTimeout(() => onCloseRef.current(), 300);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // Note: We don't call history.back() here to avoid triggering popstate
+    };
   }, [open]);
 
   const handleClose = () => {

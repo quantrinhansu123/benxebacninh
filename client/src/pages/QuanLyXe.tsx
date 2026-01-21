@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react"
 import { toast } from "react-toastify"
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Eye, 
-  Trash2, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Eye,
+  Trash2,
   Car,
   ChevronLeft,
   ChevronRight,
@@ -33,6 +33,7 @@ import { quanlyDataService } from "@/services/quanly-data.service"
 import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { format, isValid, parseISO } from "date-fns"
+import { useDialogHistory } from "@/hooks/useDialogHistory"
 
 // Helper functions
 const getVehicleTypeName = (vehicle: Vehicle): string => {
@@ -108,6 +109,9 @@ export default function QuanLyXe() {
   const [displayMode, setDisplayMode] = useState<"table" | "grid">("table")
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const setTitle = useUIStore((state) => state.setTitle)
+
+  // Handle browser back button for dialog
+  const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "vehicleDialogOpen")
 
   useEffect(() => {
     setTitle("Quản lý xe")
@@ -826,9 +830,9 @@ export default function QuanLyXe() {
         )}
 
         {/* Vehicle Dialog */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogContent className="max-w-5xl w-full max-h-[95vh] overflow-y-auto p-6">
-            <DialogClose onClose={() => setDialogOpen(false)} />
+            <DialogClose onClose={() => handleDialogOpenChange(false)} />
             <DialogHeader>
               <DialogTitle className="text-2xl flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-gradient-to-br from-sky-500 to-cyan-500 shadow-lg shadow-sky-500/25">

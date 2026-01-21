@@ -18,6 +18,7 @@ import { serviceFormulaService } from "@/services/service-formula.service"
 import type { ServiceFormula } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { FormulaDialog } from "@/components/service/FormulaDialog"
+import { useDialogHistory } from "@/hooks/useDialogHistory"
 
 export default function QuanLyBieuThuc() {
   const [formulas, setFormulas] = useState<ServiceFormula[]>([])
@@ -30,6 +31,9 @@ export default function QuanLyBieuThuc() {
   const [filterStatus, setFilterStatus] = useState("")
   const [createFormulaType, setCreateFormulaType] = useState<'quantity' | 'price'>('quantity')
   const setTitle = useUIStore((state) => state.setTitle)
+
+  // Handle browser back button for dialog
+  const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "formulaDialogOpen")
 
   useEffect(() => {
     setTitle("Quản lý biểu thức")
@@ -503,7 +507,7 @@ export default function QuanLyBieuThuc() {
       {/* Dialog */}
       <FormulaDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         viewMode={viewMode}
         selectedFormula={selectedFormula}
         onSuccess={loadFormulas}

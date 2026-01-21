@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { routeService, LegacyRoute } from "@/services/route.service"
 import { useUIStore } from "@/store/ui.store"
+import { useDialogHistory } from "@/hooks/useDialogHistory"
 
 export default function QuanLyTuyen() {
   const [routes, setRoutes] = useState<LegacyRoute[]>([])
@@ -36,6 +37,9 @@ export default function QuanLyTuyen() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
+
+  // Handle browser back button for dialog
+  const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "routeDialogOpen")
 
   useEffect(() => {
     setTitle("Quản lý tuyến xe")
@@ -472,7 +476,7 @@ export default function QuanLyTuyen() {
       </Card>
 
       {/* Detail Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl">Chi tiết tuyến xe</DialogTitle>

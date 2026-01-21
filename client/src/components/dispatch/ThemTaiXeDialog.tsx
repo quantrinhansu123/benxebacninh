@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "react-toastify";
 import { X, Search, User } from "lucide-react";
@@ -12,6 +12,8 @@ interface ThemTaiXeDialogProps {
   open: boolean;
   onClose: () => void;
   onSuccess: (driver: Driver) => void;
+  /** Skip history pushState when dialog is nested inside another dialog */
+  skipHistoryManagement?: boolean;
 }
 
 export function ThemTaiXeDialog({
@@ -19,16 +21,58 @@ export function ThemTaiXeDialog({
   open,
   onClose,
   onSuccess,
+  skipHistoryManagement = false,
 }: ThemTaiXeDialogProps) {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Handle browser back button - close dialog instead of navigating away
+  const closedViaBackButtonRef = useRef(false);
+  const historyPushedRef = useRef(false);
+
+  // Use ref for callbacks to avoid effect re-runs when parent re-renders
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (open) {
       loadDrivers();
     }
   }, [open, operatorId]);
+
+  useEffect(() => {
+    if (!open) {
+      historyPushedRef.current = false;
+      return;
+    }
+    // Skip history management when nested inside another dialog
+    if (skipHistoryManagement) return;
+
+    // Prevent duplicate pushState (React StrictMode runs effects twice)
+    if (historyPushedRef.current) return;
+
+    closedViaBackButtonRef.current = false;
+    historyPushedRef.current = true;
+
+    // Push state with current URL - back button will close dialog and stay on same page
+    window.history.pushState({ themTaiXeDialogOpen: true }, "", window.location.href);
+
+    const handlePopState = () => {
+      // User pressed back button - close dialog instead of navigating
+      closedViaBackButtonRef.current = true;
+      historyPushedRef.current = false;
+      onCloseRef.current();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // Note: We don't call history.back() here to avoid triggering popstate
+      // The extra history entry will be cleaned up naturally on next navigation
+    };
+  }, [open, skipHistoryManagement]);
 
   const loadDrivers = async () => {
     setIsLoading(true);

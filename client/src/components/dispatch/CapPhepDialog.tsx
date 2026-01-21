@@ -61,37 +61,45 @@ export function CapPhepDialog({
   // Handle browser back button - prevent navigation, just close dialog
   // Use a ref to track if dialog was closed via back button
   const closedViaBackButtonRef = useRef(false);
+  const historyPushedRef = useRef(false);
+
+  // Use ref for callbacks to avoid effect re-runs when parent re-renders
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      historyPushedRef.current = false;
+      return;
+    }
     // Skip history management when nested inside another dialog
     if (skipHistoryManagement) return;
 
-    // Reset the ref when dialog opens
-    closedViaBackButtonRef.current = false;
+    // Prevent duplicate pushState (React StrictMode runs effects twice)
+    if (historyPushedRef.current) return;
 
-    // Push a dummy state so we can intercept back button
-    window.history.pushState({ capPhepDialogOpen: true }, "");
+    closedViaBackButtonRef.current = false;
+    historyPushedRef.current = true;
+
+    // Push state with current URL - back button will close dialog and stay on same page
+    window.history.pushState({ capPhepDialogOpen: true }, "", window.location.href);
 
     const handlePopState = () => {
       // User pressed back button - close dialog instead of navigating
       closedViaBackButtonRef.current = true;
+      historyPushedRef.current = false;
       setIsAnimating(false);
-      setTimeout(onClose, 300);
+      setTimeout(() => onCloseRef.current(), 300);
     };
 
     window.addEventListener("popstate", handlePopState);
 
     return () => {
       window.removeEventListener("popstate", handlePopState);
-      // Only clean up history state if dialog closed normally (not via back button)
-      // and our state is still on top
-      if (!closedViaBackButtonRef.current && window.history.state?.capPhepDialogOpen === true) {
-        // Use replaceState to remove our dummy state without triggering navigation
-        window.history.replaceState(null, "");
-      }
+      // Note: We don't call history.back() here to avoid triggering popstate
+      // The extra history entry will be cleaned up naturally on next navigation
     };
-  }, [open, onClose, skipHistoryManagement]);
+  }, [open, skipHistoryManagement]); // Only depend on open and skipHistoryManagement
 
   const handleClose = () => {
     setIsAnimating(false);

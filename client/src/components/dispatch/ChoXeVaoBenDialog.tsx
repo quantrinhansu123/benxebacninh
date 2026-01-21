@@ -57,29 +57,43 @@ export function ChoXeVaoBenDialog({
 
   // Handle browser back button - close dialog instead of navigating away
   const closedViaBackButtonRef = useRef(false);
+  const historyPushedRef = useRef(false);
+
+  // Use ref for handleClose to avoid effect re-runs
+  const handleCloseRef = useRef(handleClose);
+  handleCloseRef.current = handleClose;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      historyPushedRef.current = false;
+      return;
+    }
     // Don't add history state if permit dialog is showing (let it handle back button)
     if (showPermitDialog) return;
 
+    // Prevent duplicate pushState (React StrictMode runs effects twice)
+    if (historyPushedRef.current) return;
+
     closedViaBackButtonRef.current = false;
-    window.history.pushState({ choXeVaoBenDialogOpen: true }, "");
+    historyPushedRef.current = true;
+
+    // Push state with current URL - back button will close dialog and stay on same page
+    window.history.pushState({ choXeVaoBenDialogOpen: true }, "", window.location.href);
 
     const handlePopState = () => {
       closedViaBackButtonRef.current = true;
-      handleClose();
+      historyPushedRef.current = false;
+      handleCloseRef.current();
     };
 
     window.addEventListener("popstate", handlePopState);
 
     return () => {
       window.removeEventListener("popstate", handlePopState);
-      if (!closedViaBackButtonRef.current && window.history.state?.choXeVaoBenDialogOpen === true) {
-        window.history.replaceState(null, "");
-      }
+      // Note: We don't call history.back() here to avoid triggering popstate
+      // The extra history entry will be cleaned up naturally on next navigation
     };
-  }, [open, showPermitDialog, handleClose]);
+  }, [open, showPermitDialog]); // Only depend on open and showPermitDialog
 
   if (!open) return null;
 
