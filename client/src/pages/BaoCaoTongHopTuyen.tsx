@@ -19,8 +19,10 @@ import { Select } from "@/components/ui/select";
 import { dispatchService } from "@/services/dispatch.service";
 import { useUIStore } from "@/store/ui.store";
 import { DatePickerRange } from "@/components/DatePickerRange";
+import { parseDatabaseTimeForFilter, formatVietnamDateTime } from "@/lib/vietnam-time";
 
 interface RouteSummaryData {
+  date: string; // Ngày
   routeName: string;
   routeType: string;
   plateNumber: string;
@@ -59,29 +61,34 @@ export default function BaoCaoTongHopTuyen() {
       // Filter by date range if provided
       let filteredRecords = dispatchRecords;
       if (dateRange?.from && dateRange?.to) {
-        const fromDate = new Date(dateRange.from);
-        fromDate.setHours(0, 0, 0, 0);
-        const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        
+        const fromTime = new Date(dateRange.from).setHours(0, 0, 0, 0);
+        const toTime = new Date(dateRange.to).setHours(23, 59, 59, 999);
+
         filteredRecords = dispatchRecords.filter((record) => {
-          const recordDate = new Date(record.entryTime);
-          return recordDate >= fromDate && recordDate <= toDate;
+          const recordDate = parseDatabaseTimeForFilter(record.entryTime);
+          if (!recordDate) return false;
+          const recordTime = recordDate.getTime();
+          return recordTime >= fromTime && recordTime <= toTime;
         });
       }
 
-      // Group by route and vehicle
+      // Group by date, route and vehicle
       const grouped = new Map<string, RouteSummaryData>();
-      
+
       filteredRecords.forEach((record) => {
-        const key = `${record.routeId}-${record.vehicleId}`;
+        // Get date from entryTime
+        const recordDate = parseDatabaseTimeForFilter(record.entryTime);
+        const dateStr = recordDate ? formatVietnamDateTime(record.entryTime, "dd/MM/yyyy") : "-";
+
+        const key = `${dateStr}-${record.routeId}-${record.vehicleId}`;
         const routeName = record.routeName || "-";
         const routeType = record.route?.routeType || "-";
         const plateNumber = record.vehiclePlateNumber || "-";
         const seatCount = record.vehicle?.seatCapacity || record.seatCount || 0;
-        
+
         if (!grouped.has(key)) {
           grouped.set(key, {
+            date: dateStr,
             routeName,
             routeType,
             plateNumber,
@@ -138,7 +145,8 @@ export default function BaoCaoTongHopTuyen() {
       let matchesSearch = true;
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
-        matchesSearch = 
+        matchesSearch =
+          item.date.toLowerCase().includes(query) ||
           item.routeName.toLowerCase().includes(query) ||
           item.plateNumber.toLowerCase().includes(query) ||
           item.routeType.toLowerCase().includes(query);
@@ -174,6 +182,7 @@ export default function BaoCaoTongHopTuyen() {
       // Prepare data for Excel
       const excelData = filteredData.map((item, index) => ({
         "STT": index + 1,
+        "Ngày": item.date,
         "Tên tuyến": item.routeName,
         "Loại tuyến": item.routeType,
         "Biển số": item.plateNumber,
@@ -194,6 +203,7 @@ export default function BaoCaoTongHopTuyen() {
       // Set column widths
       const colWidths = [
         { wch: 5 },   // STT
+        { wch: 12 },  // Ngày
         { wch: 25 },  // Tên tuyến
         { wch: 15 },  // Loại tuyến
         { wch: 15 },  // Biển số
@@ -318,6 +328,12 @@ export default function BaoCaoTongHopTuyen() {
                     STT
                   </TableHead>
                   <TableHead
+                    rowSpan={2}
+                    className="border-r border-gray-300 align-middle text-center font-semibold"
+                  >
+                    Ngày
+                  </TableHead>
+                  <TableHead
                     colSpan={4}
                     className="border-r border-gray-300 text-center font-semibold"
                   >
@@ -373,22 +389,25 @@ export default function BaoCaoTongHopTuyen() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center text-gray-500">
+                    <TableCell colSpan={12} className="text-center text-gray-500">
                       Đang tải dữ liệu...
                     </TableCell>
                   </TableRow>
                 ) : filteredData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center text-gray-500">
+                    <TableCell colSpan={12} className="text-center text-gray-500">
                       Không có dữ liệu
                     </TableCell>
                   </TableRow>
                 ) : (
                   <>
                     {filteredData.map((item, index) => (
-                      <TableRow key={`${item.plateNumber}-${item.routeName}-${index}`}>
+                      <TableRow key={`${item.date}-${item.plateNumber}-${item.routeName}-${index}`}>
                         <TableCell className="text-center border-r border-gray-200">
                           {index + 1}
+                        </TableCell>
+                        <TableCell className="text-center border-r border-gray-200 font-medium">
+                          {item.date}
                         </TableCell>
                         <TableCell className="border-r border-gray-200">
                           {item.routeName}
@@ -424,11 +443,11 @@ export default function BaoCaoTongHopTuyen() {
                     ))}
                     {/* Total row */}
                     <TableRow className="bg-gray-50 font-semibold">
-                      <TableCell className="text-center border-r border-gray-200">
+                      <TableCell colSpan={2} className="text-center border-r border-gray-200">
                         Tổng
                       </TableCell>
                       <TableCell colSpan={3} className="border-r border-gray-200">
-                        {filteredData.length} xe
+                        {filteredData.length} dòng
                       </TableCell>
                       <TableCell className="text-center border-r border-gray-200">
                         {filteredData.reduce((sum, item) => sum + item.seatCount, 0)}

@@ -18,8 +18,10 @@ import { Button } from "@/components/ui/button";
 import { dispatchService } from "@/services/dispatch.service";
 import { useUIStore } from "@/store/ui.store";
 import { DatePickerRange } from "@/components/DatePickerRange";
+import { parseDatabaseTimeForFilter, formatVietnamDateTime } from "@/lib/vietnam-time";
 
 interface RouteSummaryData {
+  date: string; // Ngày
   routeCode: string;
   routeName: string;
   quantity: number; // Số lượng chuyến
@@ -58,14 +60,14 @@ export default function BaoCaoTongHop() {
       // Filter by date range if provided
       let filteredRecords = dispatchRecords;
       if (dateRange?.from && dateRange?.to) {
-        const fromDate = new Date(dateRange.from);
-        fromDate.setHours(0, 0, 0, 0);
-        const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        
+        const fromTime = new Date(dateRange.from).setHours(0, 0, 0, 0);
+        const toTime = new Date(dateRange.to).setHours(23, 59, 59, 999);
+
         filteredRecords = dispatchRecords.filter((record) => {
-          const recordDate = new Date(record.entryTime);
-          return recordDate >= fromDate && recordDate <= toDate;
+          const recordDate = parseDatabaseTimeForFilter(record.entryTime);
+          if (!recordDate) return false;
+          const recordTime = recordDate.getTime();
+          return recordTime >= fromTime && recordTime <= toTime;
         });
       }
 
@@ -76,14 +78,20 @@ export default function BaoCaoTongHop() {
 
       // Group by route
       const grouped = new Map<string, RouteSummaryData>();
-      
+
       paidRecords.forEach((record) => {
+        // Get date from entryTime
+        const recordDate = parseDatabaseTimeForFilter(record.entryTime);
+        const dateStr = recordDate ? formatVietnamDateTime(record.entryTime, "dd/MM/yyyy") : "-";
+
         const routeId = record.routeId;
+        const key = `${dateStr}-${routeId}`;
         const routeCode = record.route?.routeCode || "-";
         const routeName = record.routeName || "-";
-        
-        if (!grouped.has(routeId)) {
-          grouped.set(routeId, {
+
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            date: dateStr,
             routeCode,
             routeName,
             quantity: 0,
@@ -92,7 +100,7 @@ export default function BaoCaoTongHop() {
           });
         }
         
-        const item = grouped.get(routeId)!;
+        const item = grouped.get(key)!;
         
         // Count trips
         item.quantity += 1;
@@ -128,6 +136,7 @@ export default function BaoCaoTongHop() {
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         return (
+          item.date.toLowerCase().includes(query) ||
           item.routeCode.toLowerCase().includes(query) ||
           item.routeName.toLowerCase().includes(query)
         );
@@ -146,6 +155,7 @@ export default function BaoCaoTongHop() {
       // Prepare data for Excel
       const excelData = filteredData.map((item, index) => ({
         "STT": index + 1,
+        "Ngày": item.date,
         "Mã tuyến": item.routeCode,
         "Tên tuyến": item.routeName,
         "Số lượng": item.quantity,
@@ -163,6 +173,7 @@ export default function BaoCaoTongHop() {
       // Set column widths
       const colWidths = [
         { wch: 5 },   // STT
+        { wch: 12 },  // Ngày
         { wch: 15 },  // Mã tuyến
         { wch: 30 },  // Tên tuyến
         { wch: 12 },  // Số lượng
@@ -257,6 +268,7 @@ export default function BaoCaoTongHop() {
               <TableHeader>
                 <TableRow className="bg-gray-100">
                   <TableHead className="text-center font-semibold">STT</TableHead>
+                  <TableHead className="text-center font-semibold">Ngày</TableHead>
                   <TableHead className="text-center font-semibold">Mã tuyến</TableHead>
                   <TableHead className="text-center font-semibold">Tên tuyến</TableHead>
                   <TableHead className="text-center font-semibold">Số lượng</TableHead>
@@ -267,22 +279,25 @@ export default function BaoCaoTongHop() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-gray-500">
+                    <TableCell colSpan={7} className="text-center text-gray-500">
                       Đang tải dữ liệu...
                     </TableCell>
                   </TableRow>
                 ) : filteredData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-gray-500">
+                    <TableCell colSpan={7} className="text-center text-gray-500">
                       Không có dữ liệu
                     </TableCell>
                   </TableRow>
                 ) : (
                   <>
                     {filteredData.map((item, index) => (
-                      <TableRow key={`${item.routeCode}-${index}`}>
+                      <TableRow key={`${item.date}-${item.routeCode}-${index}`}>
                         <TableCell className="text-center">
                           {index + 1}
+                        </TableCell>
+                        <TableCell className="text-center font-medium">
+                          {item.date}
                         </TableCell>
                         <TableCell className="text-center font-semibold">
                           {item.routeCode}
@@ -305,7 +320,7 @@ export default function BaoCaoTongHop() {
                     ))}
                     {/* Total row */}
                     <TableRow className="bg-gray-50 font-semibold">
-                      <TableCell colSpan={3} className="text-center">
+                      <TableCell colSpan={4} className="text-center">
                         Tổng cộng:
                       </TableCell>
                       <TableCell className="text-center">

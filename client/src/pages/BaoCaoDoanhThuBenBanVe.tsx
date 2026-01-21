@@ -18,8 +18,10 @@ import { Button } from "@/components/ui/button";
 import { dispatchService } from "@/services/dispatch.service";
 import { useUIStore } from "@/store/ui.store";
 import { DatePickerRange } from "@/components/DatePickerRange";
+import { parseDatabaseTimeForFilter, formatVietnamDateTime } from "@/lib/vietnam-time";
 
 interface RevenueDetailData {
+  date: string; // Ngày
   operatorName: string;
   routeName: string;
   routeCode: string;
@@ -64,14 +66,14 @@ export default function BaoCaoDoanhThuBenBanVe() {
       // Filter by date range if provided
       let filteredRecords = dispatchRecords;
       if (dateRange?.from && dateRange?.to) {
-        const fromDate = new Date(dateRange.from);
-        fromDate.setHours(0, 0, 0, 0);
-        const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        
+        const fromTime = new Date(dateRange.from).setHours(0, 0, 0, 0);
+        const toTime = new Date(dateRange.to).setHours(23, 59, 59, 999);
+
         filteredRecords = dispatchRecords.filter((record) => {
-          const recordDate = new Date(record.entryTime);
-          return recordDate >= fromDate && recordDate <= toDate;
+          const recordDate = parseDatabaseTimeForFilter(record.entryTime);
+          if (!recordDate) return false;
+          const recordTime = recordDate.getTime();
+          return recordTime >= fromTime && recordTime <= toTime;
         });
       }
 
@@ -84,13 +86,18 @@ export default function BaoCaoDoanhThuBenBanVe() {
       const grouped = new Map<string, RevenueDetailData>();
       
       paidRecords.forEach((record) => {
-        const key = `${record.vehicle?.operatorId || 'unknown'}-${record.routeId}`;
+        // Get date from entryTime
+        const recordDate = parseDatabaseTimeForFilter(record.entryTime);
+        const dateStr = recordDate ? formatVietnamDateTime(record.entryTime, "dd/MM/yyyy") : "-";
+
+        const key = `${dateStr}-${record.vehicle?.operatorId || 'unknown'}-${record.routeId}`;
         const operatorName = record.vehicle?.operator?.name || "-";
         const routeName = record.routeName || "-";
         const routeCode = record.route?.routeCode || "-";
-        
+
         if (!grouped.has(key)) {
           grouped.set(key, {
+            date: dateStr,
             operatorName,
             routeName,
             routeCode,
@@ -194,6 +201,7 @@ export default function BaoCaoDoanhThuBenBanVe() {
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         return (
+          item.date.toLowerCase().includes(query) ||
           item.operatorName.toLowerCase().includes(query) ||
           item.routeCode.toLowerCase().includes(query) ||
           item.routeName.toLowerCase().includes(query)
@@ -213,6 +221,7 @@ export default function BaoCaoDoanhThuBenBanVe() {
       // Prepare data for Excel
       const excelData = filteredData.map((item, index) => ({
         "STT": index + 1,
+        "Ngày": item.date,
         "Doanh nghiệp": item.operatorName,
         "Tên tuyến": item.routeName,
         "Mã tuyến": item.routeCode,
@@ -239,6 +248,7 @@ export default function BaoCaoDoanhThuBenBanVe() {
       // Set column widths
       const colWidths = [
         { wch: 5 },   // STT
+        { wch: 12 },  // Ngày
         { wch: 25 },  // Doanh nghiệp
         { wch: 25 },  // Tên tuyến
         { wch: 15 },  // Mã tuyến
@@ -376,6 +386,12 @@ export default function BaoCaoDoanhThuBenBanVe() {
                     rowSpan={2}
                     className="text-center font-semibold border-r border-gray-300 align-middle"
                   >
+                    Ngày
+                  </TableHead>
+                  <TableHead
+                    rowSpan={2}
+                    className="text-center font-semibold border-r border-gray-300 align-middle"
+                  >
                     Doanh nghiệp
                   </TableHead>
                   <TableHead
@@ -446,22 +462,25 @@ export default function BaoCaoDoanhThuBenBanVe() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={17} className="text-center text-gray-500">
+                    <TableCell colSpan={18} className="text-center text-gray-500">
                       Đang tải dữ liệu...
                     </TableCell>
                   </TableRow>
                 ) : filteredData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={17} className="text-center text-gray-500">
+                    <TableCell colSpan={18} className="text-center text-gray-500">
                       Không có dữ liệu
                     </TableCell>
                   </TableRow>
                 ) : (
                   <>
                     {filteredData.map((item, index) => (
-                      <TableRow key={`${item.operatorName}-${item.routeCode}-${index}`}>
+                      <TableRow key={`${item.date}-${item.operatorName}-${item.routeCode}-${index}`}>
                         <TableCell className="text-center border-r border-gray-200">
                           {index + 1}
+                        </TableCell>
+                        <TableCell className="text-center border-r border-gray-200 font-medium">
+                          {item.date}
                         </TableCell>
                         <TableCell className="border-r border-gray-200">
                           {item.operatorName}
@@ -515,7 +534,7 @@ export default function BaoCaoDoanhThuBenBanVe() {
                     ))}
                     {/* Total row */}
                     <TableRow className="bg-gradient-to-r from-blue-100 to-blue-50 font-bold text-blue-900 border-t-2 border-blue-300 sticky bottom-0">
-                      <TableCell colSpan={4} className="text-center border-r border-blue-300 bg-blue-200 shadow-sm">
+                      <TableCell colSpan={5} className="text-center border-r border-blue-300 bg-blue-200 shadow-sm">
                         <div className="flex items-center justify-center gap-2">
                           <span className="text-lg"></span>
                           <span className="text-base font-bold">TỔNG CỘNG</span>
