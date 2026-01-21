@@ -170,6 +170,7 @@ export function DatePickerRange({
               fromYear={1900}
               toYear={2100}
               locale={vi}
+              month={range?.from}
             />
           </PopoverContent>
         </Popover>

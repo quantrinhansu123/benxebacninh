@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { dispatchService } from "@/services/dispatch.service";
 import { useUIStore } from "@/store/ui.store";
 import { DatePickerRange } from "@/components/DatePickerRange";
-import { formatVietnamDateTime } from "@/lib/vietnam-time";
+import { formatVietnamDateTime, parseDatabaseTimeForFilter } from "@/lib/vietnam-time";
 
 interface OrderData {
   plateNumber: string;
@@ -53,23 +53,25 @@ export default function BaoCaoTheoDoiLenhTraKhach() {
     try {
       // Load dispatch records
       const dispatchRecords = await dispatchService.getAll();
-      
+
       // Filter by date range if provided
       let filteredRecords = dispatchRecords;
       if (dateRange?.from && dateRange?.to) {
-        const fromDate = new Date(dateRange.from);
-        fromDate.setHours(0, 0, 0, 0);
-        const toDate = new Date(dateRange.to);
-        toDate.setHours(23, 59, 59, 999);
-        
+        // Create start of day and end of day for comparison
+        const fromTime = new Date(dateRange.from).setHours(0, 0, 0, 0);
+        const toTime = new Date(dateRange.to).setHours(23, 59, 59, 999);
+
         filteredRecords = dispatchRecords.filter((record) => {
-          // Filter by passenger drop time or planned departure time
-          const filterDate = record.passengerDropTime || record.plannedDepartureTime;
-          if (filterDate) {
-            const recordDate = new Date(filterDate);
-            return recordDate >= fromDate && recordDate <= toDate;
-          }
-          return false;
+          // Use passengerDropTime for filtering (since this is lệnh trả khách report)
+          const filterDate = record.passengerDropTime;
+          if (!filterDate) return false;
+
+          // Parse database time to Vietnam time for comparison
+          const recordDate = parseDatabaseTimeForFilter(filterDate);
+          if (!recordDate) return false; // Skip invalid dates
+
+          const recordTime = recordDate.getTime();
+          return recordTime >= fromTime && recordTime <= toTime;
         });
       }
 
@@ -225,7 +227,7 @@ export default function BaoCaoTheoDoiLenhTraKhach() {
         "Bến đi": item.departureStation,
         "Loại lệnh": item.orderType,
         "Giờ XB kế hoạch": item.plannedDepartureTime !== "-"
-          ? format(new Date(item.plannedDepartureTime), "dd/MM/yyyy HH:mm")
+          ? formatVietnamDateTime(item.plannedDepartureTime, "dd/MM/yyyy HH:mm")
           : "-",
         "Trạng thái lệnh": item.orderStatus,
       }));

@@ -274,3 +274,51 @@ export function parseDatabaseTimeForEdit(dateString: string | undefined | null):
   }
 }
 
+/**
+ * Parse database time string for filtering/comparison purposes.
+ * Returns null if the date is invalid (instead of falling back to current date).
+ *
+ * @param dateString - ISO date string from database
+ * @returns Date object or null if invalid
+ */
+export function parseDatabaseTimeForFilter(dateString: string | undefined | null): Date | null {
+  if (!dateString) return null
+
+  try {
+    const utcDate = new Date(dateString)
+    if (isNaN(utcDate.getTime())) return null
+
+    // If the date is in UTC format (ends with Z), convert to Vietnam time
+    if (dateString.endsWith('Z')) {
+      const vietnamTimeMs = utcDate.getTime() + VIETNAM_TIMEZONE_OFFSET_HOURS * 60 * 60 * 1000
+      const vietnamDate = new Date(vietnamTimeMs)
+      return new Date(
+        vietnamDate.getUTCFullYear(),
+        vietnamDate.getUTCMonth(),
+        vietnamDate.getUTCDate(),
+        vietnamDate.getUTCHours(),
+        vietnamDate.getUTCMinutes(),
+        vietnamDate.getUTCSeconds()
+      )
+    }
+
+    // For dates with +07:00 offset, extract components directly
+    const match = dateString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match
+      return new Date(
+        parseInt(year),
+        parseInt(month) - 1,
+        parseInt(day),
+        parseInt(hours),
+        parseInt(minutes),
+        parseInt(seconds)
+      )
+    }
+
+    return null
+  } catch {
+    return null
+  }
+}
+
