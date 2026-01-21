@@ -36,7 +36,7 @@ export function ChatWidget() {
     <>
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-24 right-4 w-[380px] h-[520px] bg-white rounded-2xl shadow-2xl shadow-stone-300/40 flex flex-col z-[9999] border border-stone-200/50 overflow-hidden">
+        <div className="fixed bottom-24 right-4 w-[380px] h-[520px] bg-white rounded-2xl shadow-2xl shadow-stone-300/40 flex flex-col z-40 border border-stone-200/50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3.5 bg-stone-800 text-white">
             <div className="flex items-center gap-3">
@@ -136,7 +136,7 @@ export function ChatWidget() {
       {/* Toggle Button */}
       <Button
         onClick={toggleChat}
-        className={`fixed bottom-6 right-6 w-14 h-14 rounded-2xl shadow-xl z-[9999] transition-all duration-300 ${
+        className={`fixed bottom-6 right-6 w-14 h-14 rounded-2xl shadow-xl z-40 transition-all duration-300 ${
           isOpen
             ? 'bg-stone-600 hover:bg-stone-500 shadow-stone-400/30'
             : 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/40'
