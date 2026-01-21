@@ -26,6 +26,7 @@ import { Select } from "@/components/ui/select"
 import { vehicleBadgeService, type VehicleBadge, type CreateVehicleBadgeInput } from "@/services/vehicle-badge.service"
 import { quanlyDataService } from "@/services/quanly-data.service"
 import { useUIStore } from "@/store/ui.store"
+import { useDialogHistory } from "@/hooks/useDialogHistory"
 
 // Helper function to format date
 const formatDate = (dateString: string | undefined | null): string => {
@@ -98,6 +99,28 @@ export default function QuanLyPhuHieuXe() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
+
+  // Handle browser back button for dialogs
+  const { handleDialogOpenChange: handleViewDialogChange } = useDialogHistory(
+    viewDialogOpen,
+    setViewDialogOpen,
+    "viewBadgeDialogOpen"
+  )
+  const { handleDialogOpenChange: handleFormDialogChange } = useDialogHistory(
+    formDialogOpen,
+    setFormDialogOpen,
+    "formBadgeDialogOpen"
+  )
+  const { handleDialogOpenChange: handleDeleteDialogChange } = useDialogHistory(
+    deleteDialogOpen,
+    setDeleteDialogOpen,
+    "deleteBadgeDialogOpen"
+  )
+  const { handleDialogOpenChange: handleImportDialogChange } = useDialogHistory(
+    importDialogOpen,
+    setImportDialogOpen,
+    "importBadgeDialogOpen"
+  )
 
   useEffect(() => {
     setTitle("Quản lý phù hiệu xe")
@@ -875,9 +898,9 @@ export default function QuanLyPhuHieuXe() {
       )}
 
       {/* View Detail Dialog */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+      <Dialog open={viewDialogOpen} onOpenChange={handleViewDialogChange}>
         <DialogContent className="max-w-4xl w-full max-h-[95vh] overflow-y-auto p-6">
-          <DialogClose onClose={() => setViewDialogOpen(false)} />
+          <DialogClose onClose={() => handleViewDialogChange(false)} />
           <DialogHeader>
             <DialogTitle className="text-2xl">Chi tiết phù hiệu xe</DialogTitle>
           </DialogHeader>
@@ -990,9 +1013,9 @@ export default function QuanLyPhuHieuXe() {
       </Dialog>
 
       {/* Form Dialog (Create/Edit) */}
-      <Dialog open={formDialogOpen} onOpenChange={setFormDialogOpen}>
+      <Dialog open={formDialogOpen} onOpenChange={handleFormDialogChange}>
         <DialogContent className="max-w-2xl w-full max-h-[95vh] overflow-y-auto p-6">
-          <DialogClose onClose={() => setFormDialogOpen(false)} />
+          <DialogClose onClose={() => handleFormDialogChange(false)} />
           <DialogHeader>
             <DialogTitle className="text-2xl">
               {formMode === "create" ? "Thêm phù hiệu mới" : "Chỉnh sửa phù hiệu"}
@@ -1134,7 +1157,7 @@ export default function QuanLyPhuHieuXe() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-4">
-              <Button type="button" variant="outline" onClick={() => setFormDialogOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => handleFormDialogChange(false)}>
                 Hủy
               </Button>
               <Button type="submit" disabled={isSubmitting}>
@@ -1146,9 +1169,9 @@ export default function QuanLyPhuHieuXe() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <Dialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogChange}>
         <DialogContent className="max-w-md">
-          <DialogClose onClose={() => setDeleteDialogOpen(false)} />
+          <DialogClose onClose={() => handleDeleteDialogChange(false)} />
           <DialogHeader>
             <DialogTitle>Xác nhận xóa</DialogTitle>
           </DialogHeader>
@@ -1157,7 +1180,7 @@ export default function QuanLyPhuHieuXe() {
             <p className="text-sm text-gray-500 mt-2">Biển số xe: {badgeToDelete?.license_plate_sheet}</p>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button variant="outline" onClick={() => handleDeleteDialogChange(false)}>
               Hủy
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
@@ -1168,9 +1191,9 @@ export default function QuanLyPhuHieuXe() {
       </Dialog>
 
       {/* Import Preview Dialog */}
-      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+      <Dialog open={importDialogOpen} onOpenChange={handleImportDialogChange}>
         <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-          <DialogClose onClose={() => setImportDialogOpen(false)} />
+          <DialogClose onClose={() => handleImportDialogChange(false)} />
           <DialogHeader>
             <DialogTitle className="text-xl">Xem trước dữ liệu import</DialogTitle>
           </DialogHeader>
@@ -1218,7 +1241,7 @@ export default function QuanLyPhuHieuXe() {
             <Button 
               variant="outline" 
               onClick={() => {
-                setImportDialogOpen(false)
+                handleImportDialogChange(false)
                 setImportData([])
               }}
               disabled={isImporting}
