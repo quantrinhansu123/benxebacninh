@@ -37,6 +37,7 @@ export interface QuanLyOperator {
   address: string
   representativeName: string
   taxCode: string
+  isTicketDelegated: boolean
   isActive: boolean
   source: string
 }
@@ -85,10 +86,10 @@ export const quanlyDataService = {
         // Filter cached data if specific includes requested
         if (include && include.length > 0) {
           const filtered: QuanLyData = { meta: dataCache.meta }
-          if (include.includes('badges')) filtered.badges = dataCache.badges
-          if (include.includes('vehicles')) filtered.vehicles = dataCache.vehicles
-          if (include.includes('operators')) filtered.operators = dataCache.operators
-          if (include.includes('routes')) filtered.routes = dataCache.routes
+          if (include.includes('badges') && dataCache.badges) filtered.badges = dataCache.badges
+          if (include.includes('vehicles') && dataCache.vehicles) filtered.vehicles = dataCache.vehicles
+          if (include.includes('operators') && dataCache.operators) filtered.operators = dataCache.operators
+          if (include.includes('routes') && dataCache.routes) filtered.routes = dataCache.routes
           return filtered
         }
         return dataCache

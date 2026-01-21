@@ -24,23 +24,28 @@ const parseAddress = (addressValue?: string) => {
   if (addressParts.length > 0) {
     // Province is always the last part
     province = addressParts[addressParts.length - 1] || ""
-    
-    if (addressParts.length >= 2) {
-      // Try to determine if it's v1 (3 parts) or v2 (2 parts)
-      // For v2: address, ward, province
-      // For v1: address, ward, district, province
-      if (addressParts.length >= 3) {
-        // Likely v1 format
-        ward = addressParts[addressParts.length - 3] || ""
-        district = addressParts[addressParts.length - 2] || ""
-        if (addressParts.length >= 4) {
-          addressDetail = addressParts.slice(0, -3).join(", ")
-        }
-      } else {
-        // Likely v2 format (2 parts: ward, province)
-        ward = addressParts[addressParts.length - 2] || ""
-        addressDetail = ""
-      }
+
+    if (addressParts.length === 4) {
+      // V1 format with specific address: "123 Đường ABC, Phường XYZ, Quận Cầu Giấy, Hà Nội"
+      addressDetail = addressParts[0] || ""
+      ward = addressParts[1] || ""
+      district = addressParts[2] || ""
+    } else if (addressParts.length === 3) {
+      // V1 format without specific address: "Phường XYZ, Quận Cầu Giấy, Hà Nội"
+      ward = addressParts[0] || ""
+      district = addressParts[1] || ""
+    } else if (addressParts.length === 2) {
+      // V2 format: "Phường XYZ, Hà Nội"
+      ward = addressParts[0] || ""
+    } else if (addressParts.length === 1) {
+      // Only province
+      // province already set above
+    } else if (addressParts.length > 4) {
+      // More than 4 parts - treat first N-3 as address detail
+      console.warn(`Unexpected address format: ${addressValue} (${addressParts.length} parts)`)
+      addressDetail = addressParts.slice(0, -3).join(", ")
+      ward = addressParts[addressParts.length - 3] || ""
+      district = addressParts[addressParts.length - 2] || ""
     }
   }
   

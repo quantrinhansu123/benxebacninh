@@ -357,13 +357,47 @@ export default function ThanhToan() {
     });
   };
 
-  const handleBatchPayment = () => {
+  const handleBatchPayment = async () => {
     if (selectedItems.size === 0) {
       toast.warning("Vui lòng chọn ít nhất một đơn hàng");
       return;
     }
-    const selectedRecord = listData.find(item => selectedItems.has(item.id));
-    if (selectedRecord) navigate(`/thanh-toan/${selectedRecord.id}`);
+
+    const selectedRecords = listData.filter(item => selectedItems.has(item.id));
+    let successCount = 0;
+    let failCount = 0;
+
+    setIsProcessing(true);
+
+    for (const record of selectedRecords) {
+      try {
+        const chargesData = await serviceChargeService.getAll(record.id);
+        const subtotal = chargesData.reduce((sum, charge) => sum + charge.totalAmount, 0);
+        await dispatchService.processPayment(record.id, { paymentAmount: subtotal, paymentMethod: 'cash' });
+        successCount++;
+      } catch (error) {
+        console.error(`[ThanhToan] Failed to process payment for ${record.id}:`, error);
+        failCount++;
+      }
+    }
+
+    setIsProcessing(false);
+
+    // Clear cache to refresh list
+    invalidateCache('thanhtoan-dispatch-list');
+    await refetchList();
+
+    // Show summary toast
+    if (successCount > 0 && failCount === 0) {
+      toast.success(`Đã thanh toán thành công ${successCount} đơn hàng`);
+    } else if (successCount > 0 && failCount > 0) {
+      toast.warning(`Thanh toán: ${successCount} thành công, ${failCount} thất bại`);
+    } else {
+      toast.error(`Không thể thanh toán. ${failCount} đơn hàng thất bại`);
+    }
+
+    // Clear selection
+    setSelectedItems(new Set());
   };
 
   // ========== LIST VIEW ==========
