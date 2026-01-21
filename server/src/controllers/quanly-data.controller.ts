@@ -76,6 +76,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           address: operatorsTable.address,
           representative: operatorsTable.representative,
           taxCode: operatorsTable.taxCode,
+          isTicketDelegated: operatorsTable.isTicketDelegated,
           isActive: operatorsTable.isActive,
           source: operatorsTable.source,
         }).from(operatorsTable),
@@ -126,6 +127,12 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         const vehicleId = b.vehicleId || ''
         if (!plateNumber && vehicleId && vehiclePlateMap.has(vehicleId)) {
           plateNumber = vehiclePlateMap.get(vehicleId)!
+        }
+
+        // Early exit if no plate/vehicle reference
+        if (!plateNumber && !vehicleId) {
+          console.warn(`[QuanLyData] Badge ${b.id || 'unknown'} has no plate/vehicle reference, skipping`)
+          continue
         }
 
         if (plateNumber) {
@@ -237,6 +244,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           address: o.address || '',
           representativeName: o.representative || '',
           taxCode: o.taxCode || '',
+          isTicketDelegated: o.isTicketDelegated || false,
           isActive: o.isActive !== false,
           source: o.source || 'drizzle',
         })

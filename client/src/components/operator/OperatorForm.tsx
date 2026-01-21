@@ -20,13 +20,13 @@ const operatorSchema = z.object({
   code: z.string().min(1, "Mã đơn vị là bắt buộc"),
   taxCode: z.string().optional(),
   isTicketDelegated: z.boolean().optional(),
-  province: z.string().optional(),
-  district: z.string().optional(),
-  address: z.string().optional(),
+  province: z.string().min(1, "Tỉnh/Thành phố là bắt buộc"),
+  district: z.string().min(1, "Quận/Huyện là bắt buộc"),
+  address: z.string().min(1, "Địa chỉ cụ thể là bắt buộc"),
   phone: z.string().optional(),
   email: z.string().email("Email không hợp lệ").optional().or(z.literal("")),
-  representativeName: z.string().optional(),
-  representativePosition: z.string().optional(),
+  representativeName: z.string().min(1, "Tên đại diện là bắt buộc"),
+  representativePosition: z.string().min(1, "Chức vụ là bắt buộc"),
 })
 
 type OperatorFormData = z.infer<typeof operatorSchema>
@@ -425,7 +425,7 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
               {errors.code && <p className="text-sm text-red-500">{errors.code.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="taxCode">Mã số thuế <span className="text-red-500">*</span></Label>
+              <Label htmlFor="taxCode">Mã số thuế</Label>
               <Input id="taxCode" {...register("taxCode")} />
               {errors.taxCode && <p className="text-sm text-red-500">{errors.taxCode.message}</p>}
               {taxCodeWarning && (
@@ -445,12 +445,12 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="phone">Số điện thoại <span className="text-red-500">*</span></Label>
+              <Label htmlFor="phone">Số điện thoại</Label>
               <Input id="phone" {...register("phone")} />
               {errors.phone && <p className="text-sm text-red-500">{errors.phone.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
+              <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" {...register("email")} />
               {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
             </div>

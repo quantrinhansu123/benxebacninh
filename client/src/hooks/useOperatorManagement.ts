@@ -119,8 +119,8 @@ export function useOperatorManagement() {
         if (operator.isActive !== isActive) return false;
       }
       if (filterTicketDelegated) {
-        const isDelegated = filterTicketDelegated === "yes";
-        if (operator.isTicketDelegated !== isDelegated) return false;
+        const isDelegated = filterTicketDelegated === "yes" || filterTicketDelegated === "true";
+        if (Boolean(operator.isTicketDelegated) !== isDelegated) return false;
       }
       return true;
     });
