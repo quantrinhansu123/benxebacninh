@@ -88,6 +88,14 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
     const input = validateCreateDispatch(req.body)
     const userId = req.user?.id
 
+    // Check if vehicle already has active dispatch (still in station)
+    const { hasActive, existingRecord } = await dispatchRepository.hasActiveDispatch(input.vehicleId)
+    if (hasActive && existingRecord) {
+      return res.status(400).json({
+        error: `Xe ${existingRecord.vehiclePlateNumber || 'này'} đang ở trong bến (trạng thái: ${existingRecord.status}). Không thể thêm xe vào bến khi chưa xuất bến.`
+      })
+    }
+
     const entryTimeForDB = new Date(convertVietnamISOToUTCForStorage(input.entryTime))
     const denormData = await fetchDenormalizedData({
       vehicleId: input.vehicleId,

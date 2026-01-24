@@ -172,6 +172,31 @@ class DrizzleDispatchRepository extends DrizzleRepository<
   }
 
   /**
+   * Check if vehicle has active dispatch (still in station)
+   * Active statuses: entered, passengers_dropped, permit_issued, permit_rejected, paid, departure_ordered
+   */
+  async hasActiveDispatch(vehicleId: string): Promise<{ hasActive: boolean; existingRecord?: DispatchRecord }> {
+    const database = this.getDb()
+    const activeStatuses = ['entered', 'passengers_dropped', 'permit_issued', 'permit_rejected', 'paid', 'departure_ordered']
+
+    const [existing] = await database
+      .select()
+      .from(dispatchRecords)
+      .where(
+        and(
+          eq(dispatchRecords.vehicleId, vehicleId),
+          sql`${dispatchRecords.status} = ANY(ARRAY[${sql.join(activeStatuses.map(s => sql`${s}`), sql`, `)}]::text[])`
+        )
+      )
+      .limit(1)
+
+    return {
+      hasActive: !!existing,
+      existingRecord: existing || undefined
+    }
+  }
+
+  /**
    * Count dispatch records by status
    */
   async countByStatus(status: string): Promise<number> {

@@ -425,6 +425,21 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
 
   const handleEligible = useCallback(async () => {
     setHasAttemptedSubmit(true);
+
+    // Check if all documents are valid first
+    if (!checkAllDocumentsValid()) {
+      const results = getDocumentsCheckResults();
+      const invalidDocs = results
+        .filter(r => r.status === 'expired' || r.status === 'missing')
+        .map(r => r.name);
+      const errorMessage = `Xe không đủ điều kiện. Các giấy tờ sau không hợp lệ:\n• ${invalidDocs.join('\n• ')}\n\nVui lòng nhấn "Không đủ ĐK" để ghi nhận lý do.`;
+      toast.error(errorMessage, {
+        autoClose: 7000,
+        style: { whiteSpace: 'pre-line' }
+      });
+      return;
+    }
+
     const { isValid, errors, fieldErrors } = validatePermitFields();
     setValidationErrors(fieldErrors);
     
@@ -444,7 +459,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       return;
     }
     await submitPermit();
-  }, [validatePermitFields, totalAmount, submitPermit]);
+  }, [validatePermitFields, totalAmount, submitPermit, checkAllDocumentsValid, getDocumentsCheckResults]);
 
   // Clear validation error when field value changes
   useEffect(() => {
