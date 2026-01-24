@@ -42,26 +42,26 @@ The app runs on `http://localhost:5173` (client) and backend API on configured p
 quanlybenxe/
 ├── client/                 # React 18 frontend (Vite)
 │   └── src/
-│       ├── features/       # Feature modules (auth, dispatch, fleet)
+│       ├── features/       # Feature modules (auth, dispatch, fleet, chat)
 │       ├── pages/          # 47 lazy-loaded page components
-│       ├── components/     # 117 shared UI components (ui/, dispatch/, fleet/, dashboard/, etc.)
-│       ├── services/       # 20 API client services
-│       ├── hooks/          # 8 custom React hooks
-│       ├── store/          # Zustand global stores
+│       ├── components/     # 132 shared UI components (ui/, dispatch/, fleet/, dashboard/, etc.)
+│       ├── services/       # 21 API client services
+│       ├── hooks/          # 9 custom React hooks
+│       ├── store/          # Zustand global stores (3+4)
 │       ├── types/          # TypeScript definitions
-│       └── lib/            # Utilities and helpers
+│       └── lib/            # 12 utility files
 │
 ├── server/                 # Express.js backend
 │   └── src/
-│       ├── modules/        # 11 feature modules (auth, billing, chat, common, dispatch, fleet, operator, report, route)
+│       ├── modules/        # 11 feature modules (auth, billing, chat, dispatch, fleet, operator, report, route)
 │       ├── controllers/    # 27 HTTP request handlers
-│       ├── services/       # Business logic layer
+│       ├── services/       # Business logic layer (fleet: 247 LOC service)
 │       ├── repositories/   # Data access layer
-│       ├── middleware/     # Auth, error handling, validation
-│       ├── config/         # Database and external service config
+│       ├── middleware/     # 3 middleware files (auth, error, validation)
+│       ├── db/             # Drizzle ORM schemas (19 tables)
 │       └── types/          # Shared TypeScript types
 │
-└── docs/                   # Technical documentation
+└── docs/                   # Technical documentation (7 files)
 ```
 
 ---
@@ -238,22 +238,26 @@ See `DEPLOYMENT_CONFIG.md` for detailed setup.
 
 ## Performance Metrics
 
-### Frontend Bundle
-- **React vendor**: ~163KB
-- **UI components (Radix)**: ~68KB
-- **Utilities**: ~89KB
-- **Icons**: ~38KB
-- **Charts**: ~382KB
-- **Excel export**: ~283KB
+### Frontend Bundle (Vite Build)
+- **Total uncompressed**: ~1.4MB
+- **Total gzipped**: ~350KB
+- **vendor-react**: ~163KB
+- **vendor-radix** (UI components): ~68KB
+- **vendor-utils**: ~89KB
+- **vendor-icons**: ~38KB
+- **vendor-charts** (Recharts): ~382KB
+- **vendor-toast**: ~30KB
 
 ### Code Quality
+- **Total files**: 578 files (286 client TS/TSX + 178 server TS)
+- **Total LOC**: ~51,467 client + ~33,000 server = ~84,467 LOC
 - TypeScript strict mode enabled
-- No `any` types policy (496 found - needs cleanup)
-- Controller max: 300 lines (current max: 263)
-- Service/Helper functions: <50 lines average
+- Controller max: 300 lines (current max: 510 LOC dispatch controller)
+- Service/Helper functions: <250 lines average
+- Database: 19 tables with 7 indexes on dispatch_records
 
 ---
 
-**Last Updated:** 2026-01-13
+**Last Updated:** 2026-01-22
 **Maintainers:** Development Team
 **Status:** Migration Complete - Supabase Production Ready
