@@ -27,6 +27,7 @@ import { vehicleBadgeService, type VehicleBadge, type CreateVehicleBadgeInput } 
 import { quanlyDataService } from "@/services/quanly-data.service"
 import { useUIStore } from "@/store/ui.store"
 import { useDialogHistory } from "@/hooks/useDialogHistory"
+import { DatePicker } from "@/components/DatePicker"
 
 // Helper function to convert dd/MM/yyyy string to Date object
 const parseDateString = (dateStr: string | undefined | null): Date | null => {
@@ -1137,7 +1138,7 @@ export default function QuanLyPhuHieuXe() {
                 <Label htmlFor="issue_date">Ngày cấp</Label>
                 <DatePicker
                   date={formData.issue_date}
-                  onDateChange={(date) => setFormData({ ...formData, issue_date: date || null })}
+                  onDateChange={(date: Date | undefined) => setFormData({ ...formData, issue_date: date || null })}
                   placeholder="Chọn ngày cấp"
                 />
               </div>
@@ -1145,7 +1146,7 @@ export default function QuanLyPhuHieuXe() {
                 <Label htmlFor="expiry_date">Ngày hết hạn</Label>
                 <DatePicker
                   date={formData.expiry_date}
-                  onDateChange={(date) => setFormData({ ...formData, expiry_date: date || null })}
+                  onDateChange={(date: Date | undefined) => setFormData({ ...formData, expiry_date: date || null })}
                   placeholder="Chọn ngày hết hạn"
                 />
               </div>
