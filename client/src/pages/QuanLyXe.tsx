@@ -158,13 +158,16 @@ export default function QuanLyXe() {
     [vehicles]
   )
 
-  // Stats calculations
+  // Stats calculations - respect badge filter
   const stats = useMemo(() => {
-    const active = vehicles.filter(v => v.isActive).length
-    const inactive = vehicles.length - active
+    const baseVehicles = showOnlyBadgeVehicles
+      ? vehicles.filter(v => v.hasBadge)
+      : vehicles
+    const active = baseVehicles.filter(v => v.isActive).length
+    const inactive = baseVehicles.length - active
     // Use operatorCount from same data source as Đơn vị vận tải page for consistency
-    return { total: vehicles.length, active, inactive, uniqueOperators: operatorCount }
-  }, [vehicles, operatorCount])
+    return { total: baseVehicles.length, active, inactive, uniqueOperators: operatorCount }
+  }, [vehicles, operatorCount, showOnlyBadgeVehicles])
 
   const filteredVehicles = useMemo(() => {
     return vehicles.filter((vehicle: Vehicle) => {
