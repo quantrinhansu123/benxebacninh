@@ -175,10 +175,8 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
       }
 
       // Build set of plates that have valid badges (Buýt/Tuyến cố định)
-      const platesWithBadge = new Set<string>([
-        ...vehicleOperatorMap.keys(),
-        ...vehicleBadgeExpiryMap.keys()
-      ])
+      // Use allowedPlates which contains ALL plates with valid badge types
+      const platesWithBadge = allowedPlates
 
       // Include ALL vehicles (removed badge-based filtering)
       // Previous logic was too strict - excluded vehicles without badges
