@@ -105,6 +105,7 @@ export interface Vehicle {
   province?: string
 
   isActive: boolean
+  hasBadge?: boolean
   notes?: string
   documents?: VehicleDocuments
   createdAt?: string

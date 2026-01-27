@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -99,6 +100,7 @@ export default function QuanLyXe() {
   const [filterOperator, setFilterOperator] = useState("")
   const [filterStatus, setFilterStatus] = useState("")
   const [quickFilter, setQuickFilter] = useState<"all" | "active" | "inactive">("all")
+  const [showOnlyBadgeVehicles, setShowOnlyBadgeVehicles] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -133,6 +135,7 @@ export default function QuanLyXe() {
         vehicleTypeName: v.vehicleType || '',
         inspectionExpiryDate: v.inspectionExpiryDate,
         isActive: v.isActive,
+        hasBadge: v.hasBadge,
       } as any))
 
       setVehicles(vehicleData)
@@ -168,6 +171,9 @@ export default function QuanLyXe() {
       const vehicleTypeName = getVehicleTypeName(vehicle)
       const operatorName = getOperatorName(vehicle)
 
+      // Badge filter - default ON (only show vehicles with Buýt/TCĐ badges)
+      if (showOnlyBadgeVehicles && !vehicle.hasBadge) return false
+
       // Quick filter
       if (quickFilter === "active" && !vehicle.isActive) return false
       if (quickFilter === "inactive" && vehicle.isActive) return false
@@ -191,7 +197,7 @@ export default function QuanLyXe() {
 
       return true
     })
-  }, [vehicles, searchQuery, filterVehicleType, filterOperator, filterStatus, quickFilter])
+  }, [vehicles, searchQuery, filterVehicleType, filterOperator, filterStatus, quickFilter, showOnlyBadgeVehicles])
 
   // Pagination
   const totalPages = Math.ceil(filteredVehicles.length / ITEMS_PER_PAGE)
@@ -423,6 +429,21 @@ export default function QuanLyXe() {
               active={quickFilter === "inactive"} 
               onClick={() => setQuickFilter("inactive")} 
             />
+          </div>
+
+          {/* Divider */}
+          <div className="hidden lg:block w-px h-10 bg-slate-200" />
+
+          {/* Badge Filter Toggle */}
+          <div className="flex items-center gap-2 px-2">
+            <Switch
+              id="badge-filter"
+              checked={showOnlyBadgeVehicles}
+              onCheckedChange={setShowOnlyBadgeVehicles}
+            />
+            <Label htmlFor="badge-filter" className="text-sm text-slate-600 whitespace-nowrap cursor-pointer">
+              Chỉ Buýt/TCĐ
+            </Label>
           </div>
 
           {/* Divider */}

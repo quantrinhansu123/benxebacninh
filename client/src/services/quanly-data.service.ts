@@ -25,6 +25,7 @@ export interface QuanLyVehicle {
   vehicleType: string
   inspectionExpiryDate: string
   isActive: boolean
+  hasBadge?: boolean
   source: string
 }
 

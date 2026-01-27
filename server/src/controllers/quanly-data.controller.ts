@@ -174,6 +174,12 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         })
       }
 
+      // Build set of plates that have valid badges (Buýt/Tuyến cố định)
+      const platesWithBadge = new Set<string>([
+        ...vehicleOperatorMap.keys(),
+        ...vehicleBadgeExpiryMap.keys()
+      ])
+
       // Include ALL vehicles (removed badge-based filtering)
       // Previous logic was too strict - excluded vehicles without badges
       // Vehicles created manually should also appear in the list
@@ -224,6 +230,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           vehicleType: '',
           inspectionExpiryDate: badgeExpiryDate || v.roadWorthinessExpiry || '',
           isActive: v.isActive !== false,
+          hasBadge: platesWithBadge.has(normalizedPlate),
           source: v.source || 'drizzle',
         })
       }
