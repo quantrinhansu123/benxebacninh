@@ -72,7 +72,7 @@ export const paymentSchema = z.object({
  */
 export const departureOrderSchema = z.object({
   passengersDeparting: z.number().int().min(0, 'Passengers must be non-negative').max(100, 'Passengers must not exceed 100').optional(),
-  departureOrderShiftId: z.string().uuid('Invalid shift ID').optional(),
+  departureOrderShiftId: z.string().min(1, 'Invalid shift ID').optional(),
 })
 
 /**
@@ -80,7 +80,7 @@ export const departureOrderSchema = z.object({
  */
 export const exitSchema = z.object({
   exitTime: z.string().datetime({ message: 'Invalid datetime format' }).optional(),
-  exitShiftId: z.string().uuid('Invalid shift ID').optional(),
+  exitShiftId: z.string().min(1, 'Invalid shift ID').optional(),
   passengersDeparting: z.number().int().min(0, 'Passengers must be non-negative').max(100, 'Passengers must not exceed 100').optional(),
 })
 
