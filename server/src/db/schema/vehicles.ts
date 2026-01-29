@@ -36,7 +36,7 @@ export const vehicles = pgTable('vehicles', {
   // GPS info
   gpsProvider: varchar('gps_provider', { length: 100 }),
   gpsUsername: varchar('gps_username', { length: 100 }),
-  gpsPassword: varchar('gps_password', { length: 100 }),
+  gpsPassword: varchar('gps_password', { length: 256 }), // Increased for AES-256-CBC encrypted format (iv:encrypted)
   // Location
   province: varchar('province', { length: 100 }),
   // Notes

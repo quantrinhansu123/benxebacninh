@@ -201,18 +201,22 @@ describe('Dispatch Validation', () => {
       expect(result.paymentMethod).toBe('cash');
     });
 
-    it('should allow zero payment amount', () => {
-      const validData = { paymentAmount: 0 };
+    it('should throw error for zero payment amount', () => {
+      const invalidData = { paymentAmount: 0 };
 
-      const result = validatePayment(validData);
-
-      expect(result.paymentAmount).toBe(0);
+      expect(() => validatePayment(invalidData)).toThrow('Số tiền thanh toán phải lớn hơn 0');
     });
 
     it('should throw error for negative payment', () => {
       const invalidData = { paymentAmount: -100 };
 
       expect(() => validatePayment(invalidData)).toThrow();
+    });
+
+    it('should throw error for payment amount exceeding limit', () => {
+      const invalidData = { paymentAmount: 1_000_000_001 };
+
+      expect(() => validatePayment(invalidData)).toThrow('Số tiền thanh toán vượt quá giới hạn');
     });
 
     it('should throw error for invalid payment method', () => {

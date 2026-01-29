@@ -2,7 +2,40 @@
 import dotenv from 'dotenv'
 dotenv.config()
 
-import express, { Request, Response } from 'express'
+// Global error handlers - prevent silent crashes
+process.on('unhandledRejection', (reason: Error | unknown, promise: Promise<unknown>) => {
+  console.error('[UNHANDLED REJECTION] at:', promise)
+  if (reason instanceof Error) {
+    console.error('[UNHANDLED REJECTION] reason:', reason.message)
+    console.error('[UNHANDLED REJECTION] stack:', reason.stack)
+  } else {
+    console.error('[UNHANDLED REJECTION] reason:', reason)
+  }
+
+  // In production, log and continue (for monitoring)
+  // In critical cases, you might want to gracefully shutdown
+  if (process.env.NODE_ENV === 'production') {
+    // Log to external service here (e.g., Sentry, CloudWatch)
+    console.error('[UNHANDLED REJECTION] Production mode - server continues running')
+  } else {
+    console.warn('[UNHANDLED REJECTION] Development mode - server continues running')
+  }
+})
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('[UNCAUGHT EXCEPTION]:', error.message)
+  console.error('[UNCAUGHT EXCEPTION] stack:', error.stack)
+
+  // Uncaught exceptions are critical - graceful shutdown required
+  console.error('[UNCAUGHT EXCEPTION] Shutting down gracefully...')
+
+  // Give time for logging before exit
+  setTimeout(() => {
+    process.exit(1)
+  }, 1000)
+})
+
+import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import { errorHandler } from './middleware/errorHandler.js'
 
@@ -89,6 +122,34 @@ app.use(cors({
 }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
+
+// XSS Sanitization Middleware
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  const sanitize = (obj: Record<string, unknown>): void => {
+    for (const key in obj) {
+      if (typeof obj[key] === 'string') {
+        // Basic HTML entity encoding to prevent XSS
+        obj[key] = (obj[key] as string)
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#x27;')
+          .replace(/\//g, '&#x2F;')
+      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        sanitize(obj[key] as Record<string, unknown>)
+      }
+    }
+  }
+
+  if (req.body && typeof req.body === 'object') {
+    sanitize(req.body as Record<string, unknown>)
+  }
+  if (req.query && typeof req.query === 'object') {
+    sanitize(req.query as Record<string, unknown>)
+  }
+
+  next()
+})
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {

@@ -4,6 +4,7 @@
  */
 
 import { Router } from 'express'
+import { authenticate, authorize } from '../../middleware/auth.js'
 import {
   getAllDrivers,
   getDriverById,
@@ -14,14 +15,17 @@ import {
 
 const router = Router()
 
-// Note: Removed global auth requirement for consistency with quanly-data endpoints
-// Auth is still enforced on write operations via individual route middleware
+// Apply authentication to all routes
+router.use(authenticate)
 
-// Driver CRUD (GET operations are public for admin panel)
+// Driver CRUD
+// GET operations - accessible to all authenticated users
 router.get('/', getAllDrivers)
 router.get('/:id', getDriverById)
-router.post('/', createDriver)
-router.put('/:id', updateDriver)
-router.delete('/:id', deleteDriver)
+
+// Write operations - require admin role
+router.post('/', authorize('admin'), createDriver)
+router.put('/:id', authorize('admin'), updateDriver)
+router.delete('/:id', authorize('admin'), deleteDriver)
 
 export default router

@@ -8,13 +8,28 @@
 import { db } from '../../db/drizzle'
 import { eq, sql, and, or, gte, lte, like, desc, asc } from 'drizzle-orm'
 import { PgTable, PgColumn } from 'drizzle-orm/pg-core'
-import { DatabaseError, NotFoundError } from '../errors/app-error'
+import { DatabaseError, NotFoundError, ValidationError } from '../errors/app-error'
 
 export interface DrizzleQueryOptions<T> {
   where?: Partial<T>
   orderBy?: { field: keyof T; direction: 'asc' | 'desc' }
   limit?: number
   offset?: number
+}
+
+/**
+ * Pagination validation constants
+ */
+const MAX_LIMIT = 1000
+const DEFAULT_LIMIT = 10
+const DEFAULT_OFFSET = 0
+
+/**
+ * Validated pagination parameters
+ */
+interface ValidatedPagination {
+  limit: number
+  offset: number
 }
 
 export interface PaginatedResult<T> {
@@ -52,6 +67,42 @@ export abstract class DrizzleRepository<
   }
 
   /**
+   * Validate pagination parameters
+   * Ensures limit and offset are non-negative and within allowed ranges
+   */
+  protected validatePagination(
+    limit?: number,
+    offset?: number
+  ): ValidatedPagination {
+    const validatedLimit = limit ?? DEFAULT_LIMIT
+    const validatedOffset = offset ?? DEFAULT_OFFSET
+
+    if (validatedLimit < 0) {
+      throw new ValidationError('Limit must be non-negative', [
+        { field: 'limit', value: limit, message: 'Limit cannot be negative' },
+      ])
+    }
+
+    if (validatedOffset < 0) {
+      throw new ValidationError('Offset must be non-negative', [
+        {
+          field: 'offset',
+          value: offset,
+          message: 'Offset cannot be negative',
+        },
+      ])
+    }
+
+    // Cap limit at MAX_LIMIT to prevent DoS
+    const cappedLimit = validatedLimit > MAX_LIMIT ? MAX_LIMIT : validatedLimit
+
+    return {
+      limit: cappedLimit,
+      offset: validatedOffset,
+    }
+  }
+
+  /**
    * Find all records with optional filters
    */
   async findAll(options?: DrizzleQueryOptions<TSelect>): Promise<TSelect[]> {
@@ -59,17 +110,25 @@ export abstract class DrizzleRepository<
       const database = this.getDb()
       let query = database.select().from(this.table as any)
 
-      if (options?.limit) {
-        query = query.limit(options.limit) as any
+      // Validate and apply pagination
+      const { limit, offset } = this.validatePagination(
+        options?.limit,
+        options?.offset
+      )
+
+      query = query.limit(limit) as any
+
+      if (offset > 0) {
+        query = query.offset(offset) as any
       }
 
-      if (options?.offset) {
-        query = query.offset(options.offset) as any
-      }
-
-      return await query as unknown as TSelect[]
+      return (await query) as unknown as TSelect[]
     } catch (error) {
       console.error(`[${this.constructor.name}] findAll error:`, error)
+      // Re-throw ValidationError without wrapping
+      if (error instanceof ValidationError) {
+        throw error
+      }
       throw new DatabaseError('Failed to fetch records')
     }
   }
