@@ -172,6 +172,28 @@ class DrizzleDispatchRepository extends DrizzleRepository<
   }
 
   /**
+   * Update with optimistic lock check using updatedAt timestamp
+   * Returns null if record was modified by another user (conflict)
+   */
+  async updateWithLock(id: string, data: Record<string, unknown>, expectedUpdatedAt: Date): Promise<DispatchRecord | null> {
+    const database = this.getDb()
+
+    const [result] = await database
+      .update(dispatchRecords)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(
+        eq(dispatchRecords.id, id),
+        eq(dispatchRecords.updatedAt, expectedUpdatedAt)
+      ))
+      .returning()
+
+    // Invalidate cache after mutation
+    if (result) this.invalidateCache()
+
+    return result || null
+  }
+
+  /**
    * Check if vehicle has active dispatch (still in station)
    * Active statuses: entered, passengers_dropped, permit_issued, permit_rejected, paid, departure_ordered
    */
@@ -194,6 +216,21 @@ class DrizzleDispatchRepository extends DrizzleRepository<
       hasActive: !!existing,
       existingRecord: existing || undefined
     }
+  }
+
+  /**
+   * Find dispatch record by invoice number
+   */
+  async findByInvoiceNumber(invoiceNumber: string): Promise<DispatchRecord | null> {
+    const database = this.getDb()
+
+    const [result] = await database
+      .select()
+      .from(dispatchRecords)
+      .where(eq(dispatchRecords.invoiceNumber, invoiceNumber))
+      .limit(1)
+
+    return result || null
   }
 
   /**

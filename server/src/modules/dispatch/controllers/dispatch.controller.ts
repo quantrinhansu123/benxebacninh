@@ -162,8 +162,8 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
       if (routeData) Object.assign(updateData, buildRouteDenormalizedFields(routeData))
     }
 
-    const record = await dispatchRepository.update(id, updateData)
-    if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
+    const record = await dispatchRepository.updateWithLock(id, updateData, currentRecord.updatedAt)
+    if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
 
     return res.json({ message: 'Passenger drop recorded', dispatch: record })
   } catch (error: unknown) {
@@ -224,7 +224,8 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
       updateData.rejectionReason = input.rejectionReason || null
     }
 
-    const record = await dispatchRepository.update(id, updateData)
+    const record = await dispatchRepository.updateWithLock(id, updateData, currentRecord.updatedAt)
+    if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
     return res.json({ message: 'Permit processed', dispatch: record })
   } catch (error: unknown) {
     console.error('Error issuing permit:', error)
@@ -249,6 +250,14 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Dispatch record not found' })
     }
 
+    // Validate invoice number uniqueness
+    if (input.invoiceNumber) {
+      const existing = await dispatchRepository.findByInvoiceNumber(input.invoiceNumber)
+      if (existing && existing.id !== id) {
+        return res.status(400).json({ error: 'Số hóa đơn đã tồn tại' })
+      }
+    }
+
     // Validate status transition
     validateStatusTransition(currentRecord.status, DISPATCH_STATUS.PAID)
 
@@ -263,8 +272,8 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       status: DISPATCH_STATUS.PAID,
     }
 
-    const record = await dispatchRepository.update(id, updateData)
-    if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
+    const record = await dispatchRepository.updateWithLock(id, updateData, currentRecord.updatedAt)
+    if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
 
     return res.json({ message: 'Payment processed', dispatch: record })
   } catch (error: unknown) {
@@ -300,8 +309,8 @@ export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
       status: DISPATCH_STATUS.DEPARTURE_ORDERED,
     }
 
-    const record = await dispatchRepository.update(id, updateData)
-    if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
+    const record = await dispatchRepository.updateWithLock(id, updateData, currentRecord.updatedAt)
+    if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
 
     return res.json({ message: 'Departure order issued', dispatch: record })
   } catch (error: unknown) {
@@ -340,8 +349,8 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
       updateData.passengersDeparting = input.passengersDeparting
     }
 
-    const record = await dispatchRepository.update(id, updateData)
-    if (!record) return res.status(404).json({ error: 'Dispatch record not found' })
+    const record = await dispatchRepository.updateWithLock(id, updateData, currentRecord.updatedAt)
+    if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
 
     return res.json({ message: 'Exit recorded', dispatch: record })
   } catch (error: unknown) {
