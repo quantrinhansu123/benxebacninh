@@ -27,6 +27,7 @@ import {
   validateExit,
   DISPATCH_STATUS,
 } from '../dispatch-validation.js'
+import { validateStatusTransition } from '../../../shared/validation/dispatch-status.js'
 
 /**
  * Helper to get current Vietnam time as Date object
@@ -140,6 +141,13 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id
     const userName = await fetchUserName(userId)
 
+    // Fetch current record to validate status transition
+    const currentRecord = await dispatchRepository.findById(id)
+    if (!currentRecord) return res.status(404).json({ error: 'Dispatch record not found' })
+
+    // Validate status transition
+    validateStatusTransition(currentRecord.status, DISPATCH_STATUS.PASSENGERS_DROPPED)
+
     const updateData: Record<string, unknown> = {
       passengerDropTime: getCurrentVietnamTimeAsDate(),
       passengersArrived: input.passengersArrived ?? null,
@@ -160,6 +168,7 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
     return res.json({ message: 'Passenger drop recorded', dispatch: record })
   } catch (error: unknown) {
     console.error('Error recording passenger drop:', error)
+    if (isValidationError(error)) return res.status(400).json({ error: getErrorMessage(error) })
     return res.status(500).json({ error: getErrorMessage(error, 'Failed to record passenger drop') })
   }
 }
@@ -176,6 +185,10 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
 
     const currentRecord = await dispatchRepository.findById(id)
     if (!currentRecord) return res.status(404).json({ error: 'Dispatch record not found' })
+
+    // Validate status transition based on permit decision
+    const targetStatus = input.permitStatus === 'approved' ? DISPATCH_STATUS.PERMIT_ISSUED : DISPATCH_STATUS.PERMIT_REJECTED
+    validateStatusTransition(currentRecord.status, targetStatus)
 
     const metadata = { ...(currentRecord.metadata as Record<string, unknown> || {}) }
     if (input.replacementVehicleId) metadata.replacementVehicleId = input.replacementVehicleId
@@ -230,6 +243,15 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id
     const userName = await fetchUserName(userId)
 
+    // Check if record exists and validate status transition
+    const currentRecord = await dispatchRepository.findById(id)
+    if (!currentRecord) {
+      return res.status(404).json({ error: 'Dispatch record not found' })
+    }
+
+    // Validate status transition
+    validateStatusTransition(currentRecord.status, DISPATCH_STATUS.PAID)
+
     const updateData = {
       paymentTime: getCurrentVietnamTimeAsDate(),
       paymentAmount: String(input.paymentAmount),
@@ -262,6 +284,13 @@ export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id
     const userName = await fetchUserName(userId)
 
+    // Fetch current record to validate status transition
+    const currentRecord = await dispatchRepository.findById(id)
+    if (!currentRecord) return res.status(404).json({ error: 'Dispatch record not found' })
+
+    // Validate status transition
+    validateStatusTransition(currentRecord.status, DISPATCH_STATUS.DEPARTURE_ORDERED)
+
     const updateData = {
       departureOrderTime: getCurrentVietnamTimeAsDate(),
       passengersDeparting: input.passengersDeparting ?? null,
@@ -277,6 +306,7 @@ export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
     return res.json({ message: 'Departure order issued', dispatch: record })
   } catch (error: unknown) {
     console.error('Error issuing departure order:', error)
+    if (isValidationError(error)) return res.status(400).json({ error: getErrorMessage(error) })
     return res.status(500).json({ error: getErrorMessage(error, 'Failed to issue departure order') })
   }
 }
@@ -290,6 +320,13 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
     const input = validateExit(req.body)
     const userId = req.user?.id
     const userName = await fetchUserName(userId)
+
+    // Fetch current record to validate status transition
+    const currentRecord = await dispatchRepository.findById(id)
+    if (!currentRecord) return res.status(404).json({ error: 'Dispatch record not found' })
+
+    // Validate status transition
+    validateStatusTransition(currentRecord.status, DISPATCH_STATUS.DEPARTED)
 
     const updateData: Record<string, unknown> = {
       exitTime: input.exitTime ? toDate(input.exitTime) : getCurrentVietnamTimeAsDate(),
@@ -309,6 +346,7 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
     return res.json({ message: 'Exit recorded', dispatch: record })
   } catch (error: unknown) {
     console.error('Error recording exit:', error)
+    if (isValidationError(error)) return res.status(400).json({ error: getErrorMessage(error) })
     return res.status(500).json({ error: getErrorMessage(error, 'Failed to record exit') })
   }
 }
