@@ -6,7 +6,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../../../middleware/auth.js';
 import { db } from '../../../db/drizzle.js';
-import { vehicles, vehicleDocuments, operators, vehicleTypes, auditLogs, users, vehicleBadges } from '../../../db/schema/index.js';
+import { vehicles, vehicleDocuments, operators, vehicleTypes, auditLogs, users, vehicleBadges, dispatchRecords } from '../../../db/schema/index.js';
 import { eq, and, inArray, desc, or } from 'drizzle-orm';
 import { syncVehicleChanges } from '../../../utils/denormalization-sync.js';
 import { validateCreateVehicle, validateUpdateVehicle } from '../fleet-validation.js';
@@ -240,6 +240,23 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
 export const deleteVehicle = async (req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
+
+    // Check for active dispatch records
+    const activeStatuses = ['entered', 'passengers_dropped', 'permit_issued', 'paid', 'departure_ordered'];
+    const activeDispatches = await db
+      .select({ id: dispatchRecords.id })
+      .from(dispatchRecords)
+      .where(and(
+        eq(dispatchRecords.vehicleId, req.params.id),
+        inArray(dispatchRecords.status, activeStatuses)
+      ))
+      .limit(1);
+
+    if (activeDispatches.length > 0) {
+      return res.status(400).json({
+        error: 'Không thể xóa xe đang có lệnh điều độ chưa hoàn thành'
+      });
+    }
 
     const [data] = await db
       .update(vehicles)
