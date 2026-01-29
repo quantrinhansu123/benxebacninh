@@ -12,6 +12,7 @@ import { syncVehicleChanges } from '../../../utils/denormalization-sync.js';
 import { validateCreateVehicle, validateUpdateVehicle } from '../fleet-validation.js';
 import { mapVehicleToAPI, mapAuditLogToAPI } from '../fleet-mappers.js';
 import { vehicleService } from '../services/vehicle.service.js';
+import { vehicleCacheService } from '../services/vehicle-cache.service.js';
 import type { VehicleDocumentDB, DocumentType } from '../fleet-types.js';
 
 const DOCUMENT_TYPES: DocumentType[] = ['registration', 'inspection', 'insurance', 'operation_permit', 'emblem'];
@@ -224,6 +225,9 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
       }).catch((err) => console.error('[Vehicle Update] Sync failed:', err));
     }
 
+    // Clear cache to ensure fresh data
+    vehicleCacheService.clearCache();
+
     const documents = await fetchVehicleDocuments(id);
     return res.json(mapVehicleToAPI(vehicle as any, documents, operator as any, vehicleType as any));
   } catch (error: unknown) {
@@ -244,6 +248,10 @@ export const deleteVehicle = async (req: Request, res: Response) => {
       .returning();
 
     if (!data) return res.status(404).json({ error: 'Vehicle not found' });
+
+    // Clear cache to ensure fresh data
+    vehicleCacheService.clearCache();
+
     return res.json({ id: data.id, isActive: data.isActive, message: 'Vehicle deleted successfully' });
   } catch (error: unknown) {
     const err = error as { message?: string };
