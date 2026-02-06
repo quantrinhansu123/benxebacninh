@@ -35,7 +35,7 @@ process.on('uncaughtException', (error: Error) => {
   }, 1000)
 })
 
-import express, { Request, Response, NextFunction } from 'express'
+import express, { Request, Response } from 'express'
 import cors from 'cors'
 import { errorHandler } from './middleware/errorHandler.js'
 
@@ -123,33 +123,8 @@ app.use(cors({
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-// XSS Sanitization Middleware
-app.use((req: Request, _res: Response, next: NextFunction) => {
-  const sanitize = (obj: Record<string, unknown>): void => {
-    for (const key in obj) {
-      if (typeof obj[key] === 'string') {
-        // Basic HTML entity encoding to prevent XSS
-        obj[key] = (obj[key] as string)
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#x27;')
-          .replace(/\//g, '&#x2F;')
-      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-        sanitize(obj[key] as Record<string, unknown>)
-      }
-    }
-  }
-
-  if (req.body && typeof req.body === 'object') {
-    sanitize(req.body as Record<string, unknown>)
-  }
-  if (req.query && typeof req.query === 'object') {
-    sanitize(req.query as Record<string, unknown>)
-  }
-
-  next()
-})
+// XSS protection: handled at output layer (React auto-escapes, API returns JSON)
+// Input sanitization removed - it corrupts passwords, dates, and paths
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {

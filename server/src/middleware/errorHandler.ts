@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express'
+import { AppError } from '../shared/errors/app-error.js'
 
 export const errorHandler = (
   err: Error,
@@ -8,17 +9,19 @@ export const errorHandler = (
 ) => {
   console.error('Error:', err)
 
-  if (err.name === 'ValidationError') {
+  // Handle AppError and its subclasses (ValidationError, NotFoundError, etc.)
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json(err.toJSON())
+  }
+
+  // Handle Zod validation errors
+  if (err.name === 'ZodError') {
     return res.status(400).json({ error: err.message })
   }
 
-  if (err.name === 'UnauthorizedError') {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
-
   return res.status(500).json({
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
       : err.message
   })
 }
