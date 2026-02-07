@@ -194,6 +194,27 @@ class DrizzleDispatchRepository extends DrizzleRepository<
   }
 
   /**
+   * Update record only if current status matches expected status
+   * Safer than updatedAt-based locking for status transitions
+   */
+  async updateWithStatusCheck(id: string, data: Record<string, unknown>, expectedStatus: string): Promise<DispatchRecord | null> {
+    const database = this.getDb()
+
+    const [result] = await database
+      .update(dispatchRecords)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(
+        eq(dispatchRecords.id, id),
+        eq(dispatchRecords.status, expectedStatus)
+      ))
+      .returning()
+
+    if (result) this.invalidateCache()
+
+    return result || null
+  }
+
+  /**
    * Check if vehicle has active dispatch (still in station)
    * Active statuses: entered, passengers_dropped, permit_issued, permit_rejected, paid, departure_ordered
    */

@@ -44,23 +44,15 @@ function toDate(isoString: string): Date {
 }
 
 /**
- * Retry updateWithLock once if optimistic lock fails (stale updatedAt)
- * Only retries if record status hasn't changed between attempts
+ * Update dispatch record with status-based concurrency check
+ * Uses status match instead of updatedAt timestamp to avoid false conflicts
  */
-async function updateWithRetry(
+async function updateWithStatusCheck(
   id: string,
   updateData: Record<string, unknown>,
-  expectedUpdatedAt: Date,
   expectedStatus: string
 ) {
-  let result = await dispatchRepository.updateWithLock(id, updateData, expectedUpdatedAt)
-  if (!result) {
-    const refreshed = await dispatchRepository.findById(id)
-    if (refreshed && refreshed.status === expectedStatus) {
-      result = await dispatchRepository.updateWithLock(id, updateData, refreshed.updatedAt)
-    }
-  }
-  return result
+  return dispatchRepository.updateWithStatusCheck(id, updateData, expectedStatus)
 }
 
 /**
@@ -182,7 +174,7 @@ export const recordPassengerDrop = async (req: AuthRequest, res: Response) => {
       if (routeData) Object.assign(updateData, buildRouteDenormalizedFields(routeData))
     }
 
-    const record = await updateWithRetry(id, updateData, currentRecord.updatedAt, currentRecord.status)
+    const record = await updateWithStatusCheck(id, updateData, currentRecord.status)
     if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
 
     return res.json({ message: 'Passenger drop recorded', dispatch: record })
@@ -244,7 +236,7 @@ export const issuePermit = async (req: AuthRequest, res: Response) => {
       updateData.rejectionReason = input.rejectionReason || null
     }
 
-    const record = await updateWithRetry(id, updateData, currentRecord.updatedAt, currentRecord.status)
+    const record = await updateWithStatusCheck(id, updateData, currentRecord.status)
     if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
     return res.json({ message: 'Permit processed', dispatch: record })
   } catch (error: unknown) {
@@ -292,7 +284,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       status: DISPATCH_STATUS.PAID,
     }
 
-    const record = await updateWithRetry(id, updateData, currentRecord.updatedAt, currentRecord.status)
+    const record = await updateWithStatusCheck(id, updateData, currentRecord.status)
     if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
 
     return res.json({ message: 'Payment processed', dispatch: record })
@@ -329,7 +321,7 @@ export const issueDepartureOrder = async (req: AuthRequest, res: Response) => {
       status: DISPATCH_STATUS.DEPARTURE_ORDERED,
     }
 
-    const record = await updateWithRetry(id, updateData, currentRecord.updatedAt, currentRecord.status)
+    const record = await updateWithStatusCheck(id, updateData, currentRecord.status)
     if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
 
     return res.json({ message: 'Departure order issued', dispatch: record })
@@ -369,7 +361,7 @@ export const recordExit = async (req: AuthRequest, res: Response) => {
       updateData.passengersDeparting = input.passengersDeparting
     }
 
-    const record = await updateWithRetry(id, updateData, currentRecord.updatedAt, currentRecord.status)
+    const record = await updateWithStatusCheck(id, updateData, currentRecord.status)
     if (!record) return res.status(409).json({ error: 'Record đã được cập nhật bởi người khác. Vui lòng tải lại trang.' })
 
     return res.json({ message: 'Exit recorded', dispatch: record })
