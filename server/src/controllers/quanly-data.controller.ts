@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
-import { vehicleBadges, vehicles as vehiclesTable, operators as operatorsTable, routes as routesTable } from '../db/schema/index.js'
+import { vehicleBadges, vehicles as vehiclesTable, operators as operatorsTable, routes as routesTable, vehicleTypes as vehicleTypesTable } from '../db/schema/index.js'
 
 // Unified cache for all quanly data - pre-filtered for Buýt and Tuyến cố định
 interface QuanLyCache {
@@ -43,7 +43,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
       const startTime = Date.now()
 
       // OPTIMIZED: Load only required columns (60-80% faster)
-      const [badgeData, vehicleData, operatorData, routeData] = await Promise.all([
+      const [badgeData, vehicleData, operatorData, routeData, vehicleTypeData] = await Promise.all([
         db.select({
           id: vehicleBadges.id,
           plateNumber: vehicleBadges.plateNumber,
@@ -63,6 +63,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           bedCapacity: vehiclesTable.bedCapacity,
           operatorId: vehiclesTable.operatorId,
           operatorName: vehiclesTable.operatorName,
+          vehicleTypeId: vehiclesTable.vehicleTypeId,
           isActive: vehiclesTable.isActive,
           roadWorthinessExpiry: vehiclesTable.roadWorthinessExpiry,
           source: vehiclesTable.source,
@@ -88,6 +89,10 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           distanceKm: routesTable.distanceKm,
           routeType: routesTable.routeType,
         }).from(routesTable),
+        db.select({
+          id: vehicleTypesTable.id,
+          name: vehicleTypesTable.name,
+        }).from(vehicleTypesTable),
       ])
 
       // Build vehicle plate lookup (Drizzle data is array)
@@ -106,6 +111,15 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         const o = op as any
         if (o.id) {
           operatorNameMap.set(o.id, o.name || '')
+        }
+      }
+
+      // Build vehicle type name lookup
+      const vehicleTypeMap = new Map<string, string>()
+      for (const vt of vehicleTypeData) {
+        const t = vt as any
+        if (t.id) {
+          vehicleTypeMap.set(t.id, t.name || '')
         }
       }
 
@@ -211,9 +225,13 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         // Get seat capacity from seatCount field
         const seatCapacity = v.seatCount || 0
 
-        // Get operator name: prefer from badge reference, fallback to vehicle operatorName
+        // Get operator name: prefer from badge reference, fallback to vehicle operatorName, then operators table
         const operatorFromBadge = vehicleOperatorMap.get(normalizedPlate) || ''
-        const operatorName = operatorFromBadge || v.operatorName || ''
+        const operatorFromRelation = v.operatorId ? (operatorNameMap.get(v.operatorId) || '') : ''
+        const operatorName = operatorFromBadge || v.operatorName || operatorFromRelation || ''
+
+        // Get vehicle type name from vehicle_types table
+        const vehicleTypeName = v.vehicleTypeId ? (vehicleTypeMap.get(v.vehicleTypeId) || '') : ''
 
         // Get badge expiry date for inspection display
         const badgeExpiryDate = vehicleBadgeExpiryMap.get(normalizedPlate) || ''
@@ -225,7 +243,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           bedCapacity: v.bedCapacity || 0,
           operatorId: v.operatorId || null,
           operatorName,
-          vehicleType: '',
+          vehicleType: vehicleTypeName,
           inspectionExpiryDate: badgeExpiryDate || v.roadWorthinessExpiry || '',
           isActive: v.isActive !== false,
           hasBadge: platesWithBadge.has(normalizedPlate),
