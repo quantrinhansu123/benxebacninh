@@ -2,7 +2,6 @@
  * Vehicle Repository - Drizzle ORM Version
  * Handles all PostgreSQL operations for vehicle records via Supabase
  */
-import crypto from 'crypto';
 import { vehicles, operators, vehicleTypes } from '../../../db/schema'
 import { DrizzleRepository, eq, and, desc, sql } from '../../../shared/database/drizzle-repository'
 import { VehicleAPI, mapVehicle } from '../../../shared/mappers/entity-mappers'
@@ -10,49 +9,6 @@ import { VehicleAPI, mapVehicle } from '../../../shared/mappers/entity-mappers'
 // Infer types from schema
 type Vehicle = typeof vehicles.$inferSelect
 type NewVehicle = typeof vehicles.$inferInsert
-
-const ALGORITHM = 'aes-256-cbc';
-// const IV_LENGTH = 16; // Reserved for future encryption
-const KEY_LENGTH = 32; // 256 bits
-
-/**
- * Decrypt GPS password from AES-256-CBC format
- * Format: {iv}:{encryptedData}
- */
-function decryptGpsPassword(encryptedPassword: string | null | undefined): string | undefined {
-  if (!encryptedPassword) return undefined;
-
-  const key = process.env.GPS_ENCRYPTION_KEY;
-  if (!key) {
-    return encryptedPassword;
-  }
-
-  try {
-    // Check if password is encrypted (contains ':' separator)
-    if (!encryptedPassword.includes(':')) {
-      return encryptedPassword;
-    }
-
-    const [ivHex, encryptedData] = encryptedPassword.split(':');
-    if (!ivHex || !encryptedData) {
-      return encryptedPassword;
-    }
-
-    const keyBuffer = Buffer.from(key, 'hex');
-    if (keyBuffer.length !== KEY_LENGTH) {
-      return encryptedPassword;
-    }
-
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM, keyBuffer, iv);
-    let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  } catch (error) {
-    console.error('Failed to decrypt GPS password in repository:', error);
-    return encryptedPassword;
-  }
-}
 
 /**
  * Normalize plate number: remove dots, dashes, spaces, convert to uppercase
@@ -100,9 +56,6 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         operatorName: vehicles.operatorName,
         operatorCode: vehicles.operatorCode,
         metadata: vehicles.metadata,
-        gpsProvider: vehicles.gpsProvider,
-        gpsUsername: vehicles.gpsUsername,
-        gpsPassword: vehicles.gpsPassword,
         createdAt: vehicles.createdAt,
         updatedAt: vehicles.updatedAt,
         // Operator fields
@@ -148,9 +101,9 @@ class DrizzleVehicleRepository extends DrizzleRepository<
           cargo_length: undefined,
           cargo_width: undefined,
           cargo_height: undefined,
-          gps_provider: row.gpsProvider ?? undefined,
-          gps_username: row.gpsUsername ?? undefined,
-          gps_password: decryptGpsPassword(row.gpsPassword),
+          gps_provider: undefined,
+          gps_username: undefined,
+          gps_password: undefined,
           province: undefined,
           is_active: row.isActive,
           notes: undefined,
@@ -202,9 +155,6 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         operatorName: vehicles.operatorName,
         operatorCode: vehicles.operatorCode,
         metadata: vehicles.metadata,
-        gpsProvider: vehicles.gpsProvider,
-        gpsUsername: vehicles.gpsUsername,
-        gpsPassword: vehicles.gpsPassword,
         createdAt: vehicles.createdAt,
         updatedAt: vehicles.updatedAt,
         // Operator fields
@@ -253,9 +203,9 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         cargo_length: undefined,
         cargo_width: undefined,
         cargo_height: undefined,
-        gps_provider: row.gpsProvider ?? undefined,
-        gps_username: row.gpsUsername ?? undefined,
-        gps_password: decryptGpsPassword(row.gpsPassword),
+        gps_provider: undefined,
+        gps_username: undefined,
+        gps_password: undefined,
         province: undefined,
         is_active: row.isActive,
         notes: undefined,
@@ -388,9 +338,6 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         engineNumber: data.engineNumber || null,
         insuranceExpiry: data.insuranceExpiryDate || null,
         roadWorthinessExpiry: data.inspectionExpiryDate || null,
-        gpsProvider: data.gpsProvider || null,
-        gpsUsername: data.gpsUsername || null,
-        gpsPassword: data.gpsPassword || null, // Already encrypted by service
         isActive: data.isActive ?? true,
       })
       .returning()
@@ -445,9 +392,6 @@ class DrizzleVehicleRepository extends DrizzleRepository<
       updateData.insuranceExpiry = data.insuranceExpiryDate || null
     if (data.inspectionExpiryDate !== undefined)
       updateData.roadWorthinessExpiry = data.inspectionExpiryDate || null
-    if (data.gpsProvider !== undefined) updateData.gpsProvider = data.gpsProvider || null
-    if (data.gpsUsername !== undefined) updateData.gpsUsername = data.gpsUsername || null
-    if (data.gpsPassword !== undefined) updateData.gpsPassword = data.gpsPassword || null // Already encrypted by service
     if (data.isActive !== undefined) updateData.isActive = data.isActive
 
     await database

@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express'
-import { authenticate, authorize } from '../../middleware/auth.js'
+import { authenticate } from '../../middleware/auth.js'
 import {
   getAllDispatchRecords,
   getDispatchRecordById,
@@ -27,24 +27,24 @@ const router = Router()
 // Apply authentication to all routes
 router.use(authenticate)
 
-// GET routes - accessible to all authenticated users
+// GET routes
 router.get('/', getAllDispatchRecords)
 router.get('/:id', getDispatchRecordById)
 
-// Workflow endpoints - require admin or dispatcher role
-router.post('/', authorize('admin', 'dispatcher'), createDispatchRecord)
-router.put('/:id', authorize('admin', 'dispatcher'), updateDispatchRecord)
-router.delete('/:id', authorize('admin'), deleteDispatchRecord)
-router.post('/:id/cancel', authorize('admin', 'dispatcher'), cancelDispatchRecord)
-router.post('/:id/passenger-drop', authorize('admin', 'dispatcher'), recordPassengerDrop)
-router.post('/:id/permit', authorize('admin', 'dispatcher'), issuePermit)
-router.post('/:id/payment', authorize('admin', 'dispatcher'), processPayment)
-router.post('/:id/departure-order', authorize('admin', 'dispatcher'), issueDepartureOrder)
-router.post('/:id/exit', authorize('admin', 'dispatcher'), recordExit)
-router.patch('/:id/entry-image', authorize('admin', 'dispatcher'), updateEntryImage)
+// Workflow endpoints
+router.post('/', createDispatchRecord)
+router.put('/:id', updateDispatchRecord)
+router.delete('/:id', deleteDispatchRecord)
+router.post('/:id/cancel', cancelDispatchRecord)
+router.post('/:id/passenger-drop', recordPassengerDrop)
+router.post('/:id/permit', issuePermit)
+router.post('/:id/payment', processPayment)
+router.post('/:id/departure-order', issueDepartureOrder)
+router.post('/:id/exit', recordExit)
+router.patch('/:id/entry-image', updateEntryImage)
 
-// Legacy deprecated endpoints - require admin or dispatcher role
-router.put('/:id/status', authorize('admin', 'dispatcher'), updateDispatchStatus)
-router.post('/:id/depart', authorize('admin', 'dispatcher'), depart)
+// Legacy deprecated endpoints
+router.put('/:id/status', updateDispatchStatus)
+router.post('/:id/depart', depart)
 
 export default router

@@ -3,45 +3,10 @@
  * Business logic layer for Vehicle entity with legacy/badge support
  */
 
-import crypto from 'crypto';
 import { VehicleAPI } from '../../../shared/mappers/entity-mappers.js';
 import { AlreadyExistsError, ValidationError } from '../../../shared/errors/app-error.js';
 import { vehicleRepository, VehicleRepository } from '../repositories/vehicle.repository.js';
 import { vehicleCacheService, LegacyVehicleData, BadgeVehicleData } from './vehicle-cache.service.js';
-
-const ALGORITHM = 'aes-256-cbc';
-const IV_LENGTH = 16;
-const KEY_LENGTH = 32; // 256 bits
-
-/**
- * Encrypt GPS password using AES-256-CBC
- * Format: {iv}:{encryptedData}
- */
-function encryptGpsPassword(password: string): string {
-  const key = process.env.GPS_ENCRYPTION_KEY;
-  if (!key) {
-    console.warn('GPS_ENCRYPTION_KEY not set, storing password in plain text (backwards compatibility)');
-    return password;
-  }
-
-  try {
-    // Ensure key is 32 bytes (256 bits)
-    const keyBuffer = Buffer.from(key, 'hex');
-    if (keyBuffer.length !== KEY_LENGTH) {
-      console.error(`GPS_ENCRYPTION_KEY must be ${KEY_LENGTH} bytes (${KEY_LENGTH * 2} hex chars), got ${keyBuffer.length} bytes`);
-      return password;
-    }
-
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(ALGORITHM, keyBuffer, iv);
-    let encrypted = cipher.update(password, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return iv.toString('hex') + ':' + encrypted;
-  } catch (error) {
-    console.error('Failed to encrypt GPS password:', error);
-    return password;
-  }
-}
 
 export interface CreateVehicleDTO {
   plateNumber: string;
@@ -232,13 +197,10 @@ export class VehicleService {
       throw new AlreadyExistsError('Vehicle', 'plateNumber', data.plateNumber);
     }
 
-    // Encrypt GPS password before saving
-    const createData = { ...data, isActive: data.isActive ?? true };
-    if (createData.gpsPassword) {
-      createData.gpsPassword = encryptGpsPassword(createData.gpsPassword);
-    }
-
-    return this.repository.createFromAPI(createData);
+    return this.repository.createFromAPI({
+      ...data,
+      isActive: data.isActive ?? true,
+    });
   }
 
   async update(id: string, data: UpdateVehicleDTO): Promise<VehicleAPI> {
@@ -251,13 +213,7 @@ export class VehicleService {
       }
     }
 
-    // Encrypt GPS password before updating
-    const updateData = { ...data };
-    if (updateData.gpsPassword) {
-      updateData.gpsPassword = encryptGpsPassword(updateData.gpsPassword);
-    }
-
-    await this.repository.updateById(id, updateData);
+    await this.repository.updateById(id, data);
     const vehicle = await this.repository.findByIdWithRelations(id);
     if (!vehicle) {
       throw new ValidationError('Vehicle not found after update');

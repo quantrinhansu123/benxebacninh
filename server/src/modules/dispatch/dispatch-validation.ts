@@ -61,9 +61,7 @@ export const issuePermitSchema = z.object({
  * Schema for payment
  */
 export const paymentSchema = z.object({
-  paymentAmount: z.number()
-    .min(1, 'Số tiền thanh toán phải lớn hơn 0')
-    .max(1_000_000_000, 'Số tiền thanh toán vượt quá giới hạn'),
+  paymentAmount: z.number().min(0, 'Payment amount must be >= 0'),
   paymentMethod: z.enum(['cash', 'transfer', 'card']).optional(),
   invoiceNumber: z.string().optional(),
   paymentShiftId: z.string().min(1).optional(),

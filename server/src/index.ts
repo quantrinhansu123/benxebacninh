@@ -2,39 +2,6 @@
 import dotenv from 'dotenv'
 dotenv.config()
 
-// Global error handlers - prevent silent crashes
-process.on('unhandledRejection', (reason: Error | unknown, promise: Promise<unknown>) => {
-  console.error('[UNHANDLED REJECTION] at:', promise)
-  if (reason instanceof Error) {
-    console.error('[UNHANDLED REJECTION] reason:', reason.message)
-    console.error('[UNHANDLED REJECTION] stack:', reason.stack)
-  } else {
-    console.error('[UNHANDLED REJECTION] reason:', reason)
-  }
-
-  // In production, log and continue (for monitoring)
-  // In critical cases, you might want to gracefully shutdown
-  if (process.env.NODE_ENV === 'production') {
-    // Log to external service here (e.g., Sentry, CloudWatch)
-    console.error('[UNHANDLED REJECTION] Production mode - server continues running')
-  } else {
-    console.warn('[UNHANDLED REJECTION] Development mode - server continues running')
-  }
-})
-
-process.on('uncaughtException', (error: Error) => {
-  console.error('[UNCAUGHT EXCEPTION]:', error.message)
-  console.error('[UNCAUGHT EXCEPTION] stack:', error.stack)
-
-  // Uncaught exceptions are critical - graceful shutdown required
-  console.error('[UNCAUGHT EXCEPTION] Shutting down gracefully...')
-
-  // Give time for logging before exit
-  setTimeout(() => {
-    process.exit(1)
-  }, 1000)
-})
-
 import express, { Request, Response } from 'express'
 import cors from 'cors'
 import { errorHandler } from './middleware/errorHandler.js'
@@ -122,9 +89,6 @@ app.use(cors({
 }))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
-
-// XSS protection: handled at output layer (React auto-escapes, API returns JSON)
-// Input sanitization removed - it corrupts passwords, dates, and paths
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {
