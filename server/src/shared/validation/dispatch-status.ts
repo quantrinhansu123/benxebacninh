@@ -6,9 +6,12 @@
  *
  * Workflow:
  * entered -> passengers_dropped -> permit_issued -> paid -> departure_ordered -> departed -> exited
- *    |                                |
- *    v                                v
- *    permit_rejected            permit_rejected -> (retry) passengers_dropped
+ *    |            |                    |
+ *    |            v                    v
+ *    |      permit_rejected      permit_rejected -> (retry) passengers_dropped
+ *    |
+ *    +---> permit_issued (direct)
+ *    +---> permit_rejected (direct)
  */
 
 /**
@@ -36,7 +39,7 @@ export type DispatchStatusType = typeof DISPATCH_STATUS[keyof typeof DISPATCH_ST
  * Each key maps to array of valid next statuses
  */
 export const VALID_TRANSITIONS: Record<DispatchStatusType, DispatchStatusType[]> = {
-  [DISPATCH_STATUS.ENTERED]: [DISPATCH_STATUS.PASSENGERS_DROPPED, DISPATCH_STATUS.PERMIT_REJECTED, DISPATCH_STATUS.CANCELLED],
+  [DISPATCH_STATUS.ENTERED]: [DISPATCH_STATUS.PASSENGERS_DROPPED, DISPATCH_STATUS.PERMIT_ISSUED, DISPATCH_STATUS.PERMIT_REJECTED, DISPATCH_STATUS.CANCELLED],
   [DISPATCH_STATUS.PASSENGERS_DROPPED]: [DISPATCH_STATUS.PERMIT_ISSUED, DISPATCH_STATUS.PERMIT_REJECTED, DISPATCH_STATUS.CANCELLED],
   [DISPATCH_STATUS.PERMIT_ISSUED]: [DISPATCH_STATUS.PAID, DISPATCH_STATUS.CANCELLED],
   [DISPATCH_STATUS.PERMIT_REJECTED]: [DISPATCH_STATUS.PASSENGERS_DROPPED, DISPATCH_STATUS.CANCELLED], // Can retry
