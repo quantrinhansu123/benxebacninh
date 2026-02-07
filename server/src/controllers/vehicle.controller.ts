@@ -233,6 +233,7 @@ export const getVehicleById = async (req: Request, res: Response) => {
         name: vehicleType.name,
       } : undefined,
       operatorId: vehicle.operatorId,
+      operatorName: vehicle.operatorName || '',
       operator: operator ? {
         id: operator.id,
         name: operator.name,
@@ -588,6 +589,7 @@ export const updateVehicle = async (req: AuthRequest, res: Response) => {
         name: vehicleType.name,
       } : undefined,
       operatorId: vehicle.operatorId,
+      operatorName: vehicle.operatorName || '',
       operator: operator ? {
         id: operator.id,
         name: operator.name,
