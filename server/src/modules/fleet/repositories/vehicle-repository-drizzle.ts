@@ -71,6 +71,7 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         // Operator fields
         operatorFullName: operators.name,
         operatorCodeRel: operators.code,
+        operatorProvince: operators.province,
         // VehicleType fields
         vehicleTypeName: vehicleTypes.name,
       })
@@ -114,7 +115,7 @@ class DrizzleVehicleRepository extends DrizzleRepository<
           gps_provider: row.gpsProvider ?? undefined,
           gps_username: row.gpsUsername ?? undefined,
           gps_password: row.gpsPassword ?? undefined,
-          province: row.province ?? undefined,
+          province: row.province || row.operatorProvince || undefined,
           is_active: row.isActive,
           operator_name: row.operatorName ?? undefined,
           notes: row.notes ?? undefined,
@@ -181,6 +182,7 @@ class DrizzleVehicleRepository extends DrizzleRepository<
         // Operator fields
         operatorFullName: operators.name,
         operatorCodeRel: operators.code,
+        operatorProvince: operators.province,
         // VehicleType fields
         vehicleTypeName: vehicleTypes.name,
       })
