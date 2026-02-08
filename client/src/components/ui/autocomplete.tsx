@@ -80,7 +80,6 @@ export function Autocomplete({
     setIsCleared(false)  // Reset flag when user types
     const newValue = e.target.value
     setInputValue(newValue)
-    onChange?.(newValue)
     if (!open) setOpen(true)
   }
 
