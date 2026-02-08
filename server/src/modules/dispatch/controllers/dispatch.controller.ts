@@ -288,6 +288,9 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     }
 
     // Validate status transition
+    if (currentRecord.status === DISPATCH_STATUS.PAID) {
+      return res.status(400).json({ error: 'Đơn hàng đã được thanh toán' })
+    }
     validateStatusTransition(currentRecord.status, DISPATCH_STATUS.PAID)
 
     const updateData = {
