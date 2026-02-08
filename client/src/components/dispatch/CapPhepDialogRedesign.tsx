@@ -355,7 +355,7 @@ export function CapPhepDialogRedesign({
                             onChange={(value) => hook.setRouteId(value)}
                             options={hook.routes.map((r) => ({
                               value: r.id,
-                              label: `${r.routeName}${r.routeCode ? ` (${r.routeCode})` : ""}`,
+                              label: `${r.routeName}${r.routeCode ? ` (${r.routeCode})` : ""}${r.distanceKm ? ` - ${r.distanceKm} Km` : ""}`,
                             }))}
                             placeholder="Gõ để tìm tuyến..."
                             disabled={readOnly}
