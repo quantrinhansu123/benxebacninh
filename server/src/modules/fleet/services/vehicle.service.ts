@@ -7,6 +7,9 @@ import { VehicleAPI } from '../../../shared/mappers/entity-mappers.js';
 import { AlreadyExistsError, ValidationError } from '../../../shared/errors/app-error.js';
 import { vehicleRepository, VehicleRepository } from '../repositories/vehicle.repository.js';
 import { vehicleCacheService, LegacyVehicleData, BadgeVehicleData } from './vehicle-cache.service.js';
+import { db } from '../../../db/drizzle.js';
+import { vehicleDocuments } from '../../../db/schema/index.js';
+import { eq } from 'drizzle-orm';
 
 export interface CreateVehicleDTO {
   plateNumber: string;
@@ -181,6 +184,28 @@ export class VehicleService {
     if (!vehicle) {
       throw new ValidationError(`Vehicle with ID '${id}' not found`);
     }
+
+    // Load documents
+    if (db) {
+      const docs = await db.select().from(vehicleDocuments).where(eq(vehicleDocuments.vehicleId, id));
+      if (docs.length > 0) {
+        const docsMap: Record<string, any> = {};
+        const today = new Date().toISOString().split('T')[0];
+        docs.forEach((doc: any) => {
+          docsMap[doc.documentType] = {
+            number: doc.documentNumber,
+            issueDate: doc.issueDate,
+            expiryDate: doc.expiryDate,
+            issuingAuthority: doc.issuingAuthority,
+            documentUrl: doc.documentUrl,
+            notes: doc.notes,
+            isValid: doc.expiryDate >= today,
+          };
+        });
+        vehicle.documents = docsMap;
+      }
+    }
+
     return vehicle;
   }
 

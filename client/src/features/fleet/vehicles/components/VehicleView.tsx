@@ -224,7 +224,7 @@ export function VehicleView({ vehicle }: VehicleViewProps) {
                   <Label className="text-sm text-gray-500">Số ghế</Label>
                   <p className="text-lg font-semibold text-gray-900">
                     {vehicle.seatCapacity || 0}
-                    {vehicle.bedCapacity && ` / ${vehicle.bedCapacity} giường`}
+                    {vehicle.bedCapacity ? ` / ${vehicle.bedCapacity} giường` : ''}
                   </p>
                 </div>
               </div>
