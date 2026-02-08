@@ -28,6 +28,9 @@ import {
   DISPATCH_STATUS,
 } from '../dispatch-validation.js'
 import { validateStatusTransition } from '../../../shared/validation/dispatch-status.js'
+import { db } from '../../../db/drizzle.js'
+import { vehicles as vehiclesTable } from '../../../db/schema/index.js'
+import { eq } from 'drizzle-orm'
 
 /**
  * Helper to get current Vietnam time as Date object
@@ -100,6 +103,20 @@ export const createDispatchRecord = async (req: AuthRequest, res: Response) => {
   try {
     const input = validateCreateDispatch(req.body)
     const userId = req.user?.id
+
+    // Resolve vehicleId: if not UUID, lookup by plate number
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!UUID_REGEX.test(input.vehicleId)) {
+      const vehicle = await db!.select({ id: vehiclesTable.id })
+        .from(vehiclesTable)
+        .where(eq(vehiclesTable.plateNumber, input.vehicleId))
+        .limit(1)
+      if (vehicle.length > 0) {
+        input.vehicleId = vehicle[0].id
+      } else {
+        return res.status(400).json({ error: `Không tìm thấy xe với biển số "${input.vehicleId}"` })
+      }
+    }
 
     // Check if vehicle already has active dispatch (still in station)
     const { hasActive, existingRecord } = await dispatchRepository.hasActiveDispatch(input.vehicleId)
