@@ -31,8 +31,7 @@ const getVehicleTypeName = (vehicle: Vehicle): string => {
 }
 
 const getOperatorName = (vehicle: Vehicle): string => {
-  const v = vehicle as any
-  return vehicle.operator?.name || v.operatorName || ""
+  return vehicle.operator?.name || vehicle.operatorName || ""
 }
 
 // Helper function to calculate days until expiry

@@ -128,6 +128,7 @@ export interface VehicleDB {
   gps_password?: string
   province?: string
   notes?: string
+  operator_name?: string
   is_active: boolean
   created_at?: string
   updated_at?: string
@@ -140,6 +141,7 @@ export interface VehicleAPI {
   vehicleType?: VehicleTypeAPI
   operatorId?: string
   operator?: OperatorAPI
+  operatorName?: string
   seatCapacity: number
   bedCapacity?: number
   chassisNumber?: string
@@ -174,6 +176,7 @@ export function mapVehicle(
     vehicleType: vehicleType ? mapVehicleType(vehicleType) : undefined,
     operatorId: db.operator_id,
     operator: operator ? mapOperator(operator) : undefined,
+    operatorName: operator?.name || db.operator_name || undefined,
     seatCapacity: db.seat_capacity,
     bedCapacity: db.bed_capacity,
     chassisNumber: db.chassis_number,
