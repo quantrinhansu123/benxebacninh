@@ -159,6 +159,41 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     return lastDispatch;
   }, [cachedDispatchRecords]);
 
+  // Helper: Get routes from vehicle badges for auto-fill
+  const getBadgeRoutesForVehicle = useCallback((vehiclePlateNumber: string) => {
+    if (!vehicleBadges.length || !vehiclePlateNumber || !routes.length) return [];
+    const normalizedPlate = normalizePlate(vehiclePlateNumber);
+
+    const matchingBadges = vehicleBadges.filter(badge =>
+      badge.license_plate_sheet &&
+      normalizePlate(badge.license_plate_sheet) === normalizedPlate &&
+      badge.route_code
+    );
+
+    if (matchingBadges.length === 0) return [];
+
+    return matchingBadges
+      .map(badge => {
+        const route = routes.find((r: Route) =>
+          r.routeCode === badge.route_code
+        );
+        if (!route) return null;
+        const isExpired = badge.expiry_date
+          ? new Date(badge.expiry_date) < new Date()
+          : false;
+        return {
+          routeId: route.id,
+          routeCode: badge.route_code,
+          routeName: badge.route_name || route.routeName || '',
+          badgeNumber: badge.badge_number,
+          badgeType: badge.badge_type,
+          expiryDate: badge.expiry_date,
+          isExpired,
+        };
+      })
+      .filter(Boolean) as { routeId: string; routeCode: string; routeName: string; badgeNumber: string; badgeType: string; expiryDate: string; isExpired: boolean }[];
+  }, [vehicleBadges, routes]);
+
   const loadInitialData = useCallback(async () => {
     try {
       // Use unified endpoint - 1 request instead of 4, with frontend caching
@@ -227,6 +262,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
         expiry_date: b.expiry_date,
         status: b.status,
         vehicle_id: b.id,
+        route_code: b.route_code || '',
+        route_name: b.route_name || '',
       })) as VehicleBadge[];
 
       setRoutes(routesForDropdown as unknown as Route[]);
@@ -236,6 +273,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
 
       if (record.routeId) {
         setRouteId(record.routeId);
+        routeAutoFilledRef.current = true;
         setSchedules(schedulesData);
         if (record.scheduleId) setScheduleId(record.scheduleId);
       }
@@ -584,28 +622,29 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     }
   }, [selectedVehicle, record.seatCount]);
 
-  // Auto-fill routeId from last dispatch of the same vehicle
+  // Auto-fill routeId: prefer badge route, fallback to last dispatch
   useEffect(() => {
-    // Prevent re-triggering if already auto-filled
     if (routeAutoFilledRef.current) return;
+    if (!record.vehiclePlateNumber) return;
 
-    // Only auto-fill if:
-    // 1. Have vehicle plate number
-    // 2. routeId is empty (no existing value)
-    // 3. cachedDispatchRecords is loaded
-    if (
-      record.vehiclePlateNumber &&
-      !routeId &&
-      cachedDispatchRecords &&
-      cachedDispatchRecords.length > 0
-    ) {
+    // Strategy 1: From vehicle badges (more reliable)
+    const badgeRoutes = getBadgeRoutesForVehicle(record.vehiclePlateNumber);
+    if (badgeRoutes.length > 0) {
+      routeAutoFilledRef.current = true;
+      const activeRoute = badgeRoutes.find(r => !r.isExpired) || badgeRoutes[0];
+      setRouteId(activeRoute.routeId);
+      return;
+    }
+
+    // Strategy 2: From last dispatch (fallback)
+    if (cachedDispatchRecords && cachedDispatchRecords.length > 0) {
       const lastDispatch = getLastDispatchByVehicle(record.vehiclePlateNumber);
       if (lastDispatch?.routeId) {
         routeAutoFilledRef.current = true;
         setRouteId(lastDispatch.routeId);
       }
     }
-  }, [record.vehiclePlateNumber, cachedDispatchRecords, getLastDispatchByVehicle]); // Note: routeId not in deps to avoid loop
+  }, [record.vehiclePlateNumber, vehicleBadges, routes, cachedDispatchRecords, getBadgeRoutesForVehicle, getLastDispatchByVehicle]); // Note: routeId not in deps to avoid loop
 
   // Compute busy vehicle plates from active dispatch records
   const busyVehiclePlates = useMemo(() => {
@@ -654,5 +693,6 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     submitPermit, handleEligible, handleNotEligibleConfirm,
     handleDocumentDialogSuccess, handleAddServiceSuccess, handleAddDriverSuccess,
     getDocumentsCheckResults, checkAllDocumentsValid, getOverallStatus,
+    getBadgeRoutesForVehicle,
   };
 }

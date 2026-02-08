@@ -8,8 +8,8 @@ import { AlreadyExistsError, ValidationError } from '../../../shared/errors/app-
 import { vehicleRepository, VehicleRepository } from '../repositories/vehicle.repository.js';
 import { vehicleCacheService, LegacyVehicleData, BadgeVehicleData } from './vehicle-cache.service.js';
 import { db } from '../../../db/drizzle.js';
-import { vehicleDocuments } from '../../../db/schema/index.js';
-import { eq } from 'drizzle-orm';
+import { vehicleDocuments, vehicleBadges } from '../../../db/schema/index.js';
+import { eq, desc } from 'drizzle-orm';
 
 export interface CreateVehicleDTO {
   plateNumber: string;
@@ -185,23 +185,45 @@ export class VehicleService {
       throw new ValidationError(`Vehicle with ID '${id}' not found`);
     }
 
-    // Load documents
+    // Load documents + badges
     if (db) {
+      const docsMap: Record<string, any> = {};
+      const today = new Date().toISOString().split('T')[0];
+
+      // Load vehicle_documents
       const docs = await db.select().from(vehicleDocuments).where(eq(vehicleDocuments.vehicleId, id));
-      if (docs.length > 0) {
-        const docsMap: Record<string, any> = {};
-        const today = new Date().toISOString().split('T')[0];
-        docs.forEach((doc: any) => {
-          docsMap[doc.documentType] = {
-            number: doc.documentNumber,
-            issueDate: doc.issueDate,
-            expiryDate: doc.expiryDate,
-            issuingAuthority: doc.issuingAuthority,
-            documentUrl: doc.documentUrl,
-            notes: doc.notes,
-            isValid: doc.expiryDate >= today,
-          };
-        });
+      docs.forEach((doc: any) => {
+        docsMap[doc.documentType] = {
+          number: doc.documentNumber,
+          issueDate: doc.issueDate,
+          expiryDate: doc.expiryDate,
+          issuingAuthority: doc.issuingAuthority,
+          documentUrl: doc.documentUrl,
+          notes: doc.notes,
+          isValid: doc.expiryDate >= today,
+        };
+      });
+
+      // Load badges (phù hiệu) from vehicle_badges → map to operation_permit
+      const badges = await db.select().from(vehicleBadges)
+        .where(eq(vehicleBadges.vehicleId, id))
+        .orderBy(desc(vehicleBadges.expiryDate));
+      if (badges.length > 0) {
+        const latestBadge = badges[0];
+        const allRoutes = badges
+          .map(b => `${b.badgeNumber || ''} (${b.routeCode || ''})`.trim())
+          .filter(Boolean)
+          .join(', ');
+        docsMap['operation_permit'] = {
+          number: latestBadge.badgeNumber,
+          issueDate: latestBadge.issueDate,
+          expiryDate: latestBadge.expiryDate,
+          notes: badges.length > 1 ? `${badges.length} phù hiệu: ${allRoutes}` : (latestBadge.routeCode ? `Tuyến: ${latestBadge.routeCode}` : undefined),
+          isValid: latestBadge.expiryDate ? latestBadge.expiryDate >= today : false,
+        };
+      }
+
+      if (Object.keys(docsMap).length > 0) {
         vehicle.documents = docsMap;
       }
     }

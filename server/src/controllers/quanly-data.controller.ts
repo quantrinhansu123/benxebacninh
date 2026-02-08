@@ -55,6 +55,8 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           operatorId: vehicleBadges.operatorId,
           vehicleId: vehicleBadges.vehicleId,
           routeId: vehicleBadges.routeId,
+          routeCode: vehicleBadges.routeCode,
+          routeName: vehicleBadges.routeName,
         }).from(vehicleBadges),
         db.select({
           id: vehiclesTable.id,
@@ -184,6 +186,8 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           file_code: '',
           issuing_authority_ref: operatorId,
           route_id: b.routeId || '',
+          route_code: b.routeCode || '',
+          route_name: b.routeName || '',
           vehicle_type: '',
         })
       }

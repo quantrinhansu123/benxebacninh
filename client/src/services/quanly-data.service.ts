@@ -12,6 +12,8 @@ export interface QuanLyBadge {
   file_code: string
   issuing_authority_ref: string
   route_id: string
+  route_code: string
+  route_name: string
   vehicle_type: string
 }
 

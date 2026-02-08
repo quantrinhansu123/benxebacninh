@@ -3,7 +3,7 @@
  * OPTIMIZED VERSION: Pre-load mappings, batch insert
  */
 import { db } from '../../drizzle'
-import { vehicleBadges, vehicles, idMappings } from '../../schema'
+import { vehicleBadges, vehicles, idMappings, routes } from '../../schema'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import { eq } from 'drizzle-orm'
@@ -90,6 +90,22 @@ async function loadVehiclePlates(): Promise<Map<string, string>> {
 }
 
 /**
+ * Pre-load route code -> ID mappings
+ */
+async function loadRouteMappings(): Promise<Map<string, string>> {
+  const routeList = await db!.select({
+    id: routes.id,
+    routeCode: routes.routeCode
+  }).from(routes)
+  const map = new Map<string, string>()
+  for (const r of routeList) {
+    if (r.routeCode) map.set(r.routeCode, r.id)
+  }
+  console.log(`  Loaded ${map.size} route code mappings into memory`)
+  return map
+}
+
+/**
  * Get existing badge numbers from database
  */
 async function getExistingBadges(): Promise<Set<string>> {
@@ -155,6 +171,7 @@ export async function importVehicleBadgesBatch(exportDir: string): Promise<numbe
   console.log('\n  Pre-loading ID mappings...')
   const vehicleMappings = await loadVehicleMappings()
   const vehiclePlates = await loadVehiclePlates()
+  const routeMappings = await loadRouteMappings()
 
   // Pre-load existing data
   console.log('\n  Loading existing data...')
@@ -242,6 +259,11 @@ export async function importVehicleBadgesBatch(exportDir: string): Promise<numbe
     if (item.vehicle_replaced) metadata.vehicle_replaced = item.vehicle_replaced
     if (item.notes) metadata.notes = item.notes
 
+    // Resolve route from route_ref
+    const routeRef = item.route_ref || ''
+    const routeCode = routeRef || null
+    const routeId = routeRef ? (routeMappings.get(routeRef) || null) : null
+
     toInsert.push({
       firebaseId,
       record: {
@@ -252,6 +274,8 @@ export async function importVehicleBadgesBatch(exportDir: string): Promise<numbe
         expiryDate: parseDDMMYYYY(item.expiry_date),
         issueDate: parseDDMMYYYY(item.issue_date),
         isActive: item.status !== 'Thu hồi',
+        routeCode,
+        routeId,
         metadata: Object.keys(metadata).length > 0 ? metadata : null,
         syncedAt: parseDate(item.synced_at),
         source: item.source?.substring(0, 50) || 'google_sheets',

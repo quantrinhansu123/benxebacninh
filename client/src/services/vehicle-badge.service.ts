@@ -29,6 +29,8 @@ export interface VehicleBadge {
   revocation_decision: string
   revocation_reason: string
   route_id: string
+  route_code: string
+  route_name: string
   status: string
   vehicle_id: string
   vehicle_type: string
