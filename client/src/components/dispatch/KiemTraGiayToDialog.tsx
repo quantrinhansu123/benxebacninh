@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { DatePicker } from "@/components/DatePicker"
 import { vehicleService } from "@/services/vehicle.service"
+import { vehicleBadgeService } from "@/services/vehicle-badge.service"
 import { DocumentHistoryDialog } from "./DocumentHistoryDialog"
 import type { Vehicle, VehicleDocuments } from "@/types"
 import { format } from "date-fns"
@@ -43,7 +44,25 @@ export function KiemTraGiayToDialog({
     try {
       const data = await vehicleService.getById(vehicleId)
       setVehicle(data)
-      setDocuments(data.documents || {})
+      const docs: VehicleDocuments = { ...(data.documents || {}) }
+
+      // Lấy hạn phù hiệu từ bảng vehicle_badges nếu có
+      if (data.plateNumber) {
+        try {
+          const badge = await vehicleBadgeService.getByPlateNumber(data.plateNumber)
+          if (badge?.expiry_date) {
+            docs.operation_permit = {
+              ...(docs.operation_permit || { number: '', issueDate: '', isValid: false }),
+              expiryDate: badge.expiry_date,
+              isValid: checkDocumentValidity(badge.expiry_date),
+            }
+          }
+        } catch {
+          // Badge không tồn tại - bỏ qua, giữ nguyên dữ liệu từ vehicle
+        }
+      }
+
+      setDocuments(docs)
     } catch (error) {
       console.error("Failed to load vehicle:", error)
     }
