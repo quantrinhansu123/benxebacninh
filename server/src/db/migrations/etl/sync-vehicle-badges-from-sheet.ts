@@ -132,8 +132,8 @@ async function main() {
     UPDATE vehicle_badges vb SET
       badge_number = t.badge_number,
       badge_type = t.badge_type,
-      issue_date = t.issue_date,
-      expiry_date = t.expiry_date,
+      issue_date = NULLIF(t.issue_date, '')::date,
+      expiry_date = NULLIF(t.expiry_date, '')::date,
       status = t.status,
       is_active = t.is_active,
       metadata = COALESCE(vb.metadata, '{}'::jsonb) || t.metadata,
@@ -162,7 +162,7 @@ async function main() {
       t.firebase_id, t.badge_number,
       COALESCE(v.plate_number, 'UNKNOWN_' || COALESCE(t.vehicle_fb_ref, 'NONE')),
       im.postgres_id::uuid,
-      t.badge_type, t.issue_date, t.expiry_date, t.status, t.is_active,
+      t.badge_type, NULLIF(t.issue_date, '')::date, NULLIF(t.expiry_date, '')::date, t.status, t.is_active,
       t.metadata, 'sheet_sync', NOW(), NOW(), NOW()
     FROM _tmp_badges t
     LEFT JOIN id_mappings im ON im.firebase_id = t.vehicle_fb_ref AND im.entity_type = 'vehicles'
