@@ -1,369 +1,188 @@
 /**
- * Sync vehicle_badges from Google Sheet CSV (source of truth)
- *
- * Key mappings:
- *   - CSV ID_PhuHieu  → DB firebase_id (match key)
- *   - CSV BienSoXe    → Firebase vehicle ref (NOT a plate number!)
- *                       → lookup id_mappings(vehicles) → vehicles.plate_number
- *   - plateNumber in DB is already resolved to real plate, do NOT overwrite
- *     with Firebase ref from CSV
- *
- * Actions:
- *   1. Fetch CSV from Google Sheets
- *   2. Load all existing badges from DB (keyed by firebase_id)
- *   3. Build Firebase vehicle ref → real plate_number lookup
- *   4. Compare & categorize: INSERT new, UPDATE changed
- *   5. Apply changes (or dry-run)
- *
+ * Sync vehicle_badges from Google Sheet CSV (bulk operations)
  * Usage: npx tsx sync-vehicle-badges-from-sheet.ts [--dry-run]
  */
 import 'dotenv/config'
 import { db } from '../../drizzle.js'
-import { vehicleBadges, vehicles, idMappings } from '../../schema/index.js'
-import { eq } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
 const SHEET_CSV_URL =
   'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/gviz/tq?tqx=out:csv&gid=1560762265'
 
-// ─── Types ───
-
 interface SheetRow {
-  ID_PhuHieu: string
-  MaHoSo: string
-  LoaiPH: string
-  SoPhuHieu: string
-  BienSoXe: string       // Firebase vehicle ref, NOT real plate number
-  Ref_DonViCapPhuHieu: string
-  Ref_GPKD: string
-  Ref_Tuyen: string
-  NgayCap: string
-  NgayHetHan: string
-  LoaiCap: string
-  LyDoCapLai: string
-  SoPhuHieuCu: string
-  TrangThai: string
-  QDThuHoi: string
-  LyDoThuHoi: string
-  NgayThuHoi: string
-  XeThayThe: string
-  MauPhuHieu: string
-  GhiChu: string
-  Xebithaythe: string
-  Hancap: string
+  ID_PhuHieu: string; MaHoSo: string; LoaiPH: string; SoPhuHieu: string; BienSoXe: string
+  Ref_DonViCapPhuHieu: string; Ref_GPKD: string; Ref_Tuyen: string; NgayCap: string
+  NgayHetHan: string; LoaiCap: string; LyDoCapLai: string; SoPhuHieuCu: string
+  TrangThai: string; QDThuHoi: string; LyDoThuHoi: string; NgayThuHoi: string
+  XeThayThe: string; MauPhuHieu: string; GhiChu: string; Xebithaythe: string; Hancap: string
 }
 
-// ─── Helpers ───
-
-/** Parse CSV text into array of objects (handles quoted fields with commas) */
+/** Parse CSV (handles quoted fields with commas/escaped quotes) */
 function parseCSV(text: string): SheetRow[] {
   const lines = text.split('\n').filter(l => l.trim())
   if (lines.length < 2) return []
-
   const parseRow = (line: string): string[] => {
-    const fields: string[] = []
-    let current = ''
-    let inQuotes = false
+    const fields: string[] = []; let current = '', inQuotes = false
     for (let i = 0; i < line.length; i++) {
       const ch = line[i]
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
-        else inQuotes = !inQuotes
-      } else if (ch === ',' && !inQuotes) {
-        fields.push(current.trim()); current = ''
-      } else {
-        current += ch
-      }
+      if (ch === '"') { if (inQuotes && line[i + 1] === '"') { current += '"'; i++ } else inQuotes = !inQuotes }
+      else if (ch === ',' && !inQuotes) { fields.push(current.trim()); current = '' }
+      else current += ch
     }
     fields.push(current.trim())
     return fields
   }
-
   const headers = parseRow(lines[0])
-  const results: SheetRow[] = []
-  for (let i = 1; i < lines.length; i++) {
-    const vals = parseRow(lines[i])
-    const obj: any = {}
-    for (let j = 0; j < headers.length; j++) {
-      obj[headers[j]] = vals[j] || ''
-    }
-    results.push(obj)
-  }
-  return results
+  return lines.slice(1).map(line => {
+    const vals = parseRow(line), obj: any = {}
+    headers.forEach((h, j) => obj[h] = vals[j] || '')
+    return obj
+  })
 }
 
-/** Convert dd/MM/yyyy → yyyy-MM-dd, validates result */
-function parseDate(d: string): string {
-  if (!d) return ''
+/** dd/MM/yyyy -> yyyy-MM-dd */
+function parseDate(d: string): string | null {
+  if (!d) return null
   const m = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (!m) return ''
-  const day = parseInt(m[1], 10)
-  const month = parseInt(m[2], 10)
-  if (month < 1 || month > 12 || day < 1 || day > 31) return ''
-  return `${m[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  if (!m) return null
+  const [, day, month, year] = m
+  if (+month < 1 || +month > 12 || +day < 1 || +day > 31) return null
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
 }
 
-/** Map sheet TrangThai → DB status */
+/** Map TrangThai -> status */
 function mapStatus(s: string): string {
   if (!s) return 'active'
-  const lower = s.toLowerCase().trim()
-  if (lower.includes('thu hồi')) return 'revoked'
-  if (lower.includes('hết hiệu lực') || lower.includes('hết hạn')) return 'expired'
-  if (lower.includes('hiệu lực')) return 'active'
+  const l = s.toLowerCase()
+  if (l.includes('thu hồi')) return 'revoked'
+  if (l.includes('hết hiệu lực') || l.includes('hết hạn')) return 'expired'
+  if (l.includes('hiệu lực')) return 'active'
   return 'active'
 }
 
-/** Build metadata from CSV row (snake_case keys matching existing ETL) */
-function buildMetadata(row: SheetRow): Record<string, string> {
+/** Build metadata JSONB */
+function buildMeta(r: SheetRow): Record<string, string> {
   const m: Record<string, string> = {}
-  if (row.LoaiPH) m.badge_type = row.LoaiPH
-  if (row.MaHoSo) m.file_number = row.MaHoSo
-  if (row.LoaiCap) m.issue_type = row.LoaiCap
-  if (row.MauPhuHieu) m.badge_color = row.MauPhuHieu
-  if (row.GhiChu) m.notes = row.GhiChu
-  if (row.Ref_GPKD) m.business_license_ref = row.Ref_GPKD
-  if (row.Ref_DonViCapPhuHieu) m.issuing_authority_ref = row.Ref_DonViCapPhuHieu
-  if (row.Ref_Tuyen) m.route_ref = row.Ref_Tuyen
-  if (row.SoPhuHieuCu) m.old_badge_number = row.SoPhuHieuCu
-  if (row.LyDoCapLai) m.renewal_reason = row.LyDoCapLai
-  if (row.QDThuHoi) m.revoke_decision = row.QDThuHoi
-  if (row.LyDoThuHoi) m.revoke_reason = row.LyDoThuHoi
-  if (row.NgayThuHoi) m.revoke_date = parseDate(row.NgayThuHoi)
-  if (row.XeThayThe) m.replacement_vehicle = row.XeThayThe
-  if (row.Xebithaythe) m.vehicle_replaced = row.Xebithaythe
-  if (row.Hancap) m.renewal_due_date = row.Hancap
-  if (row.TrangThai) m.status = row.TrangThai
+  if (r.LoaiPH) m.badge_type = r.LoaiPH
+  if (r.MaHoSo) m.file_number = r.MaHoSo
+  if (r.LoaiCap) m.issue_type = r.LoaiCap
+  if (r.MauPhuHieu) m.badge_color = r.MauPhuHieu
+  if (r.GhiChu) m.notes = r.GhiChu
+  if (r.Ref_GPKD) m.business_license_ref = r.Ref_GPKD
+  if (r.Ref_DonViCapPhuHieu) m.issuing_authority_ref = r.Ref_DonViCapPhuHieu
+  if (r.Ref_Tuyen) m.route_ref = r.Ref_Tuyen
+  if (r.SoPhuHieuCu) m.old_badge_number = r.SoPhuHieuCu
+  if (r.LyDoCapLai) m.renewal_reason = r.LyDoCapLai
+  if (r.QDThuHoi) m.revoke_decision = r.QDThuHoi
+  if (r.LyDoThuHoi) m.revoke_reason = r.LyDoThuHoi
+  const rd = parseDate(r.NgayThuHoi); if (rd) m.revoke_date = rd
+  if (r.XeThayThe) m.replacement_vehicle = r.XeThayThe
+  if (r.Xebithaythe) m.vehicle_replaced = r.Xebithaythe
+  if (r.Hancap) m.renewal_due_date = r.Hancap
+  if (r.TrangThai) m.status = r.TrangThai
   return m
 }
 
-/** Check if core fields differ */
-function findDiffs(dbRow: any, csvRow: SheetRow, metadata: Record<string, string>): string[] {
-  const diffs: string[] = []
-  const badgeNumber = csvRow.SoPhuHieu || null
-  const badgeType = csvRow.LoaiPH || null
-  const issueDate = parseDate(csvRow.NgayCap)
-  const expiryDate = parseDate(csvRow.NgayHetHan)
-  const status = mapStatus(csvRow.TrangThai)
-
-  if (dbRow.badgeNumber !== badgeNumber) diffs.push(`badge_number: "${dbRow.badgeNumber}" → "${badgeNumber}"`)
-  if (dbRow.badgeType !== badgeType) diffs.push(`badge_type: "${dbRow.badgeType}" → "${badgeType}"`)
-  if (dbRow.issueDate !== issueDate) diffs.push(`issue_date: "${dbRow.issueDate}" → "${issueDate}"`)
-  if (dbRow.expiryDate !== expiryDate) diffs.push(`expiry_date: "${dbRow.expiryDate}" → "${expiryDate}"`)
-  if (dbRow.status !== status) diffs.push(`status: "${dbRow.status}" → "${status}"`)
-
-  const dbMeta = (dbRow.metadata as Record<string, string>) || {}
-  for (const [key, val] of Object.entries(metadata)) {
-    if (dbMeta[key] !== val) {
-      diffs.push(`meta.${key}: "${dbMeta[key] || ''}" → "${val}"`)
-    }
-  }
-  return diffs
-}
-
-// ─── Main ───
+/** Escape string for SQL literal */
+const esc = (s: string | null): string => s === null ? 'NULL' : `'${s.replace(/'/g, "''")}'`
 
 async function main() {
   const isDryRun = process.argv.includes('--dry-run')
-
-  if (!db) {
-    console.error('DATABASE_URL not set')
-    process.exit(1)
-  }
-
-  console.log(`=== Sync vehicle_badges from Google Sheet ===`)
-  console.log(`Mode: ${isDryRun ? 'DRY RUN' : 'LIVE'}`)
+  if (!db) { console.error('DATABASE_URL not set'); process.exit(1) }
+  console.log(`=== Sync vehicle_badges (bulk) ===\nMode: ${isDryRun ? 'DRY RUN' : 'LIVE'}`)
 
   // 1. Fetch CSV
-  console.log('\n[1/5] Fetching CSV from Google Sheets...')
+  console.log('\n[1/4] Fetching CSV...')
   const res = await fetch(SHEET_CSV_URL)
-  if (!res.ok) throw new Error(`Failed: ${res.status}`)
-  const csvText = await res.text()
-  const rows: SheetRow[] = parseCSV(csvText)
-  console.log(`  Sheet: ${rows.length} rows`)
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
+  const rows = parseCSV(await res.text()).filter(r => r.ID_PhuHieu)
+  console.log(`  Rows: ${rows.length}`)
 
-  // 2. Load DB badges
-  console.log('[2/5] Loading badges from DB...')
-  const dbBadges = await db!.select({
-    id: vehicleBadges.id,
-    firebaseId: vehicleBadges.firebaseId,
-    badgeNumber: vehicleBadges.badgeNumber,
-    plateNumber: vehicleBadges.plateNumber,
-    badgeType: vehicleBadges.badgeType,
-    issueDate: vehicleBadges.issueDate,
-    expiryDate: vehicleBadges.expiryDate,
-    status: vehicleBadges.status,
-    isActive: vehicleBadges.isActive,
-    metadata: vehicleBadges.metadata,
-    vehicleId: vehicleBadges.vehicleId,
-  }).from(vehicleBadges)
-  console.log(`  DB: ${dbBadges.length} rows`)
+  // 2. Create temp table & insert all data
+  console.log('[2/4] Creating temp table...')
+  await db.execute(sql.raw(`DROP TABLE IF EXISTS _tmp_badges`))
+  await db.execute(sql.raw(`
+    CREATE TEMP TABLE _tmp_badges (
+      firebase_id TEXT PRIMARY KEY, badge_number TEXT, badge_type TEXT,
+      issue_date TEXT, expiry_date TEXT, status TEXT, is_active BOOLEAN,
+      metadata JSONB, vehicle_fb_ref TEXT
+    )
+  `))
 
-  const dbMap = new Map<string, (typeof dbBadges)[0]>()
-  for (const b of dbBadges) {
-    if (b.firebaseId) dbMap.set(b.firebaseId, b)
+  // Build VALUES for batch insert (chunks of 500)
+  const CHUNK = 500
+  let inserted = 0
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK)
+    const values = chunk.map(r => {
+      const status = mapStatus(r.TrangThai)
+      const meta = buildMeta(r)
+      return `(${esc(r.ID_PhuHieu)},${esc(r.SoPhuHieu || null)},${esc(r.LoaiPH || null)},` +
+        `${esc(parseDate(r.NgayCap))},${esc(parseDate(r.NgayHetHan))},${esc(status)},` +
+        `${status === 'active'},${esc(JSON.stringify(meta))},${esc(r.BienSoXe || null)})`
+    }).join(',')
+    await db.execute(sql.raw(`INSERT INTO _tmp_badges VALUES ${values}`))
+    inserted += chunk.length
   }
+  console.log(`  Inserted ${inserted} rows into temp table`)
 
-  // 3. Build Firebase vehicle ref → plate number lookup (for new inserts)
-  console.log('[3/5] Building vehicle ref → plate lookup...')
-  const vehicleMappings = await db!.select({
-    firebaseId: idMappings.firebaseId,
-    postgresId: idMappings.postgresId,
-  }).from(idMappings).where(eq(idMappings.entityType, 'vehicles'))
-
-  const fbToVehicleId = new Map<string, string>()
-  for (const m of vehicleMappings) {
-    fbToVehicleId.set(m.firebaseId, m.postgresId)
-  }
-
-  const allVehicles = await db!.select({
-    id: vehicles.id,
-    plateNumber: vehicles.plateNumber,
-  }).from(vehicles)
-
-  const vehicleIdToPlate = new Map<string, string>()
-  for (const v of allVehicles) {
-    vehicleIdToPlate.set(v.id, v.plateNumber)
-  }
-  console.log(`  Vehicle mappings: ${fbToVehicleId.size}, Vehicles: ${allVehicles.length}`)
-
-  // Helper: resolve Firebase vehicle ref → { vehicleId, plateNumber }
-  function resolveVehicle(fbRef: string): { vehicleId: string | null; plateNumber: string } {
-    if (!fbRef) return { vehicleId: null, plateNumber: 'UNKNOWN' }
-    const pgId = fbToVehicleId.get(fbRef) || null
-    if (!pgId) return { vehicleId: null, plateNumber: `UNKNOWN_${fbRef}` }
-    const plate = vehicleIdToPlate.get(pgId)
-    return { vehicleId: pgId, plateNumber: plate || `UNKNOWN_${fbRef}` }
-  }
-
-  // 4. Compare
-  console.log('[4/5] Comparing...')
-  const toInsert: { row: SheetRow; vehicleId: string | null; plateNumber: string }[] = []
-  const toUpdate: { id: string; row: SheetRow; diffs: string[]; existingMeta: Record<string, string> }[] = []
-  const sheetIds = new Set<string>()
-  let unchanged = 0
-
-  for (const row of rows) {
-    if (!row.ID_PhuHieu) continue
-    sheetIds.add(row.ID_PhuHieu)
-    const metadata = buildMetadata(row)
-    const existing = dbMap.get(row.ID_PhuHieu)
-
-    if (!existing) {
-      const { vehicleId, plateNumber } = resolveVehicle(row.BienSoXe)
-      toInsert.push({ row, vehicleId, plateNumber })
-    } else {
-      const diffs = findDiffs(existing, row, metadata)
-      if (diffs.length > 0) {
-        toUpdate.push({
-          id: existing.id,
-          row,
-          diffs,
-          existingMeta: (existing.metadata as Record<string, string>) || {},
-        })
-      } else {
-        unchanged++
-      }
-    }
-  }
-
-  const orphaned = dbBadges.filter(b => b.firebaseId && !sheetIds.has(b.firebaseId))
-
-  // Report
-  console.log(`\n=== Summary ===`)
-  console.log(`  Unchanged: ${unchanged}`)
-  console.log(`  To insert: ${toInsert.length}`)
-  console.log(`  To update: ${toUpdate.length}`)
-  console.log(`  Orphaned:  ${orphaned.length} (in DB not in sheet, will NOT delete)`)
-
-  if (toUpdate.length > 0) {
-    const show = toUpdate.slice(0, 30)
-    console.log(`\n--- Updates (first ${show.length}) ---`)
-    for (const u of show) {
-      console.log(`  [${u.row.ID_PhuHieu}] ${u.diffs.join(', ')}`)
-    }
-  }
-
+  // 3. Bulk UPDATE existing records (do NOT overwrite plate_number)
+  console.log('[3/4] Bulk update...')
+  const updateSql = `
+    UPDATE vehicle_badges vb SET
+      badge_number = t.badge_number,
+      badge_type = t.badge_type,
+      issue_date = t.issue_date,
+      expiry_date = t.expiry_date,
+      status = t.status,
+      is_active = t.is_active,
+      metadata = COALESCE(vb.metadata, '{}'::jsonb) || t.metadata,
+      source = 'sheet_sync',
+      synced_at = NOW(),
+      updated_at = NOW()
+    FROM _tmp_badges t
+    WHERE vb.firebase_id = t.firebase_id
+  `
   if (isDryRun) {
-    console.log('\n[DRY RUN] No changes applied.')
-    return
+    const countRes = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM vehicle_badges vb JOIN _tmp_badges t ON vb.firebase_id = t.firebase_id`))
+    console.log(`  [DRY] Would update: ${(countRes as any)[0]?.cnt || 0}`)
+  } else {
+    const upd = await db.execute(sql.raw(updateSql))
+    console.log(`  Updated: ${(upd as any).count ?? 'ok'}`)
   }
 
-  // 5. Apply
-  console.log('\n[5/5] Applying changes...')
-
-  // Inserts (one by one to skip bad rows)
-  if (toInsert.length > 0) {
-    console.log(`  Inserting ${toInsert.length} new badges...`)
-    let inserted = 0
-    let failed = 0
-    for (const { row, vehicleId, plateNumber } of toInsert) {
-      try {
-        const status = mapStatus(row.TrangThai)
-        const metadata = buildMetadata(row)
-        const issueDate = parseDate(row.NgayCap)
-        const expiryDate = parseDate(row.NgayHetHan)
-
-        await db!.insert(vehicleBadges).values({
-          firebaseId: row.ID_PhuHieu,
-          badgeNumber: row.SoPhuHieu || null,
-          plateNumber,
-          vehicleId,
-          badgeType: row.LoaiPH || null,
-          issueDate: issueDate || null,
-          expiryDate: expiryDate || null,
-          status,
-          isActive: status === 'active',
-          metadata: Object.keys(metadata).length > 0 ? metadata : null,
-          source: 'sheet_sync',
-          syncedAt: new Date(),
-        })
-        inserted++
-      } catch (err: any) {
-        failed++
-        console.log(`    SKIP insert [${row.ID_PhuHieu}]: ${err?.cause?.message || err?.message || 'unknown'}`)
-      }
-      if ((inserted + failed) % 50 === 0) process.stdout.write(`    ${inserted + failed}/${toInsert.length}\r`)
-    }
-    console.log(`    inserted: ${inserted}, failed: ${failed}`)
+  // 4. Bulk INSERT new records (resolve plate via id_mappings->vehicles)
+  console.log('[4/4] Bulk insert new...')
+  const insertSql = `
+    INSERT INTO vehicle_badges (
+      firebase_id, badge_number, plate_number, vehicle_id, badge_type,
+      issue_date, expiry_date, status, is_active, metadata, source, synced_at, created_at, updated_at
+    )
+    SELECT
+      t.firebase_id, t.badge_number,
+      COALESCE(v.plate_number, 'UNKNOWN_' || COALESCE(t.vehicle_fb_ref, 'NONE')),
+      im.postgres_id::uuid,
+      t.badge_type, t.issue_date, t.expiry_date, t.status, t.is_active,
+      t.metadata, 'sheet_sync', NOW(), NOW(), NOW()
+    FROM _tmp_badges t
+    LEFT JOIN id_mappings im ON im.firebase_id = t.vehicle_fb_ref AND im.entity_type = 'vehicles'
+    LEFT JOIN vehicles v ON v.id = im.postgres_id::uuid
+    WHERE NOT EXISTS (SELECT 1 FROM vehicle_badges vb WHERE vb.firebase_id = t.firebase_id)
+  `
+  if (isDryRun) {
+    const countRes = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM _tmp_badges t WHERE NOT EXISTS (SELECT 1 FROM vehicle_badges vb WHERE vb.firebase_id = t.firebase_id)`))
+    console.log(`  [DRY] Would insert: ${(countRes as any)[0]?.cnt || 0}`)
+  } else {
+    const ins = await db.execute(sql.raw(insertSql))
+    console.log(`  Inserted: ${(ins as any).count ?? 'ok'}`)
   }
 
-  // Updates (one by one — preserves plateNumber from DB)
-  if (toUpdate.length > 0) {
-    console.log(`  Updating ${toUpdate.length} badges...`)
-    let count = 0
-    let failed = 0
-    for (const u of toUpdate) {
-      try {
-        const status = mapStatus(u.row.TrangThai)
-        const newMeta = buildMetadata(u.row)
-        const mergedMeta = { ...u.existingMeta, ...newMeta }
+  // Cleanup
+  await db.execute(sql.raw(`DROP TABLE IF EXISTS _tmp_badges`))
 
-        await db!.update(vehicleBadges).set({
-          // Update core fields but NOT plateNumber (already resolved in DB)
-          badgeNumber: u.row.SoPhuHieu || null,
-          badgeType: u.row.LoaiPH || null,
-          issueDate: parseDate(u.row.NgayCap) || null,
-          expiryDate: parseDate(u.row.NgayHetHan) || null,
-          status,
-          isActive: status === 'active',
-          metadata: mergedMeta,
-          source: 'sheet_sync',
-          syncedAt: new Date(),
-          updatedAt: new Date(),
-        }).where(eq(vehicleBadges.id, u.id))
-        count++
-      } catch (err: any) {
-        failed++
-        console.log(`    SKIP update [${u.row.ID_PhuHieu}]: ${err?.cause?.message || err?.message || 'unknown'}`)
-      }
-      if ((count + failed) % 500 === 0) process.stdout.write(`    ${count + failed}/${toUpdate.length}\r`)
-    }
-    console.log(`    updated: ${count}, failed: ${failed}`)
-  }
-
-  console.log(`\nDone!`)
+  // Summary
+  const total = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM vehicle_badges`))
+  console.log(`\nDone! Total badges in DB: ${(total as any)[0]?.cnt}`)
 }
 
-main().catch(err => {
-  console.error('Fatal:', err)
-  process.exit(1)
-})
+main().catch(err => { console.error('Fatal:', err); process.exit(1) })
