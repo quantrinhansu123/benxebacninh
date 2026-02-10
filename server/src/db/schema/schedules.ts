@@ -19,6 +19,16 @@ export const schedules = pgTable('schedules', {
   daysOfWeek: jsonb('days_of_week').$type<number[]>(), // [1,2,3,4,5,6,7] for Mon-Sun
   effectiveFrom: varchar('effective_from', { length: 20 }).notNull(), // Date string
   effectiveTo: varchar('effective_to', { length: 20 }), // Optional end date
+  // Sync fields
+  firebaseId: varchar('firebase_id', { length: 100 }).unique(),
+  direction: varchar('direction', { length: 10 }),
+  daysOfMonth: jsonb('days_of_month').$type<number[]>(),
+  calendarType: varchar('calendar_type', { length: 20 }),
+  notificationNumber: varchar('notification_number', { length: 100 }),
+  tripStatus: varchar('trip_status', { length: 50 }),
+  source: varchar('source', { length: 50 }).default('manual'),
+  syncedAt: timestamp('synced_at', { withTimezone: true }),
+  metadata: jsonb('metadata'),
   // Status
   isActive: boolean('is_active').default(true).notNull(),
   // Timestamps
@@ -29,6 +39,7 @@ export const schedules = pgTable('schedules', {
   routeIdx: index('schedules_route_idx').on(table.routeId),
   operatorIdx: index('schedules_operator_idx').on(table.operatorId),
   activeIdx: index('schedules_active_idx').on(table.isActive),
+  firebaseIdIdx: index('schedules_firebase_id_idx').on(table.firebaseId),
 }))
 
 export type Schedule = typeof schedules.$inferSelect

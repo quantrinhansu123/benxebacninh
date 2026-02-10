@@ -13,6 +13,11 @@ const scheduleSchema = z.object({
   daysOfWeek: z.array(z.number().int().min(1).max(7)).optional(),
   effectiveFrom: z.string().min(1, 'Effective from date is required'),
   effectiveTo: z.string().optional(),
+  direction: z.string().optional(),
+  daysOfMonth: z.array(z.number().int().min(1).max(31)).optional(),
+  calendarType: z.string().optional(),
+  notificationNumber: z.string().optional(),
+  tripStatus: z.string().optional(),
 })
 
 export const getAllSchedules = async (req: Request, res: Response) => {
@@ -48,6 +53,11 @@ export const getAllSchedules = async (req: Request, res: Response) => {
         effectiveFrom: schedules.effectiveFrom,
         effectiveTo: schedules.effectiveTo,
         isActive: schedules.isActive,
+        direction: schedules.direction,
+        daysOfMonth: schedules.daysOfMonth,
+        calendarType: schedules.calendarType,
+        notificationNumber: schedules.notificationNumber,
+        tripStatus: schedules.tripStatus,
         createdAt: schedules.createdAt,
         updatedAt: schedules.updatedAt,
         route: {
@@ -80,6 +90,11 @@ export const getAllSchedules = async (req: Request, res: Response) => {
       effectiveFrom: item.effectiveFrom,
       effectiveTo: item.effectiveTo,
       isActive: item.isActive,
+      direction: item.direction,
+      daysOfMonth: (item.daysOfMonth as number[]) || [],
+      calendarType: item.calendarType,
+      notificationNumber: item.notificationNumber,
+      tripStatus: item.tripStatus,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }))
@@ -113,6 +128,11 @@ export const getScheduleById = async (req: Request, res: Response) => {
         effectiveFrom: schedules.effectiveFrom,
         effectiveTo: schedules.effectiveTo,
         isActive: schedules.isActive,
+        direction: schedules.direction,
+        daysOfMonth: schedules.daysOfMonth,
+        calendarType: schedules.calendarType,
+        notificationNumber: schedules.notificationNumber,
+        tripStatus: schedules.tripStatus,
         createdAt: schedules.createdAt,
         updatedAt: schedules.updatedAt,
         route: {
@@ -150,6 +170,11 @@ export const getScheduleById = async (req: Request, res: Response) => {
       effectiveFrom: item.effectiveFrom,
       effectiveTo: item.effectiveTo,
       isActive: item.isActive,
+      direction: item.direction,
+      daysOfMonth: (item.daysOfMonth as number[]) || [],
+      calendarType: item.calendarType,
+      notificationNumber: item.notificationNumber,
+      tripStatus: item.tripStatus,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     })
@@ -200,6 +225,11 @@ export const createSchedule = async (req: Request, res: Response) => {
         effectiveFrom: schedules.effectiveFrom,
         effectiveTo: schedules.effectiveTo,
         isActive: schedules.isActive,
+        direction: schedules.direction,
+        daysOfMonth: schedules.daysOfMonth,
+        calendarType: schedules.calendarType,
+        notificationNumber: schedules.notificationNumber,
+        tripStatus: schedules.tripStatus,
         createdAt: schedules.createdAt,
         updatedAt: schedules.updatedAt,
         route: {
@@ -233,6 +263,11 @@ export const createSchedule = async (req: Request, res: Response) => {
       effectiveFrom: item.effectiveFrom,
       effectiveTo: item.effectiveTo,
       isActive: item.isActive,
+      direction: item.direction,
+      daysOfMonth: (item.daysOfMonth as number[]) || [],
+      calendarType: item.calendarType,
+      notificationNumber: item.notificationNumber,
+      tripStatus: item.tripStatus,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     })
@@ -265,6 +300,11 @@ export const updateSchedule = async (req: Request, res: Response) => {
     if (validated.daysOfWeek !== undefined) updateData.daysOfWeek = validated.daysOfWeek || null
     if (validated.effectiveFrom) updateData.effectiveFrom = validated.effectiveFrom
     if (validated.effectiveTo !== undefined) updateData.effectiveTo = validated.effectiveTo || null
+    if (validated.direction !== undefined) updateData.direction = validated.direction || null
+    if (validated.daysOfMonth !== undefined) updateData.daysOfMonth = validated.daysOfMonth || null
+    if (validated.calendarType !== undefined) updateData.calendarType = validated.calendarType || null
+    if (validated.notificationNumber !== undefined) updateData.notificationNumber = validated.notificationNumber || null
+    if (validated.tripStatus !== undefined) updateData.tripStatus = validated.tripStatus || null
 
     const [updated] = await db
       .update(schedules)
@@ -289,6 +329,11 @@ export const updateSchedule = async (req: Request, res: Response) => {
         effectiveFrom: schedules.effectiveFrom,
         effectiveTo: schedules.effectiveTo,
         isActive: schedules.isActive,
+        direction: schedules.direction,
+        daysOfMonth: schedules.daysOfMonth,
+        calendarType: schedules.calendarType,
+        notificationNumber: schedules.notificationNumber,
+        tripStatus: schedules.tripStatus,
         createdAt: schedules.createdAt,
         updatedAt: schedules.updatedAt,
         route: {
@@ -322,6 +367,11 @@ export const updateSchedule = async (req: Request, res: Response) => {
       effectiveFrom: item.effectiveFrom,
       effectiveTo: item.effectiveTo,
       isActive: item.isActive,
+      direction: item.direction,
+      daysOfMonth: (item.daysOfMonth as number[]) || [],
+      calendarType: item.calendarType,
+      notificationNumber: item.notificationNumber,
+      tripStatus: item.tripStatus,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     })

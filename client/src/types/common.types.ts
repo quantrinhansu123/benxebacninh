@@ -118,6 +118,11 @@ export interface Schedule {
   effectiveFrom: string
   effectiveTo?: string
   isActive: boolean
+  direction?: string
+  daysOfMonth?: number[]
+  calendarType?: string
+  notificationNumber?: string
+  tripStatus?: string
   createdAt?: string
   updatedAt?: string
 }
