@@ -431,6 +431,8 @@ export const validateScheduleDay = async (req: Request, res: Response) => {
         daysOfMonth: schedules.daysOfMonth,
         daysOfWeek: schedules.daysOfWeek,
         calendarType: schedules.calendarType,
+        effectiveFrom: schedules.effectiveFrom,
+        effectiveTo: schedules.effectiveTo,
       })
       .from(schedules)
       .where(eq(schedules.id, scheduleId))
@@ -445,6 +447,40 @@ export const validateScheduleDay = async (req: Request, res: Response) => {
     const daysOfWeek = (schedule.daysOfWeek as number[]) || []
     const calendarType = schedule.calendarType || 'solar'
     const frequencyType = schedule.frequencyType
+
+    // Check effective date range
+    const checkDate = new Date(date)
+    checkDate.setHours(0, 0, 0, 0)
+
+    if (schedule.effectiveFrom) {
+      const from = new Date(schedule.effectiveFrom)
+      from.setHours(0, 0, 0, 0)
+      if (checkDate < from) {
+        return res.json({
+          valid: false,
+          calendarType,
+          dayInMonth: 0,
+          daysOfMonth,
+          frequencyType,
+          message: 'Biểu đồ chưa có hiệu lực',
+        })
+      }
+    }
+
+    if (schedule.effectiveTo) {
+      const to = new Date(schedule.effectiveTo)
+      to.setHours(0, 0, 0, 0)
+      if (checkDate > to) {
+        return res.json({
+          valid: false,
+          calendarType,
+          dayInMonth: 0,
+          daysOfMonth,
+          frequencyType,
+          message: 'Biểu đồ đã hết hiệu lực',
+        })
+      }
+    }
 
     // Daily → always valid
     if (frequencyType === 'daily') {

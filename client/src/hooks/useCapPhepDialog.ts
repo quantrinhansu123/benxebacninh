@@ -54,7 +54,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const [showZeroAmountConfirm, setShowZeroAmountConfirm] = useState(false);
   const [dailyTripCounts, setDailyTripCounts] = useState<Record<number, number>>({});
   const [tripCountsLoaded, setTripCountsLoaded] = useState(false);
-  const [schedulesCache, setSchedulesCache] = useState<Record<string, Schedule[]>>({});
+  const schedulesCacheRef = useRef<Record<string, Schedule[]>>({});
   const [cachedDispatchRecords, setCachedDispatchRecords] = useState<DispatchRecord[] | null>(null);
   const [scheduleWarning, setScheduleWarning] = useState("");
 
@@ -68,17 +68,17 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const loadSchedules = useCallback(async (rid: string, opId?: string) => {
     try {
       const cacheKey = opId ? `${rid}_${opId}` : rid;
-      if (schedulesCache[cacheKey]) {
-        setSchedules(schedulesCache[cacheKey]);
+      if (schedulesCacheRef.current[cacheKey]) {
+        setSchedules(schedulesCacheRef.current[cacheKey]);
         return;
       }
       const data = await scheduleService.getAll(rid, opId, true, 'Đi');
       setSchedules(data);
-      setSchedulesCache(prev => ({ ...prev, [cacheKey]: data }));
+      schedulesCacheRef.current[cacheKey] = data;
     } catch (error) {
       console.error("Failed to load schedules:", error);
     }
-  }, [schedulesCache]);
+  }, []);
 
   const calculateTotal = useCallback(() => {
     const total = serviceCharges.reduce((sum, charge) => sum + charge.totalAmount, 0);
@@ -343,9 +343,10 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
 
   const normalizePlate = (plate: string): string => plate.replace(/[.\-\s]/g, '').toUpperCase();
 
-  const getMinutesFromTime = (isoString: string | undefined): number => {
-    if (!isoString) return 0;
+  const getMinutesFromTime = (isoString: string | undefined): number | null => {
+    if (!isoString) return null;
     const d = new Date(isoString);
+    if (isNaN(d.getTime())) return null;
     return d.getHours() * 60 + d.getMinutes();
   };
 
@@ -353,6 +354,12 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     if (!timeStr) return 0;
     const [h, m] = timeStr.split(':').map(Number);
     return (h || 0) * 60 + (m || 0);
+  };
+
+  // Circular time difference (handles midnight wraparound)
+  const timeDiffMinutes = (a: number, b: number): number => {
+    const diff = Math.abs(a - b);
+    return Math.min(diff, 1440 - diff);
   };
 
   const getMatchingBadge = useCallback((): VehicleBadge | undefined => {
@@ -680,6 +687,12 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       let cancelled = false;
       (async () => {
         const entryMinutes = getMinutesFromTime(record.entryTime);
+        if (entryMinutes === null) {
+          // No entry time → just pick first active candidate
+          routeAutoFilledRef.current = true;
+          setRouteId(candidates[0].routeId);
+          return;
+        }
         let bestRouteId = candidates[0].routeId;
         let bestDiff = Infinity;
 
@@ -689,7 +702,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
           if (cancelled) return;
           for (const s of scheds) {
             const schedMinutes = parseTimeToMinutes(s.departureTime);
-            const diff = Math.abs(schedMinutes - entryMinutes);
+            const diff = timeDiffMinutes(schedMinutes, entryMinutes);
             if (diff < bestDiff) {
               bestDiff = diff;
               bestRouteId = candidate.routeId;
@@ -721,12 +734,14 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     if (!routeAutoFilledRef.current) return;
 
     const entryMinutes = getMinutesFromTime(record.entryTime);
+    if (entryMinutes === null) return;
+
     let closest = schedules[0];
     let minDiff = Infinity;
 
     for (const s of schedules) {
       const schedMinutes = parseTimeToMinutes(s.departureTime);
-      const diff = Math.abs(schedMinutes - entryMinutes);
+      const diff = timeDiffMinutes(schedMinutes, entryMinutes);
       if (diff < minDiff) {
         minDiff = diff;
         closest = s;

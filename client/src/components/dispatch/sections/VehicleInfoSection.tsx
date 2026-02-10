@@ -182,9 +182,17 @@ export function VehicleInfoSection({
                   <div className="text-xs">
                     <span className="font-medium text-gray-700">Ngày hoạt động:</span>{" "}
                     <span className="text-gray-600">
-                      {selected.daysOfMonth?.length
-                        ? selected.daysOfMonth.join(", ")
-                        : "Hàng ngày"}
+                      {selected.frequencyType === 'daily'
+                        ? "Hàng ngày"
+                        : selected.frequencyType === 'weekly'
+                        ? (selected.daysOfWeek?.length
+                            ? selected.daysOfWeek.map((d: number) =>
+                                ['', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][d] || `Ngày ${d}`
+                              ).join(', ')
+                            : "Hàng ngày")
+                        : (selected.daysOfMonth?.length
+                            ? `Ngày ${selected.daysOfMonth.join(", ")}`
+                            : "Hàng ngày")}
                     </span>
                   </div>
                   <div className="text-xs">
