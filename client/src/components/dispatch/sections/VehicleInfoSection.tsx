@@ -113,7 +113,16 @@ export function VehicleInfoSection({
 
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Đơn vị vận tải">
-            {operatorNameFromVehicle && !selectedOperatorId ? (
+            {selectedOperatorId ? (() => {
+              const op = operators.find((o) => o.id === selectedOperatorId);
+              return (
+                <StyledInput
+                  value={op ? `${op.name}${op.code ? ` (${op.code})` : ''}` : operatorNameFromVehicle || selectedOperatorId}
+                  readOnly
+                  className="bg-gray-100"
+                />
+              );
+            })() : operatorNameFromVehicle ? (
               <StyledInput
                 value={operatorNameFromVehicle}
                 readOnly
@@ -121,11 +130,11 @@ export function VehicleInfoSection({
               />
             ) : (
               <StyledSelect
-                value={selectedOperatorId}
+                value=""
                 onChange={(e) => setSelectedOperatorId(e.target.value)}
                 disabled={readOnly}
               >
-                <option value="">{operatorNameFromVehicle || "-- Chọn đơn vị --"}</option>
+                <option value="">-- Chọn đơn vị --</option>
                 {operators.map((op) => (
                   <option key={op.id} value={op.id}>
                     {op.name} {op.code ? `(${op.code})` : ''}

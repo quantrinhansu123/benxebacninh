@@ -64,7 +64,7 @@ export function useDieuDo() {
       // Use cached quanlyDataService (5 min FE cache + 30 min BE cache)
       const data = await quanlyDataService.getVehicles();
 
-      // Map to Vehicle type (only need id + plateNumber for vehicleOptions)
+      // Map to Vehicle type (only need id + plateNumber + hasBadge for vehicleOptions)
       const vehicles: Vehicle[] = data.map((v) => ({
         id: v.id,
         plateNumber: v.plateNumber,
@@ -72,6 +72,7 @@ export function useDieuDo() {
         operatorId: '',
         operatorName: v.operatorName,
         isActive: v.isActive,
+        hasBadge: v.hasBadge,
       }));
       setVehicles(vehicles);
     } catch (error) {
@@ -235,7 +236,10 @@ export function useDieuDo() {
   const vehicleOptions = useMemo(() => {
     const options = vehicles
       .filter((v) => {
-        // For "entry" dialog, allow ALL vehicles (no filtering by active status)
+        // Only show vehicles with valid badges (Buýt / Tuyến cố định)
+        if (!v.hasBadge) return false;
+
+        // For "entry" dialog, allow all badged vehicles (no filtering by active status)
         // This allows the same vehicle to enter multiple times per day
         if (dialogType === "entry") return true;
 
