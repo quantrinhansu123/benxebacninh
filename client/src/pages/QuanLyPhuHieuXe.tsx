@@ -28,6 +28,7 @@ import { quanlyDataService } from "@/services/quanly-data.service"
 import { useUIStore } from "@/store/ui.store"
 import { useDialogHistory } from "@/hooks/useDialogHistory"
 import { DatePicker } from "@/components/DatePicker"
+import BadgeDetailDialog from "./badge-detail-dialog"
 
 // Helper function to convert dd/MM/yyyy string to Date object
 const parseDateString = (dateStr: string | undefined | null): Date | null => {
@@ -193,6 +194,8 @@ export default function QuanLyPhuHieuXe() {
         revocation_decision: '',
         revocation_reason: '',
         warn_duplicate_plate: false,
+        // Keep itinerary from backend data
+        itinerary: b.itinerary || '',
       } as VehicleBadge))
       setBadges(badgeData)
     } catch (error) {
@@ -957,119 +960,7 @@ export default function QuanLyPhuHieuXe() {
       )}
 
       {/* View Detail Dialog */}
-      <Dialog open={viewDialogOpen} onOpenChange={handleViewDialogChange}>
-        <DialogContent className="max-w-4xl w-full max-h-[95vh] overflow-y-auto p-6">
-          <DialogClose onClose={() => handleViewDialogChange(false)} />
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Chi tiết phù hiệu xe</DialogTitle>
-          </DialogHeader>
-          {selectedBadge && (
-            <div className="mt-4 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Số phù hiệu</Label>
-                  <p className="text-sm">{selectedBadge.badge_number || "N/A"}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Biển số xe</Label>
-                  <p className="text-sm">{selectedBadge.license_plate_sheet || "N/A"}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Loại phù hiệu</Label>
-                  <p className="text-sm">{selectedBadge.badge_type || "N/A"}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Màu phù hiệu</Label>
-                  <p className="text-sm">{selectedBadge.badge_color || "N/A"}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Ngày cấp</Label>
-                  <p className="text-sm">{formatDate(selectedBadge.issue_date)}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Ngày hết hạn</Label>
-                  <p className="text-sm">{formatDate(selectedBadge.expiry_date)}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Trạng thái</Label>
-                  <StatusBadge
-                    status={getStatusVariant(selectedBadge.status)}
-                    label={selectedBadge.status || "N/A"}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Loại cấp</Label>
-                  <p className="text-sm">{selectedBadge.issue_type || "N/A"}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Mã hồ sơ</Label>
-                  <p className="text-sm">{selectedBadge.file_code || "N/A"}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">ID Xe</Label>
-                  <p className="text-sm">{selectedBadge.vehicle_id || "N/A"}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">ID Giấy phép kinh doanh</Label>
-                  <p className="text-sm">{selectedBadge.business_license_ref || "N/A"}</p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">ID Tuyến</Label>
-                  <p className="text-sm">{selectedBadge.route_id || "N/A"}</p>
-                </div>
-                {selectedBadge.previous_badge_number && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Số phù hiệu cũ</Label>
-                    <p className="text-sm">{selectedBadge.previous_badge_number}</p>
-                  </div>
-                )}
-                {selectedBadge.renewal_due_date && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Ngày đến hạn gia hạn</Label>
-                    <p className="text-sm">{formatDate(selectedBadge.renewal_due_date)}</p>
-                  </div>
-                )}
-                {selectedBadge.renewal_reason && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Lý do gia hạn</Label>
-                    <p className="text-sm">{selectedBadge.renewal_reason}</p>
-                  </div>
-                )}
-                {selectedBadge.revocation_date && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Ngày thu hồi</Label>
-                    <p className="text-sm">{formatDate(selectedBadge.revocation_date)}</p>
-                  </div>
-                )}
-                {selectedBadge.revocation_decision && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Quyết định thu hồi</Label>
-                    <p className="text-sm">{selectedBadge.revocation_decision}</p>
-                  </div>
-                )}
-                {selectedBadge.revocation_reason && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Lý do thu hồi</Label>
-                    <p className="text-sm">{selectedBadge.revocation_reason}</p>
-                  </div>
-                )}
-                {selectedBadge.replacement_vehicle_id && (
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">ID Xe thay thế</Label>
-                    <p className="text-sm">{selectedBadge.replacement_vehicle_id}</p>
-                  </div>
-                )}
-                {selectedBadge.notes && (
-                  <div className="space-y-2 col-span-2">
-                    <Label className="text-sm font-semibold">Ghi chú</Label>
-                    <p className="text-sm">{selectedBadge.notes}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <BadgeDetailDialog open={viewDialogOpen} onOpenChange={handleViewDialogChange} badge={selectedBadge} />
 
       {/* Form Dialog (Create/Edit) */}
       <Dialog open={formDialogOpen} onOpenChange={handleFormDialogChange}>

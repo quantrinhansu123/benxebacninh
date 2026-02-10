@@ -1,13 +1,21 @@
 /**
  * Sync vehicle_badges from Google Sheet CSV (bulk operations)
+ * - Fetches PHUHIEUXE sheet + DANHMUCXE sheet (for IDXe -> BienSo mapping)
+ * - Resolves BienSoXe (Firebase vehicle ref) to real plate numbers
+ * - Also fixes existing UNKNOWN_ plate_number records
  * Usage: npx tsx sync-vehicle-badges-from-sheet.ts [--dry-run]
  */
 import 'dotenv/config'
 import { db } from '../../drizzle.js'
 import { sql } from 'drizzle-orm'
 
-const SHEET_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/gviz/tq?tqx=out:csv&gid=1560762265'
+// Use /export?format=csv (NOT gviz) — gviz drops date values for some rows
+const BADGE_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/export?format=csv&gid=1560762265'
+
+// Sheet DANHMUCXE - maps IDXe -> BienSo
+const VEHICLE_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/export?format=csv&gid=40001005'
 
 interface SheetRow {
   ID_PhuHieu: string; MaHoSo: string; LoaiPH: string; SoPhuHieu: string; BienSoXe: string
@@ -18,7 +26,7 @@ interface SheetRow {
 }
 
 /** Parse CSV (handles quoted fields with commas/escaped quotes) */
-function parseCSV(text: string): SheetRow[] {
+function parseCSV<T = Record<string, string>>(text: string): T[] {
   const lines = text.split('\n').filter(l => l.trim())
   if (lines.length < 2) return []
   const parseRow = (line: string): string[] => {
@@ -40,14 +48,31 @@ function parseCSV(text: string): SheetRow[] {
   })
 }
 
-/** dd/MM/yyyy -> yyyy-MM-dd */
+/** Parse date from various formats -> yyyy-MM-dd */
 function parseDate(d: string): string | null {
   if (!d) return null
-  const m = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (!m) return null
-  const [, day, month, year] = m
-  if (+month < 1 || +month > 12 || +day < 1 || +day > 31) return null
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  // dd/MM/yyyy or M/D/YYYY (auto-detect by checking if second part > 12)
+  const m1 = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (m1) {
+    let [, p1, p2, year] = m1
+    // If p2 > 12, format is M/D/YYYY (US) — p1 is month, p2 is day
+    if (+p2 > 12) return `${year}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`
+    // Otherwise dd/MM/yyyy (VN) — p1 is day, p2 is month
+    if (+p2 >= 1 && +p2 <= 12 && +p1 >= 1 && +p1 <= 31)
+      return `${year}-${p2.padStart(2, '0')}-${p1.padStart(2, '0')}`
+  }
+  // Google Sheets gviz format: Date(yyyy,M,d) (month is 0-based)
+  const m2 = d.match(/^Date\((\d{4}),(\d{1,2}),(\d{1,2})\)$/)
+  if (m2) {
+    const [, year, month0, day] = m2
+    const month = +month0 + 1
+    if (month >= 1 && month <= 12 && +day >= 1 && +day <= 31)
+      return `${year}-${String(month).padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+  // ISO format: yyyy-MM-dd
+  const m3 = d.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m3) return m3[0]
+  return null
 }
 
 /** Map TrangThai -> status */
@@ -91,21 +116,39 @@ async function main() {
   if (!db) { console.error('DATABASE_URL not set'); process.exit(1) }
   console.log(`=== Sync vehicle_badges (bulk) ===\nMode: ${isDryRun ? 'DRY RUN' : 'LIVE'}`)
 
-  // 1. Fetch CSV
-  console.log('\n[1/4] Fetching CSV...')
-  const res = await fetch(SHEET_CSV_URL)
-  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
-  const rows = parseCSV(await res.text()).filter(r => r.ID_PhuHieu)
-  console.log(`  Rows: ${rows.length}`)
+  // 1. Fetch both CSVs in parallel
+  console.log('\n[1/6] Fetching CSVs...')
+  const [badgeRes, vehicleRes] = await Promise.all([
+    fetch(BADGE_CSV_URL),
+    fetch(VEHICLE_CSV_URL),
+  ])
+  if (!badgeRes.ok) throw new Error(`Badge CSV fetch failed: ${badgeRes.status}`)
+  if (!vehicleRes.ok) throw new Error(`Vehicle CSV fetch failed: ${vehicleRes.status}`)
+
+  const badgeText = await badgeRes.text()
+  const vehicleText = await vehicleRes.text()
+  // Validate responses are CSV (not HTML login/error page)
+  if (badgeText.trimStart().startsWith('<')) throw new Error('Badge CSV response is HTML, not CSV — check sheet permissions')
+  if (vehicleText.trimStart().startsWith('<')) throw new Error('Vehicle CSV response is HTML, not CSV — check sheet permissions')
+
+  const rows = parseCSV<SheetRow>(badgeText).filter(r => r.ID_PhuHieu)
+  const vehicleRows = parseCSV<{ IDXe: string; BienSo: string }>(vehicleText)
+
+  // Build IDXe -> BienSo mapping
+  const vehicleMap = new Map<string, string>()
+  for (const v of vehicleRows) {
+    if (v.IDXe && v.BienSo) vehicleMap.set(v.IDXe, v.BienSo)
+  }
+  console.log(`  Badge rows: ${rows.length}, Vehicle mapping: ${vehicleMap.size} entries`)
 
   // 2. Create temp table & insert all data
-  console.log('[2/4] Creating temp table...')
+  console.log('[2/6] Creating temp table...')
   await db.execute(sql.raw(`DROP TABLE IF EXISTS _tmp_badges`))
   await db.execute(sql.raw(`
     CREATE TEMP TABLE _tmp_badges (
       firebase_id TEXT PRIMARY KEY, badge_number TEXT, badge_type TEXT,
       issue_date TEXT, expiry_date TEXT, status TEXT, is_active BOOLEAN,
-      metadata JSONB, vehicle_fb_ref TEXT
+      metadata JSONB, vehicle_fb_ref TEXT, resolved_plate TEXT
     )
   `))
 
@@ -117,26 +160,39 @@ async function main() {
     const values = chunk.map(r => {
       const status = mapStatus(r.TrangThai)
       const meta = buildMeta(r)
+      // Resolve BienSoXe (Firebase vehicle ref) -> real plate number
+      const resolvedPlate = r.BienSoXe ? (vehicleMap.get(r.BienSoXe) || null) : null
       return `(${esc(r.ID_PhuHieu)},${esc(r.SoPhuHieu || null)},${esc(r.LoaiPH || null)},` +
         `${esc(parseDate(r.NgayCap))},${esc(parseDate(r.NgayHetHan))},${esc(status)},` +
-        `${status === 'active'},${esc(JSON.stringify(meta))},${esc(r.BienSoXe || null)})`
+        `${status === 'active'},${esc(JSON.stringify(meta))},${esc(r.BienSoXe || null)},${esc(resolvedPlate)})`
     }).join(',')
     await db.execute(sql.raw(`INSERT INTO _tmp_badges VALUES ${values}`))
     inserted += chunk.length
   }
   console.log(`  Inserted ${inserted} rows into temp table`)
 
-  // 3. Bulk UPDATE existing records (do NOT overwrite plate_number)
-  console.log('[3/4] Bulk update...')
+  // Stats on resolution
+  const resolvedStats = await db.execute(sql.raw(`
+    SELECT COUNT(*) FILTER (WHERE resolved_plate IS NOT NULL) as resolved,
+           COUNT(*) FILTER (WHERE resolved_plate IS NULL AND vehicle_fb_ref IS NOT NULL) as unresolved,
+           COUNT(*) FILTER (WHERE vehicle_fb_ref IS NULL OR vehicle_fb_ref = '') as no_ref
+    FROM _tmp_badges
+  `))
+  const rs = (resolvedStats as any)[0]
+  console.log(`  Plate resolution: ${rs.resolved} resolved, ${rs.unresolved} unresolved, ${rs.no_ref} no vehicle ref`)
+
+  // 3. Bulk UPDATE existing records (now also update plate_number if resolved)
+  console.log('[3/6] Bulk update badges...')
   const updateSql = `
     UPDATE vehicle_badges vb SET
-      badge_number = t.badge_number,
-      badge_type = t.badge_type,
-      issue_date = NULLIF(t.issue_date, '')::date,
-      expiry_date = NULLIF(t.expiry_date, '')::date,
+      badge_number = COALESCE(NULLIF(t.badge_number, ''), vb.badge_number),
+      badge_type = COALESCE(NULLIF(t.badge_type, ''), vb.badge_type),
+      issue_date = COALESCE(NULLIF(t.issue_date, '')::date, vb.issue_date),
+      expiry_date = COALESCE(NULLIF(t.expiry_date, '')::date, vb.expiry_date),
       status = t.status,
       is_active = t.is_active,
       metadata = COALESCE(vb.metadata, '{}'::jsonb) || t.metadata,
+      plate_number = COALESCE(t.resolved_plate, vb.plate_number),
       source = 'sheet_sync',
       synced_at = NOW(),
       updated_at = NOW()
@@ -151,8 +207,33 @@ async function main() {
     console.log(`  Updated: ${(upd as any).count ?? 'ok'}`)
   }
 
-  // 4. Bulk INSERT new records (resolve plate via id_mappings->vehicles)
-  console.log('[4/4] Bulk insert new...')
+  // 4. Fix UNKNOWN plate_number using resolved_plate from vehicle sheet
+  // Note: step 3 already updates plate_number via COALESCE, but this catches
+  // records that were previously inserted with UNKNOWN_ and not matched in step 3
+  console.log('[4/6] Fix UNKNOWN plates...')
+  const fixUnknownSql = `
+    UPDATE vehicle_badges vb SET
+      plate_number = t.resolved_plate,
+      updated_at = NOW()
+    FROM _tmp_badges t
+    WHERE vb.firebase_id = t.firebase_id
+      AND vb.plate_number LIKE 'UNKNOWN_%'
+      AND t.resolved_plate IS NOT NULL
+  `
+  if (isDryRun) {
+    const countRes = await db.execute(sql.raw(`
+      SELECT COUNT(*) as cnt FROM vehicle_badges vb
+      JOIN _tmp_badges t ON vb.firebase_id = t.firebase_id
+      WHERE vb.plate_number LIKE 'UNKNOWN_%' AND t.resolved_plate IS NOT NULL
+    `))
+    console.log(`  [DRY] Would fix: ${(countRes as any)[0]?.cnt || 0} UNKNOWN plates`)
+  } else {
+    const fix = await db.execute(sql.raw(fixUnknownSql))
+    console.log(`  Fixed: ${(fix as any).count ?? 'ok'} UNKNOWN plates`)
+  }
+
+  // 5. Bulk INSERT new records
+  console.log('[5/6] Bulk insert new...')
   const insertSql = `
     INSERT INTO vehicle_badges (
       firebase_id, badge_number, plate_number, vehicle_id, badge_type,
@@ -160,7 +241,7 @@ async function main() {
     )
     SELECT
       t.firebase_id, t.badge_number,
-      COALESCE(v.plate_number, 'UNKNOWN_' || COALESCE(t.vehicle_fb_ref, 'NONE')),
+      COALESCE(t.resolved_plate, v.plate_number, 'UNKNOWN_' || COALESCE(t.vehicle_fb_ref, 'NONE')),
       im.postgres_id::uuid,
       t.badge_type, NULLIF(t.issue_date, '')::date, NULLIF(t.expiry_date, '')::date, t.status, t.is_active,
       t.metadata, 'sheet_sync', NOW(), NOW(), NOW()
@@ -177,12 +258,16 @@ async function main() {
     console.log(`  Inserted: ${(ins as any).count ?? 'ok'}`)
   }
 
-  // Cleanup
+  // 6. Summary
+  console.log('[6/6] Summary...')
   await db.execute(sql.raw(`DROP TABLE IF EXISTS _tmp_badges`))
-
-  // Summary
   const total = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM vehicle_badges`))
-  console.log(`\nDone! Total badges in DB: ${(total as any)[0]?.cnt}`)
+  const unknown = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM vehicle_badges WHERE plate_number LIKE 'UNKNOWN_%'`))
+  const nullDates = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM vehicle_badges WHERE issue_date IS NULL AND expiry_date IS NULL`))
+  console.log(`\nDone!`)
+  console.log(`  Total badges: ${(total as any)[0]?.cnt}`)
+  console.log(`  Remaining UNKNOWN plates: ${(unknown as any)[0]?.cnt}`)
+  console.log(`  Records with NULL dates: ${(nullDates as any)[0]?.cnt}`)
 }
 
 main().catch(err => { console.error('Fatal:', err); process.exit(1) })

@@ -31,6 +31,7 @@ export interface VehicleBadge {
   route_id: string
   route_code: string
   route_name: string
+  itinerary: string
   status: string
   vehicle_id: string
   vehicle_type: string

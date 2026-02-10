@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
-import { vehicleBadges, vehicles, dispatchRecords, auditLogs } from '../db/schema/index.js'
+import { vehicleBadges, vehicles, dispatchRecords, auditLogs, routes } from '../db/schema/index.js'
 import { eq, ne, and, sql } from 'drizzle-orm'
 import { dashboardService } from '../services/dashboard.service.js'
 
@@ -76,6 +76,9 @@ const mapFirebaseDataToBadge = (data: any, activePlates?: Set<string>) => {
     vehicle_id: vehicleId,
     route_id: metadata.route_ref || data.routeId || data.route_id || data.Ref_Tuyen || '',
     bus_route_ref: data.routeCode || data.bus_route_ref || data.TuyenDuong || '',
+    route_code: data.routeCode || data.route_code || '',
+    route_name: data.routeName || data.route_name || '',
+    itinerary: data.itinerary || '',
     vehicle_type: metadata.vehicleType || metadata.vehicle_type || data.vehicle_type || data.LoaiXe || '',
     notes: metadata.notes || data.notes || data.GhiChu || '',
     created_at: data.createdAt || data.created_at || data.synced_at || new Date().toISOString(),
@@ -153,15 +156,29 @@ const loadBadgesFromDB = async (): Promise<any[]> => {
     try {
       if (!db) throw new Error('Database not initialized')
 
-      // Load from Drizzle
+      // Load from Drizzle with LEFT JOIN to routes
       const [badgeData, vehiclePlates] = await Promise.all([
-        db.select().from(vehicleBadges),
+        db.select({
+          badge: vehicleBadges,
+          route: routes
+        })
+        .from(vehicleBadges)
+        .leftJoin(routes, eq(vehicleBadges.routeId, routes.id)),
         loadVehiclePlates()
       ])
 
       // Convert and cache
-      const mappedBadges = badgeData.map((badge: any) => {
-        const mapped = mapFirebaseDataToBadge(badge)
+      const mappedBadges = badgeData.map((item: any) => {
+        const badge = item.badge
+        const route = item.route
+
+        // Merge badge data with route itinerary
+        const mergedData = {
+          ...badge,
+          itinerary: route?.itinerary || ''
+        }
+
+        const mapped = mapFirebaseDataToBadge(mergedData)
         // Resolve vehicle_id to actual plate number
         if (mapped.vehicle_id && vehiclePlates.has(mapped.vehicle_id)) {
           mapped.license_plate_sheet = vehiclePlates.get(mapped.vehicle_id)!

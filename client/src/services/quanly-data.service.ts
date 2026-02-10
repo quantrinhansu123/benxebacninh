@@ -10,10 +10,12 @@ export interface QuanLyBadge {
   expiry_date: string
   status: string
   file_code: string
+  issue_type: string
   issuing_authority_ref: string
   route_id: string
   route_code: string
   route_name: string
+  itinerary: string
   vehicle_type: string
 }
 
