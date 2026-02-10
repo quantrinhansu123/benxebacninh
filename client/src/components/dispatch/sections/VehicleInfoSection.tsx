@@ -24,6 +24,7 @@ interface VehicleInfoSectionProps {
   routeId: string;
   schedules: Schedule[];
   departureTime: string;
+  scheduleWarning?: string;
 }
 
 export function VehicleInfoSection({
@@ -44,6 +45,7 @@ export function VehicleInfoSection({
   routeId,
   schedules,
   departureTime,
+  scheduleWarning,
 }: VehicleInfoSectionProps) {
   return (
     <GlassCard>
@@ -164,10 +166,48 @@ export function VehicleInfoSection({
               </option>
               {schedules.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {format(new Date(`2000-01-01T${s.departureTime}`), "HH:mm:ss")}
+                  {format(new Date(`2000-01-01T${s.departureTime}`), "HH:mm")}
                 </option>
               ))}
             </StyledSelect>
+            {scheduleId && (() => {
+              const selected = schedules.find(s => s.id === scheduleId);
+              if (!selected) return null;
+              return (
+                <div className="mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg space-y-1">
+                  <div className="text-xs">
+                    <span className="font-medium text-gray-700">Mã biểu đồ:</span>{" "}
+                    <span className="text-gray-600">{selected.scheduleCode}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="font-medium text-gray-700">Ngày hoạt động:</span>{" "}
+                    <span className="text-gray-600">
+                      {selected.daysOfMonth?.length
+                        ? selected.daysOfMonth.join(", ")
+                        : "Hàng ngày"}
+                    </span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="font-medium text-gray-700">Loại lịch:</span>{" "}
+                    <span className="text-gray-600">
+                      {selected.calendarType === "lunar" ? "Âm lịch" : "Dương lịch"}
+                    </span>
+                  </div>
+                  {selected.notificationNumber && (
+                    <div className="text-xs">
+                      <span className="font-medium text-gray-700">Số thông báo:</span>{" "}
+                      <span className="text-gray-600">{selected.notificationNumber}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            {scheduleWarning && (
+              <div className="flex items-center gap-1.5 mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                <span className="text-xs text-red-600 font-medium">{scheduleWarning}</span>
+              </div>
+            )}
           </FormField>
         </div>
       </div>

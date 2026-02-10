@@ -138,6 +138,15 @@ export interface ScheduleInput {
   effectiveTo?: string
 }
 
+export interface ValidateDayResponse {
+  valid: boolean
+  calendarType: string
+  dayInMonth: number
+  daysOfMonth: number[]
+  frequencyType: string
+  message?: string
+}
+
 // ==================== Violation Types ====================
 
 export interface ViolationType {

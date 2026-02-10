@@ -48,6 +48,7 @@
     "drizzle-orm": "^0.45.1",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
+    "lunar-calendar": "^0.1.4",
     "multer": "^2.0.2",
     "postgres": "^3.4.8",
     "sharp": "^0.34.5",

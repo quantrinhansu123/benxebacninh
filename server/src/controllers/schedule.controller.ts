@@ -3,6 +3,7 @@ import { db } from '../db/drizzle.js'
 import { schedules, routes, operators } from '../db/schema/index.js'
 import { eq, and } from 'drizzle-orm'
 import { z } from 'zod'
+import LunarCalendar from 'lunar-calendar'
 
 const scheduleSchema = z.object({
   scheduleCode: z.string().optional(), // Optional - will be auto-generated if not provided
@@ -26,7 +27,7 @@ export const getAllSchedules = async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Database connection not available' })
     }
 
-    const { routeId, operatorId, isActive } = req.query
+    const { routeId, operatorId, isActive, direction } = req.query
 
     // Build where conditions
     const conditions = []
@@ -38,6 +39,9 @@ export const getAllSchedules = async (req: Request, res: Response) => {
     }
     if (isActive !== undefined) {
       conditions.push(eq(schedules.isActive, isActive === 'true'))
+    }
+    if (direction) {
+      conditions.push(eq(schedules.direction, direction as string))
     }
 
     // Query with joins
@@ -399,5 +403,108 @@ export const deleteSchedule = async (req: Request, res: Response): Promise<void>
     res.status(204).send()
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to delete schedule' })
+  }
+}
+
+const validateDaySchema = z.object({
+  scheduleId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+})
+
+export const validateScheduleDay = async (req: Request, res: Response) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection not available' })
+    }
+
+    const parsed = validateDaySchema.safeParse(req.body)
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0].message })
+    }
+
+    const { scheduleId, date } = parsed.data
+
+    const data = await db
+      .select({
+        id: schedules.id,
+        frequencyType: schedules.frequencyType,
+        daysOfMonth: schedules.daysOfMonth,
+        daysOfWeek: schedules.daysOfWeek,
+        calendarType: schedules.calendarType,
+      })
+      .from(schedules)
+      .where(eq(schedules.id, scheduleId))
+      .limit(1)
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({ error: 'Schedule not found' })
+    }
+
+    const schedule = data[0]
+    const daysOfMonth = (schedule.daysOfMonth as number[]) || []
+    const daysOfWeek = (schedule.daysOfWeek as number[]) || []
+    const calendarType = schedule.calendarType || 'solar'
+    const frequencyType = schedule.frequencyType
+
+    // Daily → always valid
+    if (frequencyType === 'daily') {
+      return res.json({
+        valid: true,
+        calendarType,
+        dayInMonth: 0,
+        daysOfMonth,
+        frequencyType,
+      })
+    }
+
+    const [year, month, day] = date.split('-').map(Number)
+
+    // Weekly → check day of week (1=Mon..7=Sun)
+    if (frequencyType === 'weekly') {
+      const dateObj = new Date(year, month - 1, day)
+      const jsDay = dateObj.getDay() // 0=Sun..6=Sat
+      const isoDay = jsDay === 0 ? 7 : jsDay // Convert to 1=Mon..7=Sun
+      const valid = daysOfWeek.length === 0 || daysOfWeek.includes(isoDay)
+      return res.json({
+        valid,
+        calendarType,
+        dayInMonth: day,
+        daysOfMonth,
+        frequencyType,
+        message: valid ? undefined : 'Chuyến xe không được khai thác ngày này',
+      })
+    }
+
+    // specific_days → check daysOfMonth (empty = always valid)
+    if (daysOfMonth.length === 0) {
+      return res.json({
+        valid: true,
+        calendarType,
+        dayInMonth: 0,
+        daysOfMonth,
+        frequencyType,
+      })
+    }
+
+    // Determine which day to check
+    let dayInMonth = day
+
+    if (calendarType === 'lunar') {
+      const lunarInfo = LunarCalendar.solarToLunar(year, month, day)
+      dayInMonth = lunarInfo.lunarDay
+    }
+
+    const valid = daysOfMonth.includes(dayInMonth)
+
+    return res.json({
+      valid,
+      calendarType,
+      dayInMonth,
+      daysOfMonth,
+      frequencyType,
+      message: valid ? undefined : 'Chuyến xe không được khai thác ngày này',
+    })
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to validate schedule day' })
   }
 }

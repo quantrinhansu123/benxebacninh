@@ -56,6 +56,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const [tripCountsLoaded, setTripCountsLoaded] = useState(false);
   const [schedulesCache, setSchedulesCache] = useState<Record<string, Schedule[]>>({});
   const [cachedDispatchRecords, setCachedDispatchRecords] = useState<DispatchRecord[] | null>(null);
+  const [scheduleWarning, setScheduleWarning] = useState("");
 
   const { currentShift } = useUIStore();
 
@@ -64,15 +65,16 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const routeAutoFilledRef = useRef(false);
 
 
-  const loadSchedules = useCallback(async (rid: string) => {
+  const loadSchedules = useCallback(async (rid: string, opId?: string) => {
     try {
-      if (schedulesCache[rid]) {
-        setSchedules(schedulesCache[rid]);
+      const cacheKey = opId ? `${rid}_${opId}` : rid;
+      if (schedulesCache[cacheKey]) {
+        setSchedules(schedulesCache[cacheKey]);
         return;
       }
-      const data = await scheduleService.getAll(rid, undefined, true);
+      const data = await scheduleService.getAll(rid, opId, true, 'Đi');
       setSchedules(data);
-      setSchedulesCache(prev => ({ ...prev, [rid]: data }));
+      setSchedulesCache(prev => ({ ...prev, [cacheKey]: data }));
     } catch (error) {
       console.error("Failed to load schedules:", error);
     }
@@ -341,6 +343,18 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
 
   const normalizePlate = (plate: string): string => plate.replace(/[.\-\s]/g, '').toUpperCase();
 
+  const getMinutesFromTime = (isoString: string | undefined): number => {
+    if (!isoString) return 0;
+    const d = new Date(isoString);
+    return d.getHours() * 60 + d.getMinutes();
+  };
+
+  const parseTimeToMinutes = (timeStr: string): number => {
+    if (!timeStr) return 0;
+    const [h, m] = timeStr.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
   const getMatchingBadge = useCallback((): VehicleBadge | undefined => {
     // Use record.vehiclePlateNumber as primary source (read-only, from database)
     const plateNumber = record.vehiclePlateNumber || selectedVehicle?.plateNumber;
@@ -457,9 +471,13 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       errors.push("Số ghế (phải lớn hơn 0)");
       fieldErrors.seatCount = "Số ghế phải lớn hơn 0";
     }
-    
+    if (scheduleWarning) {
+      errors.push("Ngày không hợp lệ theo biểu đồ");
+      fieldErrors.scheduleId = scheduleWarning;
+    }
+
     return { isValid: errors.length === 0, errors, fieldErrors };
-  }, [transportOrderCode, routeId, departureDate, scheduleId, departureTime, seatCount]);
+  }, [transportOrderCode, routeId, departureDate, scheduleId, departureTime, seatCount, scheduleWarning]);
 
   const handleEligible = useCallback(async () => {
     setHasAttemptedSubmit(true);
@@ -595,8 +613,26 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   }, []); // Empty deps - run only once on mount
 
   useEffect(() => {
-    if (routeId) loadSchedules(routeId);
-  }, [routeId, loadSchedules]);
+    if (routeId) loadSchedules(routeId, selectedOperatorId || undefined);
+  }, [routeId, selectedOperatorId, loadSchedules]);
+
+  useEffect(() => {
+    if (!scheduleId || !departureDate) {
+      setScheduleWarning("");
+      return;
+    }
+    let cancelled = false;
+    scheduleService.validateDay(scheduleId, departureDate)
+      .then(result => {
+        if (!cancelled) {
+          setScheduleWarning(result.valid ? "" : (result.message || "Chuyến xe không được khai thác ngày này"));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setScheduleWarning("");
+      });
+    return () => { cancelled = true; };
+  }, [scheduleId, departureDate]);
 
   useEffect(() => {
     calculateTotal();
@@ -622,7 +658,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     }
   }, [selectedVehicle, record.seatCount]);
 
-  // Auto-fill routeId: prefer badge route, fallback to last dispatch
+  // Auto-fill routeId: prefer badge route (active, closest schedule to entryTime), fallback to last dispatch
   useEffect(() => {
     if (routeAutoFilledRef.current) return;
     if (!record.vehiclePlateNumber) return;
@@ -630,10 +666,43 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     // Strategy 1: From vehicle badges (more reliable)
     const badgeRoutes = getBadgeRoutesForVehicle(record.vehiclePlateNumber);
     if (badgeRoutes.length > 0) {
-      routeAutoFilledRef.current = true;
-      const activeRoute = badgeRoutes.find(r => !r.isExpired) || badgeRoutes[0];
-      setRouteId(activeRoute.routeId);
-      return;
+      // Filter active (non-expired) badges first
+      const activeBadgeRoutes = badgeRoutes.filter(r => !r.isExpired);
+      const candidates = activeBadgeRoutes.length > 0 ? activeBadgeRoutes : badgeRoutes;
+
+      if (candidates.length === 1) {
+        routeAutoFilledRef.current = true;
+        setRouteId(candidates[0].routeId);
+        return;
+      }
+
+      // 2+ routes: fetch schedules, pick route with closest departureTime to entryTime
+      let cancelled = false;
+      (async () => {
+        const entryMinutes = getMinutesFromTime(record.entryTime);
+        let bestRouteId = candidates[0].routeId;
+        let bestDiff = Infinity;
+
+        for (const candidate of candidates) {
+          if (cancelled) return;
+          const scheds = await scheduleService.getAll(candidate.routeId, undefined, true, 'Đi');
+          if (cancelled) return;
+          for (const s of scheds) {
+            const schedMinutes = parseTimeToMinutes(s.departureTime);
+            const diff = Math.abs(schedMinutes - entryMinutes);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestRouteId = candidate.routeId;
+            }
+          }
+        }
+
+        if (!cancelled) {
+          routeAutoFilledRef.current = true;
+          setRouteId(bestRouteId);
+        }
+      })();
+      return () => { cancelled = true; };
     }
 
     // Strategy 2: From last dispatch (fallback)
@@ -644,7 +713,55 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
         setRouteId(lastDispatch.routeId);
       }
     }
-  }, [record.vehiclePlateNumber, vehicleBadges, routes, cachedDispatchRecords, getBadgeRoutesForVehicle, getLastDispatchByVehicle]); // Note: routeId not in deps to avoid loop
+  }, [record.vehiclePlateNumber, record.entryTime, vehicleBadges, routes, cachedDispatchRecords, getBadgeRoutesForVehicle, getLastDispatchByVehicle]);
+
+  // Auto-fill scheduleId: pick schedule closest to entryTime
+  useEffect(() => {
+    if (scheduleId || schedules.length === 0 || !record.entryTime) return;
+    if (!routeAutoFilledRef.current) return;
+
+    const entryMinutes = getMinutesFromTime(record.entryTime);
+    let closest = schedules[0];
+    let minDiff = Infinity;
+
+    for (const s of schedules) {
+      const schedMinutes = parseTimeToMinutes(s.departureTime);
+      const diff = Math.abs(schedMinutes - entryMinutes);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = s;
+      }
+    }
+
+    setScheduleId(closest.id);
+  }, [schedules, record.entryTime, scheduleId]);
+
+  // Validation: block permit when badge route has no valid schedule
+  const noValidScheduleWarning = useMemo(() => {
+    if (permitType === 'temporary') return '';
+    if (!record.vehiclePlateNumber) return '';
+
+    const badgeRoutes = getBadgeRoutesForVehicle(record.vehiclePlateNumber);
+    // No badge → don't block (outside badge system)
+    if (badgeRoutes.length === 0) return '';
+
+    const activeBadges = badgeRoutes.filter(r => !r.isExpired);
+    if (activeBadges.length === 0) {
+      return 'Tất cả phù hiệu của xe đã hết hạn';
+    }
+
+    // Route selected and has schedules → OK
+    if (routeId && schedules.length > 0) return '';
+
+    // Route selected but no schedule
+    if (routeId && schedules.length === 0) {
+      const route = routes.find(r => r.id === routeId);
+      const routeName = route?.routeName || routeId;
+      return `Tuyến "${routeName}" không có biểu đồ giờ chiều đi`;
+    }
+
+    return '';
+  }, [permitType, record.vehiclePlateNumber, getBadgeRoutesForVehicle, routeId, schedules, routes]);
 
   // Compute busy vehicle plates from active dispatch records
   const busyVehiclePlates = useMemo(() => {
@@ -689,6 +806,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     showZeroAmountConfirm, setShowZeroAmountConfirm,
     dailyTripCounts,
     validationErrors,
+    scheduleWarning,
+    noValidScheduleWarning,
     // Methods
     submitPermit, handleEligible, handleNotEligibleConfirm,
     handleDocumentDialogSuccess, handleAddServiceSuccess, handleAddDriverSuccess,

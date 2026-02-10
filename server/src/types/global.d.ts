@@ -98,3 +98,15 @@ declare module 'bcryptjs' {
   export function compareSync(data: string, encrypted: string): boolean
 }
 
+declare module 'lunar-calendar' {
+  interface LunarInfo {
+    lunarYear: number
+    lunarMonth: number
+    lunarDay: number
+    isLeap: boolean
+    [key: string]: any
+  }
+  function solarToLunar(year: number, month: number, day: number): LunarInfo
+  export default { solarToLunar }
+}
+

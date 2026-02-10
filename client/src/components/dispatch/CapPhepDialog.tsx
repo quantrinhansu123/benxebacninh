@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { FileText, X, XCircle, CheckCircle, Calendar } from "lucide-react";
+import { FileText, X, XCircle, CheckCircle, Calendar, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { useCapPhepDialog } from "@/hooks/useCapPhepDialog";
 import {
@@ -124,7 +124,7 @@ export function CapPhepDialog({
       <div className="absolute inset-0 bg-gray-50" />
 
       {/* STICKY HEADER */}
-      <div 
+      <div
         className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm"
         onClick={(e) => e.stopPropagation()}
       >
@@ -148,8 +148,8 @@ export function CapPhepDialog({
                   )}
                   {/* Pre-flight status inline */}
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold ${
-                    overallStatus.isValid 
-                      ? 'bg-emerald-100 text-emerald-700' 
+                    overallStatus.isValid
+                      ? 'bg-emerald-100 text-emerald-700'
                       : 'bg-rose-100 text-rose-700'
                   }`}>
                     {overallStatus.isValid ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
@@ -181,8 +181,8 @@ export function CapPhepDialog({
                   </button>
                   <button
                     onClick={hook.handleEligible}
-                    disabled={hook.isLoading}
-                    className="h-10 px-6 rounded-lg bg-emerald-500 text-white font-bold text-sm hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/30"
+                    disabled={hook.isLoading || !!hook.noValidScheduleWarning}
+                    className="h-10 px-6 rounded-lg bg-emerald-500 text-white font-bold text-sm hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle className="h-4 w-4 inline mr-1" />
                     Đủ điều kiện
@@ -192,6 +192,14 @@ export function CapPhepDialog({
             </div>
           </div>
         </div>
+        {hook.noValidScheduleWarning && (
+          <div className="max-w-[1800px] mx-auto px-4 lg:px-6 pb-3">
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <span className="text-sm text-amber-700 font-medium">{hook.noValidScheduleWarning}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MAIN CONTENT - Scrollable */}
@@ -237,6 +245,7 @@ export function CapPhepDialog({
                   routeId={hook.routeId}
                   schedules={hook.schedules}
                   departureTime={hook.departureTime}
+                  scheduleWarning={hook.scheduleWarning}
                 />
                 <DriverSection
                   drivers={hook.drivers}

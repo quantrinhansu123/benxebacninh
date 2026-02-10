@@ -1,13 +1,14 @@
 import api from '@/lib/api'
-import type { Schedule, ScheduleInput } from '@/types'
+import type { Schedule, ScheduleInput, ValidateDayResponse } from '@/types'
 
 export const scheduleService = {
-  getAll: async (routeId?: string, operatorId?: string, isActive?: boolean): Promise<Schedule[]> => {
+  getAll: async (routeId?: string, operatorId?: string, isActive?: boolean, direction?: string): Promise<Schedule[]> => {
     try {
       const params = new URLSearchParams()
       if (routeId) params.append('routeId', routeId)
       if (operatorId) params.append('operatorId', operatorId)
       if (isActive !== undefined) params.append('isActive', String(isActive))
+      if (direction) params.append('direction', direction)
 
       const queryString = params.toString()
       const url = queryString ? `/schedules?${queryString}` : '/schedules'
@@ -37,5 +38,10 @@ export const scheduleService = {
 
   delete: async (id: string): Promise<void> => {
     await api.delete(`/schedules/${id}`)
+  },
+
+  validateDay: async (scheduleId: string, date: string): Promise<ValidateDayResponse> => {
+    const response = await api.post<ValidateDayResponse>('/schedules/validate-day', { scheduleId, date })
+    return response.data
   },
 }
