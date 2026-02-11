@@ -800,6 +800,15 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     setScheduleId(closest.id);
   }, [schedules, record.entryTime, scheduleId]);
 
+  // Autofill departureTime from selected schedule
+  useEffect(() => {
+    if (!scheduleId) return;
+    const selected = schedules.find(s => s.id === scheduleId);
+    if (selected?.departureTime) {
+      setDepartureTime(selected.departureTime);
+    }
+  }, [scheduleId, schedules]);
+
   // Validation: block permit when badge route has no valid schedule
   const noValidScheduleWarning = useMemo(() => {
     if (permitType === 'temporary') return '';
