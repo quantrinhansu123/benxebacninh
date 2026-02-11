@@ -1,8 +1,10 @@
-import { FileText, Hash, MapPin, Clock } from "lucide-react";
+import { useState } from "react";
+import { FileText, Hash, MapPin, Clock, Info } from "lucide-react";
 import { format } from "date-fns";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { DatePicker } from "@/components/DatePicker";
 import { GlassCard, SectionHeader, FormField, StyledInput } from "@/components/shared/styled-components";
+import { RouteDetailDialog } from "../RouteDetailDialog";
 import type { Route } from "@/types";
 
 interface TransportOrderSectionProps {
@@ -50,6 +52,8 @@ export function TransportOrderSection({
   scheduleId,
   validationErrors = {},
 }: TransportOrderSectionProps) {
+  const [routeDetailOpen, setRouteDetailOpen] = useState(false);
+
   return (
     <GlassCard>
       <SectionHeader icon={FileText} title="Lệnh vận chuyển" />
@@ -118,21 +122,34 @@ export function TransportOrderSection({
 
         {/* Route Selection */}
         <FormField label="Tuyến vận chuyển" required error={validationErrors.routeId}>
-          <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">
-              <MapPin className="h-5 w-5" />
+          <div className="relative flex items-center gap-2">
+            <div className="relative flex-1">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 z-10 pointer-events-none">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <Autocomplete
+                value={routeId}
+                onChange={(value) => setRouteId(value)}
+                options={routes.map((r) => ({
+                  value: r.id,
+                  label: `${r.routeName} (${r.routeCode})${r.distanceKm ? ` - ${r.distanceKm} Km` : ""}`,
+                }))}
+                placeholder="Gõ để tìm tuyến..."
+                disabled={readOnly}
+                className={`w-full [&_input]:pl-12 ${validationErrors.routeId ? "[&_input]:border-rose-400" : ""}`}
+              />
             </div>
-            <Autocomplete
-              value={routeId}
-              onChange={(value) => setRouteId(value)}
-              options={routes.map((r) => ({
-                value: r.id,
-                label: `${r.routeName} (${r.routeCode})${r.distanceKm ? ` - ${r.distanceKm} Km` : ""}`,
-              }))}
-              placeholder="Gõ để tìm tuyến..."
-              disabled={readOnly}
-              className={`w-full [&_input]:pl-12 ${validationErrors.routeId ? "[&_input]:border-rose-400" : ""}`}
-            />
+            {routeId && (
+              <button
+                type="button"
+                onClick={() => setRouteDetailOpen(true)}
+                className="shrink-0 p-2 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                title="Xem thông tin tuyến"
+                aria-label="Xem thông tin tuyến"
+              >
+                <Info className="h-5 w-5" />
+              </button>
+            )}
           </div>
         </FormField>
 
@@ -164,6 +181,12 @@ export function TransportOrderSection({
           </FormField>
         </div>
       </div>
+
+      <RouteDetailDialog
+        routeId={routeId}
+        open={routeDetailOpen}
+        onClose={() => setRouteDetailOpen(false)}
+      />
     </GlassCard>
   );
 }
