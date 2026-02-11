@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Truck, AlertTriangle, CheckCircle, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { formatVietnamTime } from "@/utils/timezone";
@@ -6,6 +6,7 @@ import { Select } from "@/components/ui/select";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { GlassCard, SectionHeader, FormField, StyledInput, StyledSelect } from "@/components/shared/styled-components";
 import { operationNoticeService } from "@/services/operation-notice.service";
+import { prefetchPdf } from "@/lib/pdf-cache";
 import { OperationNoticePdfViewer } from "../OperationNoticePdfViewer";
 import type { DispatchRecord, Schedule, Vehicle, Operator, OperationNotice, Route } from "@/types";
 
@@ -55,14 +56,39 @@ export function VehicleInfoSection({
   const [noticePdfOpen, setNoticePdfOpen] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<OperationNotice | null>(null);
   const [noticeLoading, setNoticeLoading] = useState(false);
+  // Cache prefetched notice to avoid re-fetching on click
+  const prefetchedNotice = useRef<{ key: string; notice: OperationNotice } | null>(null);
+
+  /** Prefetch API + PDF blob on hover (fire-and-forget) */
+  const handlePrefetchNotice = (noticeNumber: string) => {
+    const selectedRoute = routes.find(r => r.id === routeId);
+    const routeCode = selectedRoute?.routeCode;
+    if (!routeCode) return;
+    const key = `${routeCode}:${noticeNumber}`;
+    if (prefetchedNotice.current?.key === key) return;
+    operationNoticeService.getByRouteCode(routeCode, noticeNumber).then((notices) => {
+      if (notices.length > 0) {
+        prefetchedNotice.current = { key, notice: notices[0] };
+        if (notices[0].fileUrl) prefetchPdf(notices[0].fileUrl);
+      }
+    }).catch(() => {});
+  };
 
   const handleViewNoticePdf = async (noticeNumber: string) => {
     const selectedRoute = routes.find(r => r.id === routeId);
     const routeCode = selectedRoute?.routeCode;
     if (!routeCode) return;
 
-    // Open panel immediately, fetch in parallel
+    // Open panel immediately
     setNoticePdfOpen(true);
+
+    // Use prefetched data if available
+    const key = `${routeCode}:${noticeNumber}`;
+    if (prefetchedNotice.current?.key === key) {
+      setSelectedNotice(prefetchedNotice.current.notice);
+      return;
+    }
+
     setNoticeLoading(true);
     try {
       const notices = await operationNoticeService.getByRouteCode(routeCode, noticeNumber);
@@ -240,6 +266,7 @@ export function VehicleInfoSection({
                       <button
                         type="button"
                         onClick={() => handleViewNoticePdf(selected.notificationNumber!)}
+                        onMouseEnter={() => handlePrefetchNotice(selected.notificationNumber!)}
                         className="p-0.5 hover:bg-blue-100 rounded transition-colors"
                         title="Xem thông báo khai thác (PDF)"
                         disabled={noticeLoading}

@@ -39,6 +39,8 @@ export default defineConfig({
           'vendor-charts': ['recharts'],
           // Toast
           'vendor-toast': ['react-toastify'],
+          // PDF viewer
+          'vendor-pdf': ['react-pdf', 'pdfjs-dist'],
         },
       },
     },

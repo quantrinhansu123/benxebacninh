@@ -1,6 +1,14 @@
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { X, ExternalLink, Loader2 } from "lucide-react"
+import { Document, Page, pdfjs } from "react-pdf"
+import { fetchPdfBlob } from "@/lib/pdf-cache"
 import type { OperationNotice } from "@/types"
+
+// Configure pdf.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString()
 
 interface OperationNoticePdfViewerProps {
   notice: OperationNotice | null
@@ -8,33 +16,45 @@ interface OperationNoticePdfViewerProps {
   onClose: () => void
 }
 
-/** Wrap URL through Google Docs Viewer to bypass X-Frame-Options restrictions */
-function getViewerUrl(url: string): string {
-  return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`
-}
+const PANEL_WIDTH = 520
+const PAGE_PADDING = 32
 
 export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNoticePdfViewerProps) {
-  const [loading, setLoading] = useState(true)
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
+  const [numPages, setNumPages] = useState(0)
 
-  if (!open) return null
+  const fileUrl = notice?.fileUrl || ""
 
-  const fileUrl = notice?.fileUrl || ''
-  const viewerUrl = fileUrl ? getViewerUrl(fileUrl) : ''
+  // Fetch PDF blob when fileUrl changes
+  useEffect(() => {
+    if (!fileUrl) {
+      setBlobUrl(null)
+      return
+    }
+    setLoading(true)
+    setError(false)
+    fetchPdfBlob(fileUrl)
+      .then(setBlobUrl)
+      .catch(() => setError(true))
+      .finally(() => setLoading(false))
+  }, [fileUrl])
+
+  const onDocumentLoadSuccess = useCallback(({ numPages: n }: { numPages: number }) => {
+    setNumPages(n)
+  }, [])
 
   const handleOpenNewTab = () => {
-    if (fileUrl) {
-      window.open(fileUrl, '_blank', 'noopener,noreferrer')
-    }
+    if (fileUrl) window.open(fileUrl, "_blank", "noopener,noreferrer")
   }
+
+  if (!open) return null
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/40 transition-opacity"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/40 transition-opacity" onClick={onClose} />
 
       {/* Panel */}
       <div className="relative w-[520px] max-w-[90vw] bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
@@ -42,10 +62,10 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
         <div className="flex items-center justify-between p-4 bg-blue-50 border-b border-blue-200">
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-gray-800 truncate">
-              {notice ? `TB: ${notice.noticeNumber}` : 'Dang tai...'}
+              {notice ? `TB: ${notice.noticeNumber}` : "Đang tải..."}
             </h3>
             <div className="flex flex-wrap gap-x-3 mt-1 text-xs text-gray-600">
-              {notice?.issueDate && <span>Ngay BH: {notice.issueDate}</span>}
+              {notice?.issueDate && <span>Ngày BH: {notice.issueDate}</span>}
               {notice?.issuingAuthority && <span>{notice.issuingAuthority}</span>}
             </div>
           </div>
@@ -58,19 +78,19 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
           </button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 relative overflow-hidden">
-          {(!notice || loading) && !error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
+        {/* Body - continuous scroll for all pages */}
+        <div className="flex-1 relative overflow-auto bg-gray-200">
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
               <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
-              <span className="ml-2 text-sm text-gray-500">Dang tai PDF...</span>
+              <span className="ml-2 text-sm text-gray-500">Đang tải PDF...</span>
             </div>
           )}
 
           {error ? (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center">
               <p className="text-sm text-gray-600 mb-4">
-                Khong the hien thi PDF truc tiep. Vui long mo trong tab moi.
+                Không thể hiển thị PDF trực tiếp. Vui lòng mở trong tab mới.
               </p>
               <button
                 type="button"
@@ -78,17 +98,30 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <ExternalLink className="h-4 w-4" />
-                Mo trong tab moi
+                Mở trong tab mới
               </button>
             </div>
-          ) : notice && viewerUrl ? (
-            <iframe
-              src={viewerUrl}
-              className="w-full h-full border-0"
-              title={`Thong bao ${notice.noticeNumber}`}
-              onLoad={() => setLoading(false)}
-              onError={() => { setError(true); setLoading(false) }}
-            />
+          ) : blobUrl ? (
+            <Document
+              file={blobUrl}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={() => setError(true)}
+              loading={null}
+            >
+              {Array.from({ length: numPages }, (_, i) => (
+                <div key={i} className="flex justify-center py-2">
+                  <div className="shadow-md">
+                    <Page
+                      pageNumber={i + 1}
+                      width={PANEL_WIDTH - PAGE_PADDING}
+                      renderTextLayer={false}
+                      renderAnnotationLayer={false}
+                      loading={null}
+                    />
+                  </div>
+                </div>
+              ))}
+            </Document>
           ) : null}
         </div>
 
@@ -100,14 +133,19 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
             className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            Mo tab moi
+            Mở tab mới
           </button>
+
+          {numPages > 0 && (
+            <span className="text-xs text-gray-500">{numPages} trang</span>
+          )}
+
           <button
             type="button"
             onClick={onClose}
             className="px-3 py-1.5 text-xs bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
           >
-            Dong
+            Đóng
           </button>
         </div>
       </div>
