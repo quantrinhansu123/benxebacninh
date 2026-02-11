@@ -313,6 +313,22 @@ export interface InvoiceInput {
   notes?: string
 }
 
+// ==================== Operation Notice Types ====================
+
+export interface OperationNotice {
+  id: string
+  routeCode: string
+  operatorRef?: string
+  noticeNumber: string
+  issueDate?: string
+  effectiveDate?: string
+  filePath?: string
+  fileUrl?: string
+  issuingAuthority?: string
+  status?: string
+  noticeType?: string
+}
+
 // ==================== Report Types ====================
 
 export interface ReportFilter {

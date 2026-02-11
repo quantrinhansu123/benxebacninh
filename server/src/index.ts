@@ -29,6 +29,7 @@ import vehicleBadgeRoutes from './routes/vehicle-badge.routes.js'
 import provinceRoutes from './routes/province.routes.js'
 import chatRoutes from './modules/chat/chat.routes.js'
 import quanlyDataRoutes from './routes/quanly-data.routes.js'
+import operationNoticeRoutes from './routes/operation-notice.routes.js'
 
 const app = express()
 // Use APP_PORT instead of PORT (reserved in Firebase Functions)
@@ -118,6 +119,7 @@ app.use('/api/vehicle-badges', vehicleBadgeRoutes)
 app.use('/api/provinces', provinceRoutes)
 app.use('/api/chat', chatRoutes)
 app.use('/api/quanly-data', quanlyDataRoutes)
+app.use('/api/operation-notices', operationNoticeRoutes)
 
 // Error handling
 app.use(errorHandler)

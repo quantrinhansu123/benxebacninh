@@ -260,6 +260,7 @@ export function CapPhepDialog({
                   scheduleId={hook.scheduleId}
                   setScheduleId={hook.setScheduleId}
                   routeId={hook.routeId}
+                  routes={hook.routes}
                   schedules={hook.schedules}
                   departureTime={hook.departureTime}
                   scheduleWarning={hook.scheduleWarning}

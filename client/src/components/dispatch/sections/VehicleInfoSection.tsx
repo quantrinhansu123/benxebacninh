@@ -1,10 +1,13 @@
-import { Truck, AlertTriangle, CheckCircle } from "lucide-react";
+import { useState } from "react";
+import { Truck, AlertTriangle, CheckCircle, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { formatVietnamTime } from "@/utils/timezone";
 import { Select } from "@/components/ui/select";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { GlassCard, SectionHeader, FormField, StyledInput, StyledSelect } from "@/components/shared/styled-components";
-import type { DispatchRecord, Schedule, Vehicle, Operator } from "@/types";
+import { operationNoticeService } from "@/services/operation-notice.service";
+import { OperationNoticePdfViewer } from "../OperationNoticePdfViewer";
+import type { DispatchRecord, Schedule, Vehicle, Operator, OperationNotice, Route } from "@/types";
 
 interface VehicleInfoSectionProps {
   record: DispatchRecord;
@@ -22,6 +25,7 @@ interface VehicleInfoSectionProps {
   scheduleId: string;
   setScheduleId: (value: string) => void;
   routeId: string;
+  routes: Route[];
   schedules: Schedule[];
   departureTime: string;
   scheduleWarning?: string;
@@ -43,10 +47,34 @@ export function VehicleInfoSection({
   scheduleId,
   setScheduleId,
   routeId,
+  routes,
   schedules,
   departureTime,
   scheduleWarning,
 }: VehicleInfoSectionProps) {
+  const [noticePdfOpen, setNoticePdfOpen] = useState(false);
+  const [selectedNotice, setSelectedNotice] = useState<OperationNotice | null>(null);
+  const [noticeLoading, setNoticeLoading] = useState(false);
+
+  const handleViewNoticePdf = async (noticeNumber: string) => {
+    const selectedRoute = routes.find(r => r.id === routeId);
+    const routeCode = selectedRoute?.routeCode;
+    if (!routeCode) return;
+
+    setNoticeLoading(true);
+    try {
+      const notices = await operationNoticeService.getByRouteCode(routeCode, noticeNumber);
+      if (notices.length > 0) {
+        setSelectedNotice(notices[0]);
+        setNoticePdfOpen(true);
+      }
+    } catch (err) {
+      console.error('Failed to fetch operation notice:', err);
+    } finally {
+      setNoticeLoading(false);
+    }
+  };
+
   return (
     <GlassCard>
       <SectionHeader
@@ -202,9 +230,18 @@ export function VehicleInfoSection({
                     </span>
                   </div>
                   {selected.notificationNumber && (
-                    <div className="text-xs">
+                    <div className="text-xs flex items-center gap-1.5">
                       <span className="font-medium text-gray-700">Số thông báo:</span>{" "}
                       <span className="text-gray-600">{selected.notificationNumber}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleViewNoticePdf(selected.notificationNumber!)}
+                        className="p-0.5 hover:bg-blue-100 rounded transition-colors"
+                        title="Xem thông báo khai thác (PDF)"
+                        disabled={noticeLoading}
+                      >
+                        <FileText className="h-3.5 w-3.5 text-blue-500 hover:text-blue-700" />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -219,6 +256,11 @@ export function VehicleInfoSection({
           </FormField>
         </div>
       </div>
+      <OperationNoticePdfViewer
+        notice={selectedNotice}
+        open={noticePdfOpen}
+        onClose={() => { setNoticePdfOpen(false); setSelectedNotice(null); }}
+      />
     </GlassCard>
   );
 }
