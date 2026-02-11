@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
-import { schedules, routes, operators } from '../db/schema/index.js'
-import { eq, and } from 'drizzle-orm'
+import { schedules, routes, operators, dispatchRecords } from '../db/schema/index.js'
+import { eq, and, gte, lt, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import LunarCalendar from 'lunar-calendar'
 
@@ -403,6 +403,156 @@ export const deleteSchedule = async (req: Request, res: Response): Promise<void>
     res.status(204).send()
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to delete schedule' })
+  }
+}
+
+/**
+ * Check if a schedule is valid for a given day based on frequency, date range, and calendar type.
+ * Extracted from validateScheduleDay for reuse in trip limit calculation.
+ */
+function isScheduleValidForDay(
+  schedule: {
+    frequencyType: string
+    daysOfWeek: number[]
+    daysOfMonth: number[]
+    calendarType: string
+    effectiveFrom: string | null
+    effectiveTo: string | null
+  },
+  date: string // YYYY-MM-DD
+): boolean {
+  const [year, month, day] = date.split('-').map(Number)
+  const checkDate = new Date(year, month - 1, day)
+  checkDate.setHours(0, 0, 0, 0)
+
+  if (schedule.effectiveFrom) {
+    const from = new Date(schedule.effectiveFrom)
+    from.setHours(0, 0, 0, 0)
+    if (checkDate < from) return false
+  }
+
+  if (schedule.effectiveTo) {
+    const to = new Date(schedule.effectiveTo)
+    to.setHours(0, 0, 0, 0)
+    if (checkDate > to) return false
+  }
+
+  if (schedule.frequencyType === 'daily') return true
+
+  if (schedule.frequencyType === 'weekly') {
+    const jsDay = checkDate.getDay()
+    const isoDay = jsDay === 0 ? 7 : jsDay
+    return schedule.daysOfWeek.length === 0 || schedule.daysOfWeek.includes(isoDay)
+  }
+
+  // specific_days
+  if (schedule.daysOfMonth.length === 0) return true
+
+  let dayInMonth = day
+  if (schedule.calendarType === 'lunar') {
+    const lunarInfo = LunarCalendar.solarToLunar(year, month, day)
+    dayInMonth = lunarInfo.lunarDay
+  }
+
+  return schedule.daysOfMonth.includes(dayInMonth)
+}
+
+/**
+ * Calculate trip limit for a vehicle on a route for a given date.
+ * Shared between the API endpoint and issuePermit enforcement.
+ */
+export async function calculateTripLimit(
+  routeId: string,
+  vehiclePlateNumber: string,
+  date: string // YYYY-MM-DD
+): Promise<{ maxTrips: number; currentTrips: number; remaining: number; canIssue: boolean }> {
+  // 1. Query active "Đi" schedules for this route
+  const activeSchedules = await db!
+    .select({
+      frequencyType: schedules.frequencyType,
+      daysOfWeek: schedules.daysOfWeek,
+      daysOfMonth: schedules.daysOfMonth,
+      calendarType: schedules.calendarType,
+      effectiveFrom: schedules.effectiveFrom,
+      effectiveTo: schedules.effectiveTo,
+    })
+    .from(schedules)
+    .where(
+      and(
+        eq(schedules.routeId, routeId),
+        eq(schedules.direction, 'Đi'),
+        eq(schedules.isActive, true)
+      )
+    )
+
+  // 2. Filter schedules valid for the given date
+  const validSchedules = activeSchedules.filter((s) =>
+    isScheduleValidForDay(
+      {
+        frequencyType: s.frequencyType,
+        daysOfWeek: (s.daysOfWeek as number[]) || [],
+        daysOfMonth: (s.daysOfMonth as number[]) || [],
+        calendarType: s.calendarType || 'solar',
+        effectiveFrom: s.effectiveFrom,
+        effectiveTo: s.effectiveTo,
+      },
+      date
+    )
+  )
+  const maxTrips = validSchedules.length
+
+  // 3. Count approved dispatches for vehicle+route+date (Vietnam timezone UTC+7)
+  const dayStart = new Date(`${date}T00:00:00+07:00`)
+  // Use next-day midnight with lt to cover full day (avoids sub-second gap with lte T23:59:59)
+  const [y, m, d] = date.split('-').map(Number)
+  const nextDay = new Date(Date.UTC(y, m - 1, d + 1) - 7 * 60 * 60 * 1000) // next day 00:00 in UTC+7
+
+  const approvedCount = await db!
+    .select({ count: sql<number>`count(*)` })
+    .from(dispatchRecords)
+    .where(
+      and(
+        eq(dispatchRecords.routeId, routeId),
+        eq(dispatchRecords.vehiclePlateNumber, vehiclePlateNumber),
+        eq(dispatchRecords.permitStatus, 'approved'),
+        ne(dispatchRecords.status, 'cancelled'),
+        gte(dispatchRecords.plannedDepartureTime, dayStart),
+        lt(dispatchRecords.plannedDepartureTime, nextDay)
+      )
+    )
+
+  const currentTrips = Number(approvedCount[0]?.count || 0)
+  const remaining = Math.max(0, maxTrips - currentTrips)
+
+  // maxTrips===0 means no valid schedules for this date → block
+  return { maxTrips, currentTrips, remaining, canIssue: maxTrips > 0 && remaining > 0 }
+}
+
+/**
+ * API handler: GET /schedules/trip-limit
+ */
+export const checkTripLimit = async (req: Request, res: Response) => {
+  try {
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection not available' })
+    }
+
+    const { routeId, vehiclePlateNumber, date } = req.query
+
+    if (!routeId || typeof routeId !== 'string') {
+      return res.status(400).json({ error: 'routeId is required' })
+    }
+    if (!vehiclePlateNumber || typeof vehiclePlateNumber !== 'string') {
+      return res.status(400).json({ error: 'vehiclePlateNumber is required' })
+    }
+    if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'date is required (YYYY-MM-DD)' })
+    }
+
+    const result = await calculateTripLimit(routeId, vehiclePlateNumber, date)
+    return res.json(result)
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to check trip limit' })
   }
 }
 

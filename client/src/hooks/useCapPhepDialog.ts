@@ -57,6 +57,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const schedulesCacheRef = useRef<Record<string, Schedule[]>>({});
   const [cachedDispatchRecords, setCachedDispatchRecords] = useState<DispatchRecord[] | null>(null);
   const [scheduleWarning, setScheduleWarning] = useState("");
+  const [tripLimitWarning, setTripLimitWarning] = useState("");
+  const [tripLimitData, setTripLimitData] = useState<{ maxTrips: number; currentTrips: number } | null>(null);
 
   const { currentShift } = useUIStore();
 
@@ -441,7 +443,20 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       console.error("Failed to issue permit:", error);
       const axiosError = error as { response?: { data?: { code?: string; error?: string } } };
       const errorData = axiosError.response?.data;
-      if (errorData?.code === '23505' || errorData?.error?.includes('đã tồn tại') || errorData?.error?.includes('duplicate key')) {
+      if (errorData?.code === 'TRIP_LIMIT_EXCEEDED') {
+        toast.error(errorData.error || "Đã đạt giới hạn chuyến trong ngày");
+        // Refresh trip limit data
+        if (routeId && departureDate && record.vehiclePlateNumber) {
+          scheduleService.checkTripLimit(routeId, record.vehiclePlateNumber, departureDate)
+            .then(result => {
+              setTripLimitData({ maxTrips: result.maxTrips, currentTrips: result.currentTrips });
+              if (!result.canIssue) {
+                setTripLimitWarning(`Xe đã đạt giới hạn ${result.currentTrips}/${result.maxTrips} chuyến trong ngày.`);
+              }
+            })
+            .catch(() => {});
+        }
+      } else if (errorData?.code === '23505' || errorData?.error?.includes('đã tồn tại') || errorData?.error?.includes('duplicate key')) {
         toast.error(`Mã lệnh vận chuyển "${transportOrderCode}" đã tồn tại. Vui lòng chọn mã khác.`);
       } else {
         toast.error(errorData?.error || "Không thể cấp phép. Vui lòng thử lại sau.");
@@ -482,9 +497,13 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       errors.push("Ngày không hợp lệ theo biểu đồ");
       fieldErrors.scheduleId = scheduleWarning;
     }
+    if (tripLimitWarning) {
+      errors.push("Đã đạt giới hạn chuyến trong ngày");
+      fieldErrors.tripLimit = tripLimitWarning;
+    }
 
     return { isValid: errors.length === 0, errors, fieldErrors };
-  }, [transportOrderCode, routeId, departureDate, scheduleId, departureTime, seatCount, scheduleWarning]);
+  }, [transportOrderCode, routeId, departureDate, scheduleId, departureTime, seatCount, scheduleWarning, tripLimitWarning]);
 
   const handleEligible = useCallback(async () => {
     setHasAttemptedSubmit(true);
@@ -640,6 +659,36 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       });
     return () => { cancelled = true; };
   }, [scheduleId, departureDate]);
+
+  // Trip limit check: when route + date changes
+  useEffect(() => {
+    if (!routeId || !departureDate || !record.vehiclePlateNumber) {
+      setTripLimitWarning("");
+      setTripLimitData(null);
+      return;
+    }
+
+    let cancelled = false;
+    scheduleService.checkTripLimit(routeId, record.vehiclePlateNumber, departureDate)
+      .then(result => {
+        if (cancelled) return;
+        setTripLimitData({ maxTrips: result.maxTrips, currentTrips: result.currentTrips });
+        if (!result.canIssue) {
+          setTripLimitWarning(
+            `Xe đã đạt giới hạn ${result.currentTrips}/${result.maxTrips} chuyến trong ngày. Không thể cấp thêm phép.`
+          );
+        } else {
+          setTripLimitWarning("");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTripLimitWarning("");
+          setTripLimitData(null);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [routeId, departureDate, record.vehiclePlateNumber]);
 
   useEffect(() => {
     calculateTotal();
@@ -823,6 +872,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     validationErrors,
     scheduleWarning,
     noValidScheduleWarning,
+    tripLimitWarning,
+    tripLimitData,
     // Methods
     submitPermit, handleEligible, handleNotEligibleConfirm,
     handleDocumentDialogSuccess, handleAddServiceSuccess, handleAddDriverSuccess,

@@ -147,6 +147,13 @@ export interface ValidateDayResponse {
   message?: string
 }
 
+export interface TripLimitResponse {
+  maxTrips: number
+  currentTrips: number
+  remaining: number
+  canIssue: boolean
+}
+
 // ==================== Violation Types ====================
 
 export interface ViolationType {

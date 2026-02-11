@@ -181,7 +181,7 @@ export function CapPhepDialog({
                   </button>
                   <button
                     onClick={hook.handleEligible}
-                    disabled={hook.isLoading || !!hook.noValidScheduleWarning}
+                    disabled={hook.isLoading || !!hook.noValidScheduleWarning || !!hook.tripLimitWarning}
                     className="h-10 px-6 rounded-lg bg-emerald-500 text-white font-bold text-sm hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <CheckCircle className="h-4 w-4 inline mr-1" />
@@ -197,6 +197,23 @@ export function CapPhepDialog({
             <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
               <span className="text-sm text-amber-700 font-medium">{hook.noValidScheduleWarning}</span>
+            </div>
+          </div>
+        )}
+        {hook.tripLimitWarning && (
+          <div className="max-w-[1800px] mx-auto px-4 lg:px-6 pb-3">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+              <span className="text-sm text-red-700 font-medium">{hook.tripLimitWarning}</span>
+            </div>
+          </div>
+        )}
+        {hook.tripLimitData && !hook.tripLimitWarning && (
+          <div className="max-w-[1800px] mx-auto px-4 lg:px-6 pb-3">
+            <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+              <span className="text-xs text-blue-700">
+                Chuyến đã cấp: {hook.tripLimitData.currentTrips}/{hook.tripLimitData.maxTrips}
+              </span>
             </div>
           </div>
         )}

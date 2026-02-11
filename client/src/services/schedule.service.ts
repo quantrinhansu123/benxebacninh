@@ -1,5 +1,5 @@
 import api from '@/lib/api'
-import type { Schedule, ScheduleInput, ValidateDayResponse } from '@/types'
+import type { Schedule, ScheduleInput, ValidateDayResponse, TripLimitResponse } from '@/types'
 
 export const scheduleService = {
   getAll: async (routeId?: string, operatorId?: string, isActive?: boolean, direction?: string): Promise<Schedule[]> => {
@@ -42,6 +42,12 @@ export const scheduleService = {
 
   validateDay: async (scheduleId: string, date: string): Promise<ValidateDayResponse> => {
     const response = await api.post<ValidateDayResponse>('/schedules/validate-day', { scheduleId, date })
+    return response.data
+  },
+
+  checkTripLimit: async (routeId: string, vehiclePlateNumber: string, date: string): Promise<TripLimitResponse> => {
+    const params = new URLSearchParams({ routeId, vehiclePlateNumber, date })
+    const response = await api.get<TripLimitResponse>(`/schedules/trip-limit?${params}`)
     return response.data
   },
 }
