@@ -61,15 +61,19 @@ export function VehicleInfoSection({
     const routeCode = selectedRoute?.routeCode;
     if (!routeCode) return;
 
+    // Open panel immediately, fetch in parallel
+    setNoticePdfOpen(true);
     setNoticeLoading(true);
     try {
       const notices = await operationNoticeService.getByRouteCode(routeCode, noticeNumber);
       if (notices.length > 0) {
         setSelectedNotice(notices[0]);
-        setNoticePdfOpen(true);
+      } else {
+        setNoticePdfOpen(false);
       }
     } catch (err) {
       console.error('Failed to fetch operation notice:', err);
+      setNoticePdfOpen(false);
     } finally {
       setNoticeLoading(false);
     }

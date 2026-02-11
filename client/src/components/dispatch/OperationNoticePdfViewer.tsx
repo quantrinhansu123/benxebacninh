@@ -17,10 +17,10 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
-  if (!open || !notice) return null
+  if (!open) return null
 
-  const fileUrl = notice.fileUrl || ''
-  const viewerUrl = getViewerUrl(fileUrl)
+  const fileUrl = notice?.fileUrl || ''
+  const viewerUrl = fileUrl ? getViewerUrl(fileUrl) : ''
 
   const handleOpenNewTab = () => {
     if (fileUrl) {
@@ -42,11 +42,11 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
         <div className="flex items-center justify-between p-4 bg-blue-50 border-b border-blue-200">
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold text-gray-800 truncate">
-              TB: {notice.noticeNumber}
+              {notice ? `TB: ${notice.noticeNumber}` : 'Dang tai...'}
             </h3>
             <div className="flex flex-wrap gap-x-3 mt-1 text-xs text-gray-600">
-              {notice.issueDate && <span>Ngay BH: {notice.issueDate}</span>}
-              {notice.issuingAuthority && <span>{notice.issuingAuthority}</span>}
+              {notice?.issueDate && <span>Ngay BH: {notice.issueDate}</span>}
+              {notice?.issuingAuthority && <span>{notice.issuingAuthority}</span>}
             </div>
           </div>
           <button
@@ -60,7 +60,7 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
 
         {/* Body */}
         <div className="flex-1 relative overflow-hidden">
-          {loading && !error && (
+          {(!notice || loading) && !error && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50">
               <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
               <span className="ml-2 text-sm text-gray-500">Dang tai PDF...</span>
@@ -81,7 +81,7 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
                 Mo trong tab moi
               </button>
             </div>
-          ) : (
+          ) : notice && viewerUrl ? (
             <iframe
               src={viewerUrl}
               className="w-full h-full border-0"
@@ -89,7 +89,7 @@ export function OperationNoticePdfViewer({ notice, open, onClose }: OperationNot
               onLoad={() => setLoading(false)}
               onError={() => { setError(true); setLoading(false) }}
             />
-          )}
+          ) : null}
         </div>
 
         {/* Footer */}
