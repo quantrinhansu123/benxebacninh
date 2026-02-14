@@ -271,7 +271,7 @@ export function CapPhepDialogRedesign({
                       {/* Đơn vị vận tải */}
                       <div>
                         <label className="text-sm font-medium text-slate-500 mb-1.5 block">Đơn vị VT</label>
-                        <div className="h-11 px-4 flex items-center bg-white rounded-lg border border-slate-200 text-base text-slate-700 truncate" title={hook.operatorNameFromVehicle || ""}>
+                        <div className="min-h-11 py-2 px-4 flex items-center bg-white rounded-lg border border-slate-200 text-base text-slate-700 break-words" title={hook.operatorNameFromVehicle || ""}>
                           {hook.operatorNameFromVehicle || "---"}
                         </div>
                       </div>

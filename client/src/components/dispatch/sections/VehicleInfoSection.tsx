@@ -71,7 +71,7 @@ export function VehicleInfoSection({
         prefetchedNotice.current = { key, notice: notices[0] };
         if (notices[0].fileUrl) prefetchPdf(notices[0].fileUrl);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   };
 
   const handleViewNoticePdf = async (noticeNumber: string) => {
@@ -176,18 +176,14 @@ export function VehicleInfoSection({
             {selectedOperatorId ? (() => {
               const op = operators.find((o) => o.id === selectedOperatorId);
               return (
-                <StyledInput
-                  value={op ? `${op.name}${op.code ? ` (${op.code})` : ''}` : operatorNameFromVehicle || selectedOperatorId}
-                  readOnly
-                  className="bg-gray-100"
-                />
+                <div className="w-full min-h-9 px-3 py-2 rounded-lg bg-gray-100 border border-gray-300 text-sm text-gray-900 break-words">
+                  {op ? `${op.name}${op.code ? ` (${op.code})` : ''}` : operatorNameFromVehicle || selectedOperatorId}
+                </div>
               );
             })() : operatorNameFromVehicle ? (
-              <StyledInput
-                value={operatorNameFromVehicle}
-                readOnly
-                className="bg-gray-100"
-              />
+              <div className="w-full min-h-9 px-3 py-2 rounded-lg bg-gray-100 border border-gray-300 text-sm text-gray-900 break-words">
+                {operatorNameFromVehicle}
+              </div>
             ) : (
               <StyledSelect
                 value=""
@@ -243,12 +239,12 @@ export function VehicleInfoSection({
                       {selected.frequencyType === 'daily'
                         ? "Hàng ngày"
                         : selected.frequencyType === 'weekly'
-                        ? (selected.daysOfWeek?.length
+                          ? (selected.daysOfWeek?.length
                             ? selected.daysOfWeek.map((d: number) =>
-                                ['', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][d] || `Ngày ${d}`
-                              ).join(', ')
+                              ['', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][d] || `Ngày ${d}`
+                            ).join(', ')
                             : "Hàng ngày")
-                        : (selected.daysOfMonth?.length
+                          : (selected.daysOfMonth?.length
                             ? `Ngày ${selected.daysOfMonth.join(", ")}`
                             : "Hàng ngày")}
                     </span>
