@@ -1,9 +1,11 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { format, differenceInDays } from "date-fns"
 import { AlertTriangle, Edit, ChevronLeft, ChevronRight, History } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -31,11 +33,24 @@ export function DocumentWarningsTable({
   onViewHistory
 }: DocumentWarningsTableProps) {
   const [currentPage, setCurrentPage] = useState(1)
+  const [showOnlyBusTcd, setShowOnlyBusTcd] = useState(true)
 
-  const totalPages = Math.ceil(warnings.length / ITEMS_PER_PAGE)
+  const ALLOWED_BADGE_TYPES = ["Buýt", "Tuyến cố định"]
+
+  const filteredWarnings = useMemo(() => {
+    if (!showOnlyBusTcd) return warnings
+    return warnings.filter((w) => {
+      // Keep non-badge warnings (vehicle registration/insurance, driver license)
+      if (w.document !== "Phù hiệu") return true
+      // Filter badge warnings by type
+      return w.badgeType && ALLOWED_BADGE_TYPES.includes(w.badgeType)
+    })
+  }, [warnings, showOnlyBusTcd])
+
+  const totalPages = Math.ceil(filteredWarnings.length / ITEMS_PER_PAGE)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
   const endIndex = startIndex + ITEMS_PER_PAGE
-  const currentWarnings = warnings.slice(startIndex, endIndex)
+  const currentWarnings = filteredWarnings.slice(startIndex, endIndex)
 
   const getDaysRemaining = (expiryDate: string | Date) => {
     const today = new Date()
@@ -80,8 +95,23 @@ export function DocumentWarningsTable({
               Cảnh báo giấy tờ sắp hết hạn
             </CardTitle>
           </div>
-          <div className="text-sm text-stone-500 font-medium">
-            {warnings.length > 0 && `${warnings.length} cảnh báo`}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                id="badge-type-filter"
+                checked={showOnlyBusTcd}
+                onCheckedChange={(checked) => {
+                  setShowOnlyBusTcd(checked)
+                  setCurrentPage(1)
+                }}
+              />
+              <Label htmlFor="badge-type-filter" className="text-sm text-stone-500 whitespace-nowrap cursor-pointer">
+                Chỉ Buýt/TCĐ
+              </Label>
+            </div>
+            <div className="text-sm text-stone-500 font-medium">
+              {filteredWarnings.length > 0 && `${filteredWarnings.length} cảnh báo`}
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -175,7 +205,7 @@ export function DocumentWarningsTable({
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4 pt-4 border-t border-stone-100">
                 <div className="text-sm text-stone-500">
-                  Hiển thị {startIndex + 1}-{Math.min(endIndex, warnings.length)} của {warnings.length} cảnh báo
+                  Hiển thị {startIndex + 1}-{Math.min(endIndex, filteredWarnings.length)} của {filteredWarnings.length} cảnh báo
                 </div>
                 <div className="flex items-center gap-2">
                   <Button

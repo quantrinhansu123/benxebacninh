@@ -91,6 +91,7 @@ interface Warning {
   name?: string;
   document: string;
   expiryDate: string;
+  badgeType?: string;
 }
 
 interface WeeklyStat {
@@ -122,7 +123,7 @@ interface RawData {
   vehicles: Record<string, Vehicle>;
   routes: Record<string, Route>;
   vehicleBadges: VehicleBadge[];
-  vehicleExpiryDocs: Array<{ vehicleId: string; plateNumber: string; documentType: string; expiryDate: string }>;
+  vehicleExpiryDocs: Array<{ vehicleId: string; plateNumber: string; documentType: string; expiryDate: string; badgeType?: string }>;
   drivers: Driver[];
   todayStr: string;
 }
@@ -177,6 +178,7 @@ export class DashboardService {
         vehicleId: vehicleBadges.vehicleId,
         plateNumber: vehicleBadges.plateNumber,
         expiryDate: vehicleBadges.expiryDate,
+        badgeType: vehicleBadges.badgeType,
       }).from(vehicleBadges).where(
         and(isNotNull(vehicleBadges.expiryDate), lte(vehicleBadges.expiryDate, thirtyDaysLaterStr))
       ),
@@ -198,7 +200,7 @@ export class DashboardService {
     routesData.forEach((r) => { routesMap[r.id] = r; });
 
     // Flatten vehicle expiry documents
-    const vehicleExpiryDocs: Array<{ vehicleId: string; plateNumber: string; documentType: string; expiryDate: string }> = [];
+    const vehicleExpiryDocs: Array<{ vehicleId: string; plateNumber: string; documentType: string; expiryDate: string; badgeType?: string }> = [];
 
     for (const vehicle of vehiclesWithExpiryData) {
       if (vehicle.roadWorthinessExpiry) {
@@ -233,6 +235,7 @@ export class DashboardService {
             plateNumber,
             documentType: 'emblem',
             expiryDate: badge.expiryDate,
+            badgeType: badge.badgeType || undefined,
           });
         }
       }
@@ -417,6 +420,7 @@ export class DashboardService {
           plateNumber: doc.plateNumber || '',
           document: docTypeMap[doc.documentType] || doc.documentType,
           expiryDate,
+          badgeType: doc.badgeType,
         });
       }
     }

@@ -29,6 +29,7 @@ export interface Warning {
   expiryDate: string
   vehicleId?: string
   driverId?: string
+  badgeType?: string
 }
 
 export interface WeeklyStat {
