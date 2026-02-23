@@ -75,6 +75,22 @@ routes ←--→ dispatch_records (routeId FK)
 - **CRITICAL:** Always preserve backend data fields when mapping in frontend (don't overwrite with empty defaults)
 - Use normalized lookups (`.trim().toUpperCase()`) for string matching (route names, etc.)
 
+### Data Origin Notes (Google Sheet → Firebase → Supabase)
+
+**Google Sheet source:** `16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY`
+
+| gid | Sheet name | Target table |
+|-----|-----------|--------------|
+| `1560762265` | PHUHIEUXE | `vehicle_badges` |
+| `40001005` | DANHMUCXE | `vehicles` (plate mapping) |
+| `230690868` | (Schedules) | `schedules` |
+| `1033980793` | (Operation notices) | `operation_notices` |
+
+**`issuing_authority` field origin:**
+- **`routes` table**: Extracted from `original_info` text in sheet "Danh mục tuyến cố định". The decision number column (e.g. `1752/SGTVT-QLVT PT&NL`) was resolved client-side (Firebase app) to full authority name (e.g. `Sở Giao thông Vận tải Bắc Giang`). Data already imported via `datasheet_routes.json`.
+- **`vehicle_badges` table**: Sheet PHUHIEUXE has `Ref_DonViCapPhuHieu` (reference ID only, not name). Stored in `metadata.issuing_authority_ref` JSONB, not a dedicated column.
+- **`vehicle_documents` table**: Manually entered in app (e.g. "Cục Đăng kiểm Việt Nam").
+
 ## Documentation Management
 
 We keep all important docs in `./docs` folder and keep updating them, structure like below:
