@@ -64,6 +64,23 @@ function isToday(dateTimeStr: string | undefined, todayStr: string): boolean {
   return dateStr === todayStr;
 }
 
+function shouldUseRouteCodeOld(route?: Partial<Route>): boolean {
+  if (!route) return false;
+  const oldCode = (route.routeCodeOld || '').trim();
+  if (!oldCode) return false;
+  const routeType = (route.routeType || '').trim().toLowerCase();
+  const routeCode = (route.routeCode || '').trim().toUpperCase();
+  return routeType === 'bus' || routeCode.startsWith('BUS-');
+}
+
+function getDisplayRouteCode(route?: Partial<Route>): string {
+  if (!route) return '';
+  if (shouldUseRouteCodeOld(route)) {
+    return (route.routeCodeOld || '').trim();
+  }
+  return (route.routeCode || route.departureStation || '').trim();
+}
+
 interface DashboardStats {
   totalVehiclesToday: number;
   vehiclesInStation: number;
@@ -381,7 +398,7 @@ export class DashboardService {
         return {
           id: record.id,
           vehiclePlateNumber: vehicle?.plateNumber || record.vehiclePlateNumber || '',
-          route: route?.routeCode || route?.departureStation || '',
+          route: getDisplayRouteCode(route),
           entryTime: record.entryTime ? record.entryTime.toISOString() : '',
           status: record.status || '',
         };
@@ -538,7 +555,14 @@ export class DashboardService {
     // Get route breakdown with LEFT JOIN
     const result = await db.select({
       routeId: sql<string>`COALESCE(${dispatchRecords.routeId}::text, 'unknown')`,
-      routeName: sql<string>`COALESCE(${routes.routeCode}, ${routes.departureStation}, 'Khác')`,
+      routeName: sql<string>`
+        CASE
+          WHEN (LOWER(COALESCE(${routes.routeType}, '')) = 'bus' OR COALESCE(${routes.routeCode}, '') ILIKE 'BUS-%')
+            AND COALESCE(${routes.routeCodeOld}, '') <> ''
+          THEN ${routes.routeCodeOld}
+          ELSE COALESCE(${routes.routeCode}, ${routes.departureStation}, 'Khác')
+        END
+      `,
       count: sql<number>`COUNT(*)::int`,
     })
     .from(dispatchRecords)
@@ -547,7 +571,7 @@ export class DashboardService {
       gte(dispatchRecords.entryTime, todayStart),
       lte(dispatchRecords.entryTime, todayEnd)
     ))
-    .groupBy(dispatchRecords.routeId, routes.routeCode, routes.departureStation)
+    .groupBy(dispatchRecords.routeId, routes.routeType, routes.routeCodeOld, routes.routeCode, routes.departureStation)
     .orderBy(sql`3 DESC`)
     .limit(6);
 

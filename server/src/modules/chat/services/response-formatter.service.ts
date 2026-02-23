@@ -191,7 +191,7 @@ export class ResponseFormatterService {
 
     if (routes.length === 1) {
       const r = routes[0]
-      const routeCode = r.route_code || r.routeCode || r.MaSoTuyen || 'N/A'
+      const routeCode = this.resolveDisplayRouteCode(r, 'N/A')
       const routeName = r.route_name || r.routeName || ''
       const departure = r.departure_station || r.BenDi || 'N/A'
       const arrival = r.arrival_station || r.BenDen || 'N/A'
@@ -210,7 +210,7 @@ export class ResponseFormatterService {
 
     let response = `🛣️ **Tìm thấy ${routes.length} tuyến:**\n\n`
     routes.slice(0, 5).forEach((r, index) => {
-      const routeCode = r.route_code || r.routeCode || r.MaSoTuyen || ''
+      const routeCode = this.resolveDisplayRouteCode(r, '')
       const departure = r.departure_station || r.BenDi || ''
       const arrival = r.arrival_station || r.BenDen || ''
       response += `${index + 1}. ${routeCode ? `[${routeCode}] ` : ''}${departure} - ${arrival}\n`
@@ -221,6 +221,17 @@ export class ResponseFormatterService {
     }
 
     return response
+  }
+
+  private resolveDisplayRouteCode(route: any, fallback: string): string {
+    const routeCode = String(route.route_code || route.routeCode || route.MaSoTuyen || '').trim()
+    const routeCodeOld = String(route.route_code_old || route.routeCodeOld || '').trim()
+    const routeType = String(route.route_type || route.routeType || '').trim().toLowerCase()
+    const shouldUseOld = !!routeCodeOld && (routeType === 'bus' || routeCode.toUpperCase().startsWith('BUS-'))
+    if (shouldUseOld) return routeCodeOld
+    if (routeCode) return routeCode
+    if (routeCodeOld) return routeCodeOld
+    return fallback
   }
 
   private formatSchedules(schedules: any[]): string {

@@ -5,6 +5,31 @@ import { eq, and, gte, lt, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import LunarCalendar from 'lunar-calendar'
 
+const shouldUseRouteCodeOld = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): boolean => {
+  const oldCode = (routeCodeOld || '').trim()
+  if (!oldCode) return false
+  const type = (routeType || '').trim().toLowerCase()
+  const code = (routeCode || '').trim().toUpperCase()
+  return type === 'bus' || code.startsWith('BUS-')
+}
+
+const getDisplayRouteCode = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): string => {
+  if (shouldUseRouteCodeOld(routeCode, routeCodeOld, routeType)) {
+    return (routeCodeOld || '').trim()
+  }
+  return (routeCode || '').trim()
+}
+
+const mapRoutePayload = (route?: { id?: string; routeCode?: string | null; routeCodeOld?: string | null; routeType?: string | null } | null) => {
+  if (!route?.id) return undefined
+  const displayCode = getDisplayRouteCode(route.routeCode, route.routeCodeOld, route.routeType)
+  return {
+    id: route.id,
+    routeName: displayCode,
+    routeCode: displayCode,
+  }
+}
+
 const scheduleSchema = z.object({
   scheduleCode: z.string().optional(), // Optional - will be auto-generated if not provided
   routeId: z.string().uuid('Invalid route ID'),
@@ -68,6 +93,8 @@ export const getAllSchedules = async (req: Request, res: Response) => {
           id: routes.id,
           routeName: routes.routeCode,
           routeCode: routes.routeCode,
+          routeCodeOld: routes.routeCodeOld,
+          routeType: routes.routeType,
         },
         operator: {
           id: operators.id,
@@ -85,7 +112,7 @@ export const getAllSchedules = async (req: Request, res: Response) => {
       id: item.id,
       scheduleCode: item.scheduleCode,
       routeId: item.routeId,
-      route: item.route?.id ? item.route : undefined,
+      route: mapRoutePayload(item.route),
       operatorId: item.operatorId,
       operator: item.operator?.id ? item.operator : undefined,
       departureTime: item.departureTime,
@@ -143,6 +170,8 @@ export const getScheduleById = async (req: Request, res: Response) => {
           id: routes.id,
           routeName: routes.routeCode,
           routeCode: routes.routeCode,
+          routeCodeOld: routes.routeCodeOld,
+          routeType: routes.routeType,
         },
         operator: {
           id: operators.id,
@@ -165,7 +194,7 @@ export const getScheduleById = async (req: Request, res: Response) => {
       id: item.id,
       scheduleCode: item.scheduleCode,
       routeId: item.routeId,
-      route: item.route?.id ? item.route : undefined,
+      route: mapRoutePayload(item.route),
       operatorId: item.operatorId,
       operator: item.operator?.id ? item.operator : undefined,
       departureTime: item.departureTime,
@@ -240,6 +269,8 @@ export const createSchedule = async (req: Request, res: Response) => {
           id: routes.id,
           routeName: routes.routeCode,
           routeCode: routes.routeCode,
+          routeCodeOld: routes.routeCodeOld,
+          routeType: routes.routeType,
         },
         operator: {
           id: operators.id,
@@ -258,7 +289,7 @@ export const createSchedule = async (req: Request, res: Response) => {
       id: item.id,
       scheduleCode: item.scheduleCode,
       routeId: item.routeId,
-      route: item.route?.id ? item.route : undefined,
+      route: mapRoutePayload(item.route),
       operatorId: item.operatorId,
       operator: item.operator?.id ? item.operator : undefined,
       departureTime: item.departureTime,
@@ -344,6 +375,8 @@ export const updateSchedule = async (req: Request, res: Response) => {
           id: routes.id,
           routeName: routes.routeCode,
           routeCode: routes.routeCode,
+          routeCodeOld: routes.routeCodeOld,
+          routeType: routes.routeType,
         },
         operator: {
           id: operators.id,
@@ -362,7 +395,7 @@ export const updateSchedule = async (req: Request, res: Response) => {
       id: item.id,
       scheduleCode: item.scheduleCode,
       routeId: item.routeId,
-      route: item.route?.id ? item.route : undefined,
+      route: mapRoutePayload(item.route),
       operatorId: item.operatorId,
       operator: item.operator?.id ? item.operator : undefined,
       departureTime: item.departureTime,

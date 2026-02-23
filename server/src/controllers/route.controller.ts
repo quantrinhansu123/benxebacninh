@@ -8,6 +8,60 @@ import { z } from 'zod'
 let legacyRoutesCache: { data: any[]; timestamp: number } | null = null
 const LEGACY_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
+const shouldUseRouteCodeOld = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): boolean => {
+  const oldCode = (routeCodeOld || '').trim()
+  if (!oldCode) return false
+  const type = (routeType || '').trim().toLowerCase()
+  const code = (routeCode || '').trim().toUpperCase()
+  return type === 'bus' || code.startsWith('BUS-')
+}
+
+const getDisplayRouteCode = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): string => {
+  if (shouldUseRouteCodeOld(routeCode, routeCodeOld, routeType)) {
+    return (routeCodeOld || '').trim()
+  }
+  return (routeCode || '').trim()
+}
+
+const normalizeBusRouteCode = (routeCode: string, routeCodeOld?: string | null): { routeCode: string; routeCodeOld: string | null } => {
+  const rawCode = (routeCode || '').trim()
+  const rawCodeOld = (routeCodeOld || '').trim()
+  const withoutPrefix = rawCode.replace(/^BUS-/i, '').trim()
+  const oldWithoutPrefix = rawCodeOld.replace(/^BUS-/i, '').trim()
+  const normalizedOld = oldWithoutPrefix || withoutPrefix || null
+  const normalizedCode = normalizedOld ? `BUS-${normalizedOld}` : `BUS-${withoutPrefix || rawCode}`
+  return {
+    routeCode: normalizedCode,
+    routeCodeOld: normalizedOld,
+  }
+}
+
+const formatRouteResponse = (route: any) => ({
+  id: route.id,
+  routeCode: getDisplayRouteCode(route.routeCode, route.routeCodeOld, route.routeType),
+  routeCodeOld: route.routeCodeOld || null,
+  departureProvince: route.departureProvince || null,
+  departureStation: route.departureStation || null,
+  departureStationRef: route.departureStationRef || null,
+  arrivalProvince: route.arrivalProvince || null,
+  arrivalStation: route.arrivalStation || null,
+  arrivalStationRef: route.arrivalStationRef || null,
+  distanceKm: route.distanceKm || null,
+  itinerary: route.itinerary || null,
+  routeType: route.routeType || null,
+  totalTripsPerMonth: route.totalTripsPerMonth || null,
+  tripsOperated: route.tripsOperated || null,
+  remainingCapacity: route.remainingCapacity || null,
+  minIntervalMinutes: route.minIntervalMinutes || null,
+  decisionNumber: route.decisionNumber || null,
+  decisionDate: route.decisionDate || null,
+  issuingAuthority: route.issuingAuthority || null,
+  operationStatus: route.operationStatus || null,
+  isActive: route.isActive,
+  createdAt: route.createdAt,
+  updatedAt: route.updatedAt,
+})
+
 const routeSchema = z.object({
   routeCode: z.string().min(1, 'Route code is required'),
   routeCodeOld: z.string().optional(),
@@ -54,31 +108,7 @@ export const getAllRoutes = async (req: Request, res: Response) => {
       ? await db.select().from(routes).orderBy(asc(routes.routeCode))
       : await db.select().from(routes).where(conditions.length === 1 ? conditions[0] : and(...conditions)).orderBy(asc(routes.routeCode))
 
-    const routesFormatted = routesData.map((route) => ({
-      id: route.id,
-      routeCode: route.routeCode,
-      routeCodeOld: route.routeCodeOld || null,
-      departureProvince: route.departureProvince || null,
-      departureStation: route.departureStation || null,
-      departureStationRef: route.departureStationRef || null,
-      arrivalProvince: route.arrivalProvince || null,
-      arrivalStation: route.arrivalStation || null,
-      arrivalStationRef: route.arrivalStationRef || null,
-      distanceKm: route.distanceKm || null,
-      itinerary: route.itinerary || null,
-      routeType: route.routeType || null,
-      totalTripsPerMonth: route.totalTripsPerMonth || null,
-      tripsOperated: route.tripsOperated || null,
-      remainingCapacity: route.remainingCapacity || null,
-      minIntervalMinutes: route.minIntervalMinutes || null,
-      decisionNumber: route.decisionNumber || null,
-      decisionDate: route.decisionDate || null,
-      issuingAuthority: route.issuingAuthority || null,
-      operationStatus: route.operationStatus || null,
-      isActive: route.isActive,
-      createdAt: route.createdAt,
-      updatedAt: route.updatedAt,
-    }))
+    const routesFormatted = routesData.map(formatRouteResponse)
 
     return res.json(routesFormatted)
   } catch (error) {
@@ -103,31 +133,7 @@ export const getRouteById = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Route not found' })
     }
 
-    return res.json({
-      id: route.id,
-      routeCode: route.routeCode,
-      routeCodeOld: route.routeCodeOld || null,
-      departureProvince: route.departureProvince || null,
-      departureStation: route.departureStation || null,
-      departureStationRef: route.departureStationRef || null,
-      arrivalProvince: route.arrivalProvince || null,
-      arrivalStation: route.arrivalStation || null,
-      arrivalStationRef: route.arrivalStationRef || null,
-      distanceKm: route.distanceKm || null,
-      itinerary: route.itinerary || null,
-      routeType: route.routeType || null,
-      totalTripsPerMonth: route.totalTripsPerMonth || null,
-      tripsOperated: route.tripsOperated || null,
-      remainingCapacity: route.remainingCapacity || null,
-      minIntervalMinutes: route.minIntervalMinutes || null,
-      decisionNumber: route.decisionNumber || null,
-      decisionDate: route.decisionDate || null,
-      issuingAuthority: route.issuingAuthority || null,
-      operationStatus: route.operationStatus || null,
-      isActive: route.isActive,
-      createdAt: route.createdAt,
-      updatedAt: route.updatedAt,
-    })
+    return res.json(formatRouteResponse(route))
   } catch (error) {
     console.error('Error fetching route:', error)
     return res.status(500).json({ error: 'Failed to fetch route' })
@@ -139,12 +145,16 @@ export const createRoute = async (req: Request, res: Response) => {
     if (!db) throw new Error('Database not initialized')
 
     const validated = routeSchema.parse(req.body)
+    const isBusRoute = (validated.routeType || '').trim().toLowerCase() === 'bus'
+    const normalizedRoute = isBusRoute
+      ? normalizeBusRouteCode(validated.routeCode, validated.routeCodeOld || null)
+      : { routeCode: validated.routeCode, routeCodeOld: validated.routeCodeOld || null }
 
     const [route] = await db
       .insert(routes)
       .values({
-        routeCode: validated.routeCode,
-        routeCodeOld: validated.routeCodeOld || null,
+        routeCode: normalizedRoute.routeCode,
+        routeCodeOld: normalizedRoute.routeCodeOld,
         departureProvince: validated.departureProvince || null,
         departureStation: validated.departureStation || null,
         departureStationRef: validated.departureStationRef || null,
@@ -166,31 +176,7 @@ export const createRoute = async (req: Request, res: Response) => {
       })
       .returning()
 
-    return res.status(201).json({
-      id: route.id,
-      routeCode: route.routeCode,
-      routeCodeOld: route.routeCodeOld || null,
-      departureProvince: route.departureProvince || null,
-      departureStation: route.departureStation || null,
-      departureStationRef: route.departureStationRef || null,
-      arrivalProvince: route.arrivalProvince || null,
-      arrivalStation: route.arrivalStation || null,
-      arrivalStationRef: route.arrivalStationRef || null,
-      distanceKm: route.distanceKm || null,
-      itinerary: route.itinerary || null,
-      routeType: route.routeType || null,
-      totalTripsPerMonth: route.totalTripsPerMonth || null,
-      tripsOperated: route.tripsOperated || null,
-      remainingCapacity: route.remainingCapacity || null,
-      minIntervalMinutes: route.minIntervalMinutes || null,
-      decisionNumber: route.decisionNumber || null,
-      decisionDate: route.decisionDate || null,
-      issuingAuthority: route.issuingAuthority || null,
-      operationStatus: route.operationStatus || null,
-      isActive: route.isActive,
-      createdAt: route.createdAt,
-      updatedAt: route.updatedAt,
-    })
+    return res.status(201).json(formatRouteResponse(route))
   } catch (error: any) {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'Route with this code already exists' })
@@ -209,10 +195,40 @@ export const updateRoute = async (req: Request, res: Response) => {
     const { id } = req.params
     const validated = routeSchema.partial().parse(req.body)
 
+    const [currentRoute] = await db
+      .select({
+        id: routes.id,
+        routeCode: routes.routeCode,
+        routeCodeOld: routes.routeCodeOld,
+        routeType: routes.routeType,
+      })
+      .from(routes)
+      .where(eq(routes.id, id))
+      .limit(1)
+
+    if (!currentRoute) {
+      return res.status(404).json({ error: 'Route not found' })
+    }
+
     // Build update object
     const updateData: any = {}
-    if (validated.routeCode !== undefined) updateData.routeCode = validated.routeCode
-    if (validated.routeCodeOld !== undefined) updateData.routeCodeOld = validated.routeCodeOld || null
+    const effectiveRouteType = (validated.routeType ?? currentRoute.routeType ?? '').trim().toLowerCase()
+    if (effectiveRouteType === 'bus') {
+      const candidateRouteCode =
+        validated.routeCode ??
+        validated.routeCodeOld ??
+        currentRoute.routeCodeOld ??
+        currentRoute.routeCode ??
+        ''
+      if (candidateRouteCode) {
+        const normalizedRoute = normalizeBusRouteCode(candidateRouteCode, validated.routeCodeOld ?? currentRoute.routeCodeOld ?? null)
+        updateData.routeCode = normalizedRoute.routeCode
+        updateData.routeCodeOld = normalizedRoute.routeCodeOld
+      }
+    } else {
+      if (validated.routeCode !== undefined) updateData.routeCode = validated.routeCode
+      if (validated.routeCodeOld !== undefined) updateData.routeCodeOld = validated.routeCodeOld || null
+    }
     if (validated.departureProvince !== undefined) updateData.departureProvince = validated.departureProvince || null
     if (validated.departureStation !== undefined) updateData.departureStation = validated.departureStation || null
     if (validated.departureStationRef !== undefined) updateData.departureStationRef = validated.departureStationRef || null
@@ -250,31 +266,7 @@ export const updateRoute = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Route not found' })
     }
 
-    return res.json({
-      id: route.id,
-      routeCode: route.routeCode,
-      routeCodeOld: route.routeCodeOld || null,
-      departureProvince: route.departureProvince || null,
-      departureStation: route.departureStation || null,
-      departureStationRef: route.departureStationRef || null,
-      arrivalProvince: route.arrivalProvince || null,
-      arrivalStation: route.arrivalStation || null,
-      arrivalStationRef: route.arrivalStationRef || null,
-      distanceKm: route.distanceKm || null,
-      itinerary: route.itinerary || null,
-      routeType: route.routeType || null,
-      totalTripsPerMonth: route.totalTripsPerMonth || null,
-      tripsOperated: route.tripsOperated || null,
-      remainingCapacity: route.remainingCapacity || null,
-      minIntervalMinutes: route.minIntervalMinutes || null,
-      decisionNumber: route.decisionNumber || null,
-      decisionDate: route.decisionDate || null,
-      issuingAuthority: route.issuingAuthority || null,
-      operationStatus: route.operationStatus || null,
-      isActive: route.isActive,
-      createdAt: route.createdAt,
-      updatedAt: route.updatedAt,
-    })
+    return res.json(formatRouteResponse(route))
   } catch (error: any) {
     if (error.name === 'ZodError') {
       return res.status(400).json({ error: error.errors[0].message })
@@ -319,7 +311,7 @@ export const getLegacyRoutes = async (req: Request, res: Response) => {
 
     const routesFormatted = routesData.map((route) => ({
       id: route.id,
-      routeCode: route.routeCode || '',
+      routeCode: getDisplayRouteCode(route.routeCode, route.routeCodeOld, route.routeType),
       routeCodeOld: route.routeCodeOld || '',
       routeCodeFixed: route.routeCode || '',
       routeClass: '',

@@ -194,7 +194,8 @@ export class DataQueryService {
         .select()
         .from(routes)
         .where(
-          sql`LOWER(${routes.routeCode}) LIKE ${`%${searchLower}%`}
+          sql`LOWER(COALESCE(${routes.routeCodeOld}, '')) LIKE ${`%${searchLower}%`}
+           OR LOWER(${routes.routeCode}) LIKE ${`%${searchLower}%`}
            OR LOWER(${routes.departureStation}) LIKE ${`%${searchLower}%`}
            OR LOWER(${routes.arrivalStation}) LIKE ${`%${searchLower}%`}`
         )

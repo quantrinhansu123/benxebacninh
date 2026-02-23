@@ -22,6 +22,21 @@ const normalizePlate = (plate: string): string => {
   return (plate || '').replace(/[.\-\s]/g, '').toUpperCase()
 }
 
+const shouldUseRouteCodeOld = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): boolean => {
+  const oldCode = (routeCodeOld || '').trim()
+  if (!oldCode) return false
+  const type = (routeType || '').trim().toLowerCase()
+  const code = (routeCode || '').trim().toUpperCase()
+  return type === 'bus' || code.startsWith('BUS-')
+}
+
+const getDisplayRouteCode = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): string => {
+  if (shouldUseRouteCodeOld(routeCode, routeCodeOld, routeType)) {
+    return (routeCodeOld || '').trim()
+  }
+  return (routeCode || '').trim()
+}
+
 // Load all data in parallel and pre-filter
 async function loadQuanLyData(): Promise<QuanLyCache> {
   const now = Date.now()
@@ -87,6 +102,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         db.select({
           id: routesTable.id,
           routeCode: routesTable.routeCode,
+          routeCodeOld: routesTable.routeCodeOld,
           departureStation: routesTable.departureStation,
           arrivalStation: routesTable.arrivalStation,
           distanceKm: routesTable.distanceKm,
@@ -140,6 +156,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         const r = route as any
         if (r.itinerary) {
           if (r.routeCode) routeItineraryByCode.set(r.routeCode, r.itinerary)
+          if (r.routeCodeOld) routeItineraryByCode.set(r.routeCodeOld, r.itinerary)
           // Build route name from departure-arrival stations with normalization
           const routeName = r.departureStation && r.arrivalStation
             ? normalizeRouteName(`${r.departureStation} - ${r.arrivalStation}`)
@@ -335,7 +352,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           : ''
         routes.push({
           id: r.id,
-          code: r.routeCode || '',
+          code: getDisplayRouteCode(r.routeCode, r.routeCodeOld, r.routeType),
           name: routeName,
           startPoint: r.departureStation || '',
           endPoint: r.arrivalStation || '',
