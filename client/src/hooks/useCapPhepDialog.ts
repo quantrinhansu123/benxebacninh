@@ -171,31 +171,43 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     const matchingBadges = vehicleBadges.filter(badge =>
       badge.license_plate_sheet &&
       normalizePlate(badge.license_plate_sheet) === normalizedPlate &&
-      badge.route_code
+      (badge.route_id || badge.route_code)
     );
 
     if (matchingBadges.length === 0) return [];
 
-    return matchingBadges
-      .map(badge => {
-        const route = routes.find((r: Route) =>
-          r.routeCode === badge.route_code
-        );
-        if (!route) return null;
-        const isExpired = badge.expiry_date
-          ? new Date(badge.expiry_date) < new Date()
-          : false;
-        return {
-          routeId: route.id,
-          routeCode: badge.route_code,
-          routeName: badge.route_name || route.routeName || '',
-          badgeNumber: badge.badge_number,
-          badgeType: badge.badge_type,
-          expiryDate: badge.expiry_date,
-          isExpired,
-        };
-      })
-      .filter(Boolean) as { routeId: string; routeCode: string; routeName: string; badgeNumber: string; badgeType: string; expiryDate: string; isExpired: boolean }[];
+    const routeById = new Map<string, { routeId: string; routeCode: string; routeName: string; badgeNumber: string; badgeType: string; expiryDate: string; isExpired: boolean }>();
+    for (const badge of matchingBadges) {
+      const route =
+        (badge.route_id
+          ? routes.find((r: Route) => r.id === badge.route_id)
+          : undefined) ||
+        (badge.route_code
+          ? routes.find((r: Route) => r.routeCode === badge.route_code)
+          : undefined);
+      if (!route) continue;
+
+      const isExpired = badge.expiry_date
+        ? new Date(badge.expiry_date) < new Date()
+        : false;
+
+      const candidate = {
+        routeId: route.id,
+        routeCode: badge.route_code || route.routeCode || '',
+        routeName: route.routeName || badge.route_name || '',
+        badgeNumber: badge.badge_number,
+        badgeType: badge.badge_type,
+        expiryDate: badge.expiry_date,
+        isExpired,
+      };
+
+      const existing = routeById.get(route.id);
+      if (!existing || (existing.isExpired && !candidate.isExpired)) {
+        routeById.set(route.id, candidate);
+      }
+    }
+
+    return Array.from(routeById.values());
   }, [vehicleBadges, routes]);
 
   const loadInitialData = useCallback(async () => {
@@ -207,7 +219,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       );
 
       const dataPromise = Promise.all([
-        quanlyDataService.getAll(), // Gets routes, operators, vehicles, badges in 1 call
+        quanlyDataService.getAll(undefined, true), // Force refresh to avoid stale route names (BXxxx)
         record.routeId ? scheduleService.getAll(record.routeId, undefined, true) : Promise.resolve([]),
         record.id ? serviceChargeService.getAll(record.id) : Promise.resolve([]),
       ]);
@@ -266,6 +278,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
         expiry_date: b.expiry_date,
         status: b.status,
         vehicle_id: b.id,
+        route_id: b.route_id || '',
         route_code: b.route_code || '',
         route_name: b.route_name || '',
       })) as VehicleBadge[];

@@ -69,12 +69,11 @@ export function Autocomplete({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  // Filter options based on input and limit to 100 items for performance
+  // Filter options based on input
   const filteredOptions = options
     .filter(option =>
       option.label.toLowerCase().includes(inputValue.toLowerCase())
     )
-    .slice(0, 100)
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setIsCleared(false)  // Reset flag when user types

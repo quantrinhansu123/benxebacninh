@@ -19,7 +19,7 @@ const VEHICLE_CSV_URL =
 
 interface SheetRow {
   ID_PhuHieu: string; MaHoSo: string; LoaiPH: string; SoPhuHieu: string; BienSoXe: string
-  Ref_DonViCapPhuHieu: string; Ref_GPKD: string; Ref_Tuyen: string; NgayCap: string
+  Ref_DonViCapPhuHieu: string; Ref_GPKD: string; Ref_Tuyen: string; Ref_TuyenBuyt: string; NgayCap: string
   NgayHetHan: string; LoaiCap: string; LyDoCapLai: string; SoPhuHieuCu: string
   TrangThai: string; QDThuHoi: string; LyDoThuHoi: string; NgayThuHoi: string
   XeThayThe: string; MauPhuHieu: string; GhiChu: string; Xebithaythe: string; Hancap: string
@@ -85,6 +85,11 @@ function mapStatus(s: string): string {
   return 'active'
 }
 
+function isBusBadgeType(badgeType: string): boolean {
+  const normalized = (badgeType || '').trim().toLowerCase()
+  return normalized === 'buýt' || normalized === 'buyt'
+}
+
 /** Build metadata JSONB */
 function buildMeta(r: SheetRow): Record<string, string> {
   const m: Record<string, string> = {}
@@ -96,6 +101,7 @@ function buildMeta(r: SheetRow): Record<string, string> {
   if (r.Ref_GPKD) m.business_license_ref = r.Ref_GPKD
   if (r.Ref_DonViCapPhuHieu) m.issuing_authority_ref = r.Ref_DonViCapPhuHieu
   if (r.Ref_Tuyen) m.route_ref = r.Ref_Tuyen
+  if (r.Ref_TuyenBuyt) m.bus_route_ref = r.Ref_TuyenBuyt
   if (r.SoPhuHieuCu) m.old_badge_number = r.SoPhuHieuCu
   if (r.LyDoCapLai) m.renewal_reason = r.LyDoCapLai
   if (r.QDThuHoi) m.revoke_decision = r.QDThuHoi
@@ -141,6 +147,37 @@ async function main() {
   }
   console.log(`  Badge rows: ${rows.length}, Vehicle mapping: ${vehicleMap.size} entries`)
 
+  // Build BUS route lookup map: Ref_TuyenBuyt (firebase_id) -> route_id/route_code/route_name
+  const busRoutesRaw = await db.execute(sql.raw(`
+    SELECT
+      firebase_id,
+      id::text AS route_id,
+      route_code,
+      route_code_old,
+      departure_station,
+      arrival_station
+    FROM routes
+    WHERE route_type = 'bus'
+      AND firebase_id IS NOT NULL
+  `))
+  const busRouteMap = new Map<string, { routeId: string; routeCode: string | null; routeName: string | null }>()
+  for (const route of (busRoutesRaw as any[])) {
+    const firebaseId = String(route.firebase_id || '').trim()
+    const routeId = String(route.route_id || '').trim()
+    if (!firebaseId || !routeId) continue
+    const routeCodeOld = String(route.route_code_old || '').trim()
+    const routeCode = String(route.route_code || '').trim()
+    const departureStation = String(route.departure_station || '').trim()
+    const arrivalStation = String(route.arrival_station || '').trim()
+    const routeName = departureStation && arrivalStation ? `${departureStation} - ${arrivalStation}` : null
+    busRouteMap.set(firebaseId, {
+      routeId,
+      routeCode: routeCodeOld || routeCode || null,
+      routeName,
+    })
+  }
+  console.log(`  BUS route lookup: ${busRouteMap.size} routes`)
+
   // 2. Create temp table & insert all data
   console.log('[2/6] Creating temp table...')
   await db.execute(sql.raw(`DROP TABLE IF EXISTS _tmp_badges`))
@@ -148,28 +185,69 @@ async function main() {
     CREATE TEMP TABLE _tmp_badges (
       firebase_id TEXT PRIMARY KEY, badge_number TEXT, badge_type TEXT,
       issue_date TEXT, expiry_date TEXT, status TEXT, is_active BOOLEAN,
-      metadata JSONB, vehicle_fb_ref TEXT, resolved_plate TEXT
+      metadata JSONB, vehicle_fb_ref TEXT, resolved_plate TEXT,
+      route_fb_ref TEXT, resolved_route_id UUID, resolved_route_code TEXT, resolved_route_name TEXT
     )
   `))
 
   // Build VALUES for batch insert (chunks of 500)
   const CHUNK = 500
   let inserted = 0
+  let busBadgeTotal = 0
+  let busWithRef = 0
+  let busMissingRef = 0
+  let busResolvedRoute = 0
+  let busUnresolvedRoute = 0
+  const unresolvedSamples: string[] = []
+
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK)
     const values = chunk.map(r => {
       const status = mapStatus(r.TrangThai)
       const meta = buildMeta(r)
+      const isBus = isBusBadgeType(r.LoaiPH)
+      if (isBus) {
+        busBadgeTotal++
+      }
       // Resolve BienSoXe (Firebase vehicle ref) -> real plate number
       const resolvedPlate = r.BienSoXe ? (vehicleMap.get(r.BienSoXe) || null) : null
+      const routeFbRefRaw = (r.Ref_TuyenBuyt || '').trim()
+      const routeFbRef = isBus && routeFbRefRaw ? routeFbRefRaw : null
+      let resolvedRouteId: string | null = null
+      let resolvedRouteCode: string | null = null
+      let resolvedRouteName: string | null = null
+
+      if (isBus) {
+        if (!routeFbRef) {
+          busMissingRef++
+        } else {
+          busWithRef++
+          const matchedRoute = busRouteMap.get(routeFbRef)
+          if (matchedRoute) {
+            resolvedRouteId = matchedRoute.routeId
+            resolvedRouteCode = matchedRoute.routeCode
+            resolvedRouteName = matchedRoute.routeName
+            busResolvedRoute++
+          } else {
+            busUnresolvedRoute++
+            if (unresolvedSamples.length < 20) unresolvedSamples.push(`${r.ID_PhuHieu}:${routeFbRef}`)
+          }
+        }
+      }
+
       return `(${esc(r.ID_PhuHieu)},${esc(r.SoPhuHieu || null)},${esc(r.LoaiPH || null)},` +
         `${esc(parseDate(r.NgayCap))},${esc(parseDate(r.NgayHetHan))},${esc(status)},` +
-        `${status === 'active'},${esc(JSON.stringify(meta))},${esc(r.BienSoXe || null)},${esc(resolvedPlate)})`
+        `${status === 'active'},${esc(JSON.stringify(meta))},${esc(r.BienSoXe || null)},${esc(resolvedPlate)},` +
+        `${esc(routeFbRef)},${esc(resolvedRouteId)}::uuid,${esc(resolvedRouteCode)},${esc(resolvedRouteName)})`
     }).join(',')
     await db.execute(sql.raw(`INSERT INTO _tmp_badges VALUES ${values}`))
     inserted += chunk.length
   }
   console.log(`  Inserted ${inserted} rows into temp table`)
+  console.log(`  BUS mapping: total=${busBadgeTotal}, withRef=${busWithRef}, missingRef=${busMissingRef}, resolved=${busResolvedRoute}, unresolved=${busUnresolvedRoute}`)
+  if (unresolvedSamples.length > 0) {
+    console.warn(`  WARN unresolved BUS route refs (${unresolvedSamples.length} sample): ${unresolvedSamples.join(', ')}`)
+  }
 
   // Stats on resolution
   const resolvedStats = await db.execute(sql.raw(`
@@ -193,6 +271,9 @@ async function main() {
       is_active = t.is_active,
       metadata = COALESCE(vb.metadata, '{}'::jsonb) || t.metadata,
       plate_number = COALESCE(t.resolved_plate, vb.plate_number),
+      route_id = COALESCE(t.resolved_route_id, vb.route_id),
+      route_code = COALESCE(NULLIF(t.resolved_route_code, ''), vb.route_code),
+      route_name = COALESCE(NULLIF(t.resolved_route_name, ''), vb.route_name),
       source = 'sheet_sync',
       synced_at = NOW(),
       updated_at = NOW()
@@ -237,13 +318,18 @@ async function main() {
   const insertSql = `
     INSERT INTO vehicle_badges (
       firebase_id, badge_number, plate_number, vehicle_id, badge_type,
+      route_id, route_code, route_name,
       issue_date, expiry_date, status, is_active, metadata, source, synced_at, created_at, updated_at
     )
     SELECT
       t.firebase_id, t.badge_number,
       COALESCE(t.resolved_plate, v.plate_number, 'UNKNOWN_' || COALESCE(t.vehicle_fb_ref, 'NONE')),
       im.postgres_id::uuid,
-      t.badge_type, NULLIF(t.issue_date, '')::date, NULLIF(t.expiry_date, '')::date, t.status, t.is_active,
+      t.badge_type,
+      t.resolved_route_id,
+      NULLIF(t.resolved_route_code, ''),
+      NULLIF(t.resolved_route_name, ''),
+      NULLIF(t.issue_date, '')::date, NULLIF(t.expiry_date, '')::date, t.status, t.is_active,
       t.metadata, 'sheet_sync', NOW(), NOW(), NOW()
     FROM _tmp_badges t
     LEFT JOIN id_mappings im ON im.firebase_id = t.vehicle_fb_ref AND im.entity_type = 'vehicles'

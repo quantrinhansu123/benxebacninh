@@ -8,6 +8,46 @@ import { z } from 'zod'
 let legacyRoutesCache: { data: any[]; timestamp: number } | null = null
 const LEGACY_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
+interface ProvinceApiResponse {
+  provinces?: Array<{ code: string; name: string }>
+}
+
+const PROVINCE_API_BASE_URL = 'https://production.cas.so/address-kit'
+const PROVINCE_API_EFFECTIVE_DATE = '2024-01-01'
+const PROVINCE_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
+let provinceNameMapCache: { data: Map<string, string>; timestamp: number } | null = null
+const LEGACY_PROVINCE_CODE_MAP: Record<string, string> = {
+  '98': 'Bắc Giang',
+  '99': 'Bắc Ninh',
+  '29': 'Hà Nội',
+  '20': 'Thái Nguyên',
+}
+
+const getProvinceNameMap = async (): Promise<Map<string, string>> => {
+  if (provinceNameMapCache && Date.now() - provinceNameMapCache.timestamp < PROVINCE_CACHE_TTL) {
+    return provinceNameMapCache.data
+  }
+
+  try {
+    const res = await fetch(`${PROVINCE_API_BASE_URL}/${PROVINCE_API_EFFECTIVE_DATE}/provinces`)
+    if (!res.ok) throw new Error(`Province API failed: ${res.status}`)
+
+    const payload = await res.json() as ProvinceApiResponse
+    const map = new Map<string, string>()
+    for (const province of payload.provinces || []) {
+      const code = (province.code || '').trim()
+      const name = (province.name || '').trim()
+      if (code && name) map.set(code, name)
+    }
+
+    provinceNameMapCache = { data: map, timestamp: Date.now() }
+    return map
+  } catch (error) {
+    console.warn('[Routes] Failed to load province names, fallback to raw code:', error)
+    return provinceNameMapCache?.data || new Map<string, string>()
+  }
+}
+
 const shouldUseRouteCodeOld = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): boolean => {
   const oldCode = (routeCodeOld || '').trim()
   if (!oldCode) return false
@@ -23,6 +63,41 @@ const getDisplayRouteCode = (routeCode?: string | null, routeCodeOld?: string | 
   return (routeCode || '').trim()
 }
 
+const getDisplayProvince = (province?: string | null, provinceNameMap?: Map<string, string>): string | null => {
+  const value = (province || '').trim()
+  if (!value) return null
+  if (!/^\d+$/.test(value)) return value
+
+  const byRaw = provinceNameMap?.get(value)
+  if (byRaw) return byRaw
+
+  const byPad2 = provinceNameMap?.get(value.padStart(2, '0'))
+  if (byPad2) return byPad2
+
+  const byPad3 = provinceNameMap?.get(value.padStart(3, '0'))
+  if (byPad3) return byPad3
+
+  const byLegacy = LEGACY_PROVINCE_CODE_MAP[value]
+  if (byLegacy) return byLegacy
+
+  return value
+}
+
+const getDisplayRouteName = (
+  departureStation?: string | null,
+  arrivalStation?: string | null,
+  routeCode?: string | null,
+  routeCodeOld?: string | null,
+  routeType?: string | null
+): string => {
+  const from = (departureStation || '').trim()
+  const to = (arrivalStation || '').trim()
+  if (from && to) return `${from} - ${to}`
+  if (from) return from
+  if (to) return to
+  return getDisplayRouteCode(routeCode, routeCodeOld, routeType)
+}
+
 const normalizeBusRouteCode = (routeCode: string, routeCodeOld?: string | null): { routeCode: string; routeCodeOld: string | null } => {
   const rawCode = (routeCode || '').trim()
   const rawCodeOld = (routeCodeOld || '').trim()
@@ -36,14 +111,15 @@ const normalizeBusRouteCode = (routeCode: string, routeCodeOld?: string | null):
   }
 }
 
-const formatRouteResponse = (route: any) => ({
+const formatRouteResponse = (route: any, provinceNameMap?: Map<string, string>) => ({
   id: route.id,
   routeCode: getDisplayRouteCode(route.routeCode, route.routeCodeOld, route.routeType),
+  routeName: getDisplayRouteName(route.departureStation, route.arrivalStation, route.routeCode, route.routeCodeOld, route.routeType),
   routeCodeOld: route.routeCodeOld || null,
-  departureProvince: route.departureProvince || null,
+  departureProvince: getDisplayProvince(route.departureProvince, provinceNameMap),
   departureStation: route.departureStation || null,
   departureStationRef: route.departureStationRef || null,
-  arrivalProvince: route.arrivalProvince || null,
+  arrivalProvince: getDisplayProvince(route.arrivalProvince, provinceNameMap),
   arrivalStation: route.arrivalStation || null,
   arrivalStationRef: route.arrivalStationRef || null,
   distanceKm: route.distanceKm || null,
@@ -87,6 +163,7 @@ const routeSchema = z.object({
 export const getAllRoutes = async (req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
+    const provinceNameMap = await getProvinceNameMap()
 
     const { departureStation, arrivalStation, isActive } = req.query
 
@@ -108,7 +185,7 @@ export const getAllRoutes = async (req: Request, res: Response) => {
       ? await db.select().from(routes).orderBy(asc(routes.routeCode))
       : await db.select().from(routes).where(conditions.length === 1 ? conditions[0] : and(...conditions)).orderBy(asc(routes.routeCode))
 
-    const routesFormatted = routesData.map(formatRouteResponse)
+    const routesFormatted = routesData.map((route) => formatRouteResponse(route, provinceNameMap))
 
     return res.json(routesFormatted)
   } catch (error) {
@@ -120,6 +197,7 @@ export const getAllRoutes = async (req: Request, res: Response) => {
 export const getRouteById = async (req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
+    const provinceNameMap = await getProvinceNameMap()
 
     const { id } = req.params
 
@@ -133,7 +211,7 @@ export const getRouteById = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Route not found' })
     }
 
-    return res.json(formatRouteResponse(route))
+    return res.json(formatRouteResponse(route, provinceNameMap))
   } catch (error) {
     console.error('Error fetching route:', error)
     return res.status(500).json({ error: 'Failed to fetch route' })
@@ -143,6 +221,7 @@ export const getRouteById = async (req: Request, res: Response) => {
 export const createRoute = async (req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
+    const provinceNameMap = await getProvinceNameMap()
 
     const validated = routeSchema.parse(req.body)
     const isBusRoute = (validated.routeType || '').trim().toLowerCase() === 'bus'
@@ -176,7 +255,7 @@ export const createRoute = async (req: Request, res: Response) => {
       })
       .returning()
 
-    return res.status(201).json(formatRouteResponse(route))
+    return res.status(201).json(formatRouteResponse(route, provinceNameMap))
   } catch (error: any) {
     if (error.code === '23505') {
       return res.status(409).json({ error: 'Route with this code already exists' })
@@ -191,6 +270,7 @@ export const createRoute = async (req: Request, res: Response) => {
 export const updateRoute = async (req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
+    const provinceNameMap = await getProvinceNameMap()
 
     const { id } = req.params
     const validated = routeSchema.partial().parse(req.body)
@@ -266,7 +346,7 @@ export const updateRoute = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Route not found' })
     }
 
-    return res.json(formatRouteResponse(route))
+    return res.json(formatRouteResponse(route, provinceNameMap))
   } catch (error: any) {
     if (error.name === 'ZodError') {
       return res.status(400).json({ error: error.errors[0].message })
@@ -295,12 +375,21 @@ export const deleteRoute = async (req: Request, res: Response) => {
 export const getLegacyRoutes = async (req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
+    const provinceNameMap = await getProvinceNameMap()
 
     const forceRefresh = req.query.refresh === 'true'
 
     // Check cache
     if (!forceRefresh && legacyRoutesCache && Date.now() - legacyRoutesCache.timestamp < LEGACY_CACHE_TTL) {
-      return res.json(legacyRoutesCache.data)
+      const remappedCachedData = legacyRoutesCache.data.map((route) => ({
+        ...route,
+        departureProvince: getDisplayProvince(route.departureProvince, provinceNameMap) || '',
+        departureProvinceOld: getDisplayProvince(route.departureProvinceOld || route.departureProvince, provinceNameMap) || '',
+        arrivalProvince: getDisplayProvince(route.arrivalProvince, provinceNameMap) || '',
+        arrivalProvinceOld: getDisplayProvince(route.arrivalProvinceOld || route.arrivalProvince, provinceNameMap) || '',
+      }))
+      legacyRoutesCache = { data: remappedCachedData, timestamp: legacyRoutesCache.timestamp }
+      return res.json(remappedCachedData)
     }
 
     // Get routes from database
@@ -312,6 +401,7 @@ export const getLegacyRoutes = async (req: Request, res: Response) => {
     const routesFormatted = routesData.map((route) => ({
       id: route.id,
       routeCode: getDisplayRouteCode(route.routeCode, route.routeCodeOld, route.routeType),
+      routeName: getDisplayRouteName(route.departureStation, route.arrivalStation, route.routeCode, route.routeCodeOld, route.routeType),
       routeCodeOld: route.routeCodeOld || '',
       routeCodeFixed: route.routeCode || '',
       routeClass: '',
@@ -320,13 +410,13 @@ export const getLegacyRoutes = async (req: Request, res: Response) => {
 
       departureStation: route.departureStation || '',
       departureStationRef: route.departureStationRef || '',
-      departureProvince: route.departureProvince || '',
-      departureProvinceOld: route.departureProvince || '',
+      departureProvince: getDisplayProvince(route.departureProvince, provinceNameMap) || '',
+      departureProvinceOld: getDisplayProvince(route.departureProvince, provinceNameMap) || '',
 
       arrivalStation: route.arrivalStation || '',
       arrivalStationRef: route.arrivalStationRef || '',
-      arrivalProvince: route.arrivalProvince || '',
-      arrivalProvinceOld: route.arrivalProvince || '',
+      arrivalProvince: getDisplayProvince(route.arrivalProvince, provinceNameMap) || '',
+      arrivalProvinceOld: getDisplayProvince(route.arrivalProvince, provinceNameMap) || '',
 
       distanceKm: route.distanceKm || 0,
       minIntervalMinutes: route.minIntervalMinutes || 0,

@@ -59,6 +59,21 @@ export function VehicleInfoSection({
   // Cache prefetched notice to avoid re-fetching on click
   const prefetchedNotice = useRef<{ key: string; notice: OperationNotice } | null>(null);
 
+  // Display only original route code (e.g. 203) instead of prefixed schedule code (e.g. BDG-BUS-203-D-1600)
+  const getDisplayScheduleCode = (schedule: Schedule): string => {
+    const routeCodeFromSchedule = schedule.route?.routeCode?.trim() || "";
+    if (routeCodeFromSchedule) return routeCodeFromSchedule;
+
+    const routeCodeFromRouteList =
+      routes.find((r) => r.id === schedule.routeId)?.routeCode?.trim() || "";
+    if (routeCodeFromRouteList) return routeCodeFromRouteList;
+
+    const raw = (schedule.scheduleCode || "").trim();
+    const match = raw.match(/^(?:[A-Z]+-)?BUS-(.+?)-(?:D|V)-\d{4}(?:-\d+)?$/i);
+    if (match?.[1]) return match[1];
+    return raw;
+  };
+
   /** Prefetch API + PDF blob on hover (fire-and-forget) */
   const handlePrefetchNotice = (noticeNumber: string) => {
     const selectedRoute = routes.find(r => r.id === routeId);
@@ -231,7 +246,7 @@ export function VehicleInfoSection({
                 <div className="mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg space-y-1">
                   <div className="text-xs">
                     <span className="font-medium text-gray-700">Mã biểu đồ:</span>{" "}
-                    <span className="text-gray-600">{selected.scheduleCode}</span>
+                    <span className="text-gray-600">{getDisplayScheduleCode(selected)}</span>
                   </div>
                   <div className="text-xs">
                     <span className="font-medium text-gray-700">Ngày hoạt động:</span>{" "}

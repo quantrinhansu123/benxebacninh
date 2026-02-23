@@ -1,10 +1,10 @@
 /**
  * One-time sync schedules for bus routes from Google Sheet CSV -> Supabase
- * Source sheets:
- * - BIEUDOCHAY_BUYT
- * - GIOCHAY_BUYT
- * - DANHMUCTUYENBUYT
- * - QUYETDINH_KHAITHAC_BUYT
+ * Source sheets (Google Sheet gid):
+ * - BIEUDOCHAY_BUYT: 1985887920
+ * - GIOCHAY_BUYT: 1047672631
+ * - DANHMUCTUYENBUYT: 2025728801
+ * - QUYETDINH_KHAITHAC_BUYT: 415536628
  *
  * Usage:
  * - Dry run: npx tsx src/db/migrations/etl/sync-bus-schedules-from-sheet.ts --dry-run
@@ -16,10 +16,11 @@ import { sql } from 'drizzle-orm'
 
 const SHEET_ID = '16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY'
 const BASE_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`
-const BIEUDO_BUYT_CSV_URL = `${BASE_GVIZ_URL}&sheet=BIEUDOCHAY_BUYT`
-const GIOCHAY_BUYT_CSV_URL = `${BASE_GVIZ_URL}&sheet=GIOCHAY_BUYT`
-const DANHMUC_TUYEN_BUYT_CSV_URL = `${BASE_GVIZ_URL}&sheet=DANHMUCTUYENBUYT&tq=select%20A,H,O,D,E,F`
-const QUYETDINH_BUYT_CSV_URL = `${BASE_GVIZ_URL}&sheet=QUYETDINH_KHAITHAC_BUYT`
+const BIEUDO_BUYT_CSV_URL = `${BASE_GVIZ_URL}&gid=1985887920`
+const GIOCHAY_BUYT_CSV_URL = `${BASE_GVIZ_URL}&gid=1047672631`
+const DANHMUC_TUYEN_BUYT_CSV_URL = `${BASE_GVIZ_URL}&gid=2025728801&tq=select%20A,H,O,D,E,F,B,C,J,K,L,M,N,G`
+const QUYETDINH_BUYT_CSV_URL = `${BASE_GVIZ_URL}&gid=415536628`
+const MABENXE_CSV_URL = `${BASE_GVIZ_URL}&sheet=MABENXE&tq=select%20B,E`
 
 interface RouteRow {
   routeFbId: string
@@ -27,8 +28,17 @@ interface RouteRow {
   routeCode: string
   operationStatus: string
   departureStation: string
+  departureStationRef: string
   arrivalStation: string
+  arrivalStationRef: string
+  departureProvince: string
+  arrivalProvince: string
   distanceKm: number | null
+  itinerary: string
+  decisionNumber: string
+  totalTripsPerMonth: number | null
+  tripsOperated: number | null
+  metadata: Record<string, string>
 }
 
 interface ChartRow {
@@ -176,47 +186,80 @@ async function main() {
   console.log(`=== Sync BUS schedules ===\nMode: ${isDryRun ? 'DRY RUN' : 'LIVE'}`)
 
   console.log('\n[1/6] Fetching CSVs...')
-  const [bieuDoRes, gioChayRes, routeRes, decisionRes] = await Promise.all([
+  const [bieuDoRes, gioChayRes, routeRes, decisionRes, stationRes] = await Promise.all([
     fetch(BIEUDO_BUYT_CSV_URL),
     fetch(GIOCHAY_BUYT_CSV_URL),
     fetch(DANHMUC_TUYEN_BUYT_CSV_URL),
     fetch(QUYETDINH_BUYT_CSV_URL),
+    fetch(MABENXE_CSV_URL),
   ])
   if (!bieuDoRes.ok) throw new Error(`BIEUDOCHAY_BUYT fetch failed: ${bieuDoRes.status}`)
   if (!gioChayRes.ok) throw new Error(`GIOCHAY_BUYT fetch failed: ${gioChayRes.status}`)
   if (!routeRes.ok) throw new Error(`DANHMUCTUYENBUYT fetch failed: ${routeRes.status}`)
   if (!decisionRes.ok) throw new Error(`QUYETDINH_KHAITHAC_BUYT fetch failed: ${decisionRes.status}`)
+  if (!stationRes.ok) throw new Error(`MABENXE fetch failed: ${stationRes.status}`)
 
-  const [bieuDoText, gioChayText, routeText, decisionText] = await Promise.all([
+  const [bieuDoText, gioChayText, routeText, decisionText, stationText] = await Promise.all([
     bieuDoRes.text(),
     gioChayRes.text(),
     routeRes.text(),
     decisionRes.text(),
+    stationRes.text(),
   ])
   if (bieuDoText.trimStart().startsWith('<')) throw new Error('BIEUDOCHAY_BUYT returned HTML')
   if (gioChayText.trimStart().startsWith('<')) throw new Error('GIOCHAY_BUYT returned HTML')
   if (routeText.trimStart().startsWith('<')) throw new Error('DANHMUCTUYENBUYT returned HTML')
   if (decisionText.trimStart().startsWith('<')) throw new Error('QUYETDINH_KHAITHAC_BUYT returned HTML')
+  if (stationText.trimStart().startsWith('<')) throw new Error('MABENXE returned HTML')
 
   console.log('[2/6] Building lookup maps...')
   const routeRowsRaw = parseCsvRows(routeText).slice(1)
   const bieuDoRowsRaw = parseCsvRows(bieuDoText).slice(1)
-  const gioChayRowsRaw = parseCsvRows(gioChayText)
+  const gioChayRowsRaw = parseCsvRows(gioChayText).slice(1)
   const decisionRowsRaw = parseCsvRows(decisionText).slice(1)
+  const stationRowsRaw = parseCsvRows(stationText).slice(1)
+
+  const stationNameByCode = new Map<string, string>()
+  for (const row of stationRowsRaw) {
+    const code = (row[0] || '').trim().toUpperCase()
+    const name = (row[1] || '').trim()
+    if (!code || !name) continue
+    stationNameByCode.set(code, name)
+  }
 
   const routeMap = new Map<string, RouteRow>()
   for (const row of routeRowsRaw) {
     const routeFbId = (row[0] || '').trim()
     const normalized = normalizeBusRouteCode(row[1] || '')
     if (!routeFbId || !normalized) continue
+    const linkDecisionFile = (row[9] || '').trim()
+    const notes = (row[12] || '').trim()
+    const routeMeta: Record<string, string> = {
+      source_sheet: 'DANHMUCTUYENBUYT',
+    }
+    if (linkDecisionFile) routeMeta.link_qd_danh_muc = linkDecisionFile
+    if (notes) routeMeta.notes = notes
+    const departureStationRef = (row[3] || '').trim().toUpperCase()
+    const arrivalStationRef = (row[4] || '').trim().toUpperCase()
+    const departureStationName = stationNameByCode.get(departureStationRef) || departureStationRef
+    const arrivalStationName = stationNameByCode.get(arrivalStationRef) || arrivalStationRef
     routeMap.set(routeFbId, {
       routeFbId,
       routeCode: normalized.routeCode,
       routeCodeOld: normalized.routeCodeOld,
       operationStatus: (row[2] || '').trim(),
-      departureStation: (row[3] || '').trim(),
-      arrivalStation: (row[4] || '').trim(),
+      departureStation: departureStationName,
+      departureStationRef,
+      arrivalStation: arrivalStationName,
+      arrivalStationRef,
       distanceKm: parseIntOrNull(row[5] || ''),
+      departureProvince: (row[6] || '').trim(),
+      arrivalProvince: (row[7] || '').trim(),
+      decisionNumber: (row[8] || '').trim(),
+      totalTripsPerMonth: parseIntOrNull(row[10] || ''),
+      tripsOperated: parseIntOrNull(row[11] || ''),
+      itinerary: (row[13] || '').trim(),
+      metadata: routeMeta,
     })
   }
 
@@ -289,7 +332,7 @@ async function main() {
     })
   }
 
-  console.log(`  Routes map: ${routeMap.size}, Charts: ${chartMap.size}, Decisions: ${decisionMap.size}`)
+  console.log(`  Routes map: ${routeMap.size}, Charts: ${chartMap.size}, Decisions: ${decisionMap.size}, Stations map: ${stationNameByCode.size}`)
   console.log(`  Prepared schedules: ${preparedSchedules.length} (invalidId=${invalidId}, invalidTime=${invalidTime}, missingChart=${missingChart}, missingRoute=${missingRoute})`)
 
   console.log('[3/6] Upserting BUS routes...')
@@ -301,15 +344,25 @@ async function main() {
       route_code_old TEXT,
       operation_status TEXT,
       departure_station TEXT,
+      departure_station_ref TEXT,
       arrival_station TEXT,
+      arrival_station_ref TEXT,
+      departure_province TEXT,
+      arrival_province TEXT,
       distance_km INTEGER,
+      itinerary TEXT,
+      decision_number TEXT,
+      total_trips_per_month INTEGER,
+      trips_operated INTEGER,
       metadata JSONB
     )
   `))
   const routeValues = [...routeMap.values()].map(r =>
     `(${esc(r.routeFbId)},${esc(r.routeCode)},${esc(r.routeCodeOld)},${esc(r.operationStatus || null)},` +
-    `${esc(r.departureStation || null)},${esc(r.arrivalStation || null)},${escNum(r.distanceKm)},` +
-    `${esc(JSON.stringify({ source_sheet: 'DANHMUCTUYENBUYT' }))})`
+    `${esc(r.departureStation || null)},${esc(r.departureStationRef || null)},${esc(r.arrivalStation || null)},${esc(r.arrivalStationRef || null)},` +
+    `${esc(r.departureProvince || null)},${esc(r.arrivalProvince || null)},` +
+    `${escNum(r.distanceKm)},${esc(r.itinerary || null)},${esc(r.decisionNumber || null)},${escNum(r.totalTripsPerMonth)},${escNum(r.tripsOperated)},` +
+    `${esc(JSON.stringify(r.metadata))})`
   )
   if (routeValues.length > 0) await db.execute(sql.raw(`INSERT INTO _tmp_bus_routes VALUES ${routeValues.join(',')}`))
 
@@ -325,19 +378,36 @@ async function main() {
   } else {
     await db.execute(sql.raw(`
       INSERT INTO routes (
-        firebase_id, route_code, route_code_old, departure_station, arrival_station, distance_km,
+        firebase_id, route_code, route_code_old,
+        departure_station, departure_station_ref, arrival_station, arrival_station_ref, departure_province, arrival_province,
+        distance_km, itinerary, decision_number, total_trips_per_month, trips_operated, remaining_capacity,
         route_type, operation_status, is_active, source, metadata, synced_at, created_at, updated_at
       )
       SELECT
-        t.route_fb_id, t.route_code, t.route_code_old, NULLIF(t.departure_station, ''), NULLIF(t.arrival_station, ''), t.distance_km,
+        t.route_fb_id, t.route_code, t.route_code_old,
+        NULLIF(t.departure_station, ''), NULLIF(t.departure_station_ref, ''), NULLIF(t.arrival_station, ''), NULLIF(t.arrival_station_ref, ''), NULLIF(t.departure_province, ''), NULLIF(t.arrival_province, ''),
+        t.distance_km, NULLIF(t.itinerary, ''), NULLIF(t.decision_number, ''), t.total_trips_per_month, t.trips_operated,
+        CASE
+          WHEN t.total_trips_per_month IS NOT NULL AND t.trips_operated IS NOT NULL THEN GREATEST(t.total_trips_per_month - t.trips_operated, 0)
+          ELSE NULL
+        END,
         'bus', NULLIF(t.operation_status, ''), true, 'sheet_sync_bus', t.metadata, NOW(), NOW(), NOW()
       FROM _tmp_bus_routes t
       ON CONFLICT (firebase_id) DO UPDATE SET
         route_code = EXCLUDED.route_code,
         route_code_old = EXCLUDED.route_code_old,
         departure_station = EXCLUDED.departure_station,
+        departure_station_ref = EXCLUDED.departure_station_ref,
         arrival_station = EXCLUDED.arrival_station,
+        arrival_station_ref = EXCLUDED.arrival_station_ref,
+        departure_province = EXCLUDED.departure_province,
+        arrival_province = EXCLUDED.arrival_province,
         distance_km = EXCLUDED.distance_km,
+        itinerary = EXCLUDED.itinerary,
+        decision_number = EXCLUDED.decision_number,
+        total_trips_per_month = EXCLUDED.total_trips_per_month,
+        trips_operated = EXCLUDED.trips_operated,
+        remaining_capacity = EXCLUDED.remaining_capacity,
         route_type = 'bus',
         operation_status = EXCLUDED.operation_status,
         source = 'sheet_sync_bus',
