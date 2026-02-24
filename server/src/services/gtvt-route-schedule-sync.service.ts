@@ -3,7 +3,20 @@ import { db } from '../db/drizzle.js'
 import { operators, routes, schedules } from '../db/schema/index.js'
 import { fetchGtvtRoutes, fetchGtvtSchedules } from './gtvt-appsheet-client.service.js'
 import { cachedData } from './cached-data.service.js'
-import { isRecord } from '../utils/type-guards.js'
+import { normalizeGtvtRoutes } from './gtvt-normalize-routes.service.js'
+import { normalizeGtvtSchedules, buildScheduleCode } from './gtvt-normalize-schedules.service.js'
+import {
+  type DbExecutor,
+  GTVT_SYNC_LOCK_KEY,
+  NULL_FIREBASE_SENTINEL,
+  MAX_SCHEDULE_CODE_LENGTH,
+  toLookupKey,
+  escapeSqlString,
+  countFromRow,
+  uniqueFirebaseIds,
+  insertSeenFirebaseTempTable,
+  cleanupTempTables,
+} from './gtvt-sync-utils.js'
 import {
   GTVT_SYNC_SOURCE,
   GtvtSourceError,
@@ -15,301 +28,7 @@ import {
   type GtvtSyncSummaryResponse,
 } from '../types/gtvt-sync.types.js'
 
-const ROUTE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_TUYEN', 'ID_Tuyen', 'id', 'route_fb_id', 'routeFbId']
-const ROUTE_CODE_KEYS = ['route_code', 'routeCode', 'MaTuyen', 'ma_tuyen', 'SoHieuTuyen', 'so_hieu_tuyen', 'Ref_Tuyen']
-const ROUTE_CODE_OLD_KEYS = ['route_code_old', 'routeCodeOld', 'so_hieu_tuyen_old']
-const ROUTE_TYPE_KEYS = ['route_type', 'routeType', 'LoaiTuyen']
-const OPERATION_STATUS_KEYS = ['operation_status', 'operationStatus', 'TinhTrangKhaiThac']
-const DEPARTURE_STATION_KEYS = ['departure_station', 'departureStation', 'BenDi', 'from_station']
-const ARRIVAL_STATION_KEYS = ['arrival_station', 'arrivalStation', 'BenDen', 'to_station']
-const DISTANCE_KEYS = ['distance_km', 'distanceKm', 'CuLy', 'cu_ly_km']
-
-const SCHEDULE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_NutChay', 'id', 'schedule_id']
-const SCHEDULE_CODE_KEYS = ['schedule_code', 'scheduleCode', 'MaBieuDo']
-const SCHEDULE_ROUTE_ID_KEYS = ['route_fb_id', 'routeFbId', 'route_firebase_id', 'Ref_Tuyen']
-const SCHEDULE_ROUTE_CODE_KEYS = ['route_code', 'routeCode', 'MaTuyen', 'SoHieuTuyen']
-const SCHEDULE_OPERATOR_ID_KEYS = ['operator_fb_id', 'operatorFbId', 'Ref_DonVi', 'operator_firebase_id']
-const SCHEDULE_OPERATOR_CODE_KEYS = ['operator_code', 'operatorCode', 'MaDonVi']
-const SCHEDULE_TIME_KEYS = ['departure_time', 'departureTime', 'GioXuatBen']
-const SCHEDULE_DIRECTION_KEYS = ['direction', 'Chieu']
-const SCHEDULE_FREQUENCY_KEYS = ['frequency_type', 'frequencyType']
-const SCHEDULE_DAYS_OF_WEEK_KEYS = ['days_of_week', 'daysOfWeek']
-const SCHEDULE_DAYS_OF_MONTH_KEYS = ['days_of_month', 'daysOfMonth', 'NgayHoatDong']
-const SCHEDULE_CALENDAR_KEYS = ['calendar_type', 'calendarType', 'LoaiNgay']
-const SCHEDULE_EFFECTIVE_FROM_KEYS = ['effective_from', 'effectiveFrom', 'NgayBanHanh', 'ngay_ban_hanh']
-const SCHEDULE_NOTIFICATION_KEYS = ['notification_number', 'notificationNumber', 'SoThongBao']
-const SCHEDULE_TRIP_STATUS_KEYS = ['trip_status', 'tripStatus', 'TrangThaiChuyen']
-
-const DEFAULT_DAYS_OF_WEEK = [1, 2, 3, 4, 5, 6, 7]
-const MAX_ROUTE_CODE_LENGTH = 50
-const MAX_SCHEDULE_CODE_LENGTH = 50
-
-const toLookupKey = (value: string | null | undefined): string => (value || '').trim().toUpperCase()
-
-const pickString = (row: Record<string, unknown>, keys: string[]): string | null => {
-  for (const key of keys) {
-    const value = row[key]
-    if (value === undefined || value === null) continue
-    if (typeof value === 'string') {
-      const normalized = value.trim()
-      if (normalized) return normalized
-      continue
-    }
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value)
-    }
-  }
-  return null
-}
-
-const pickNumber = (row: Record<string, unknown>, keys: string[]): number | null => {
-  const value = pickString(row, keys)
-  if (!value) return null
-  const parsed = parseInt(value, 10)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-const parseDateValue = (value: string | null): string | null => {
-  if (!value) return null
-  const normalized = value.trim()
-  const dmy = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  if (dmy) {
-    const day = dmy[1].padStart(2, '0')
-    const month = dmy[2].padStart(2, '0')
-    const year = dmy[3]
-    return `${year}-${month}-${day}`
-  }
-  const ymd = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (ymd) return ymd[0]
-  return null
-}
-
-const parseTimeValue = (value: string | null): string | null => {
-  if (!value) return null
-  const match = value.trim().match(/^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/)
-  if (!match) return null
-  return `${match[1]}:${match[2]}`
-}
-
-const parseIntArray = (value: unknown, min: number, max: number): number[] => {
-  if (Array.isArray(value)) {
-    return [...new Set(
-      value
-        .map((item) => Number(item))
-        .filter((item) => Number.isInteger(item) && item >= min && item <= max)
-    )].sort((a, b) => a - b)
-  }
-
-  if (typeof value === 'string') {
-    const parsed = value
-      .split(',')
-      .map((item) => Number(item.trim()))
-      .filter((item) => Number.isInteger(item) && item >= min && item <= max)
-    return [...new Set(parsed)].sort((a, b) => a - b)
-  }
-
-  return []
-}
-
-const normalizeDirection = (value: string | null): string => {
-  const normalized = (value || '').trim().toLowerCase()
-  if (normalized === 'về' || normalized === 've') return 'Về'
-  return 'Đi'
-}
-
-const normalizeCalendarType = (value: string | null): string => {
-  const normalized = (value || '').trim().toLowerCase()
-  if (normalized.includes('âm') || normalized.includes('am') || normalized === 'lunar') return 'lunar'
-  return 'solar'
-}
-
-const normalizeFrequencyType = (value: string | null, daysOfWeek: number[], daysOfMonth: number[]): 'daily' | 'weekly' | 'specific_days' => {
-  const normalized = (value || '').trim().toLowerCase()
-  if (normalized === 'daily') return 'daily'
-  if (normalized === 'weekly') return 'weekly'
-  if (normalized === 'specific_days') return 'specific_days'
-  if (daysOfMonth.length > 0 && daysOfMonth.length < 28) return 'specific_days'
-  if (daysOfWeek.length > 0 && daysOfWeek.length < 7) return 'weekly'
-  return 'daily'
-}
-
-const buildScheduleCode = (routeCode: string, direction: string, departureTime: string, suffix?: number): string => {
-  const cleanedRouteCode = routeCode.replace(/[^A-Za-z0-9-]/g, '').toUpperCase() || 'UNKNOWN'
-  const dirCode = direction === 'Về' ? 'V' : 'D'
-  const timeCode = departureTime.replace(':', '')
-  const baseCode = `BDG-${cleanedRouteCode}-${dirCode}-${timeCode}`
-  if (!suffix || suffix <= 1) return baseCode
-  return `${baseCode}-${suffix}`
-}
-
 const stripBusPrefix = (value: string): string => value.replace(/^BUS-/i, '').trim()
-
-const ensureBusRouteCode = (value: string): { routeCode: string; routeCodeOld: string } => {
-  const routeCodeOld = stripBusPrefix(value)
-  return {
-    routeCode: `BUS-${routeCodeOld}`,
-    routeCodeOld,
-  }
-}
-
-const escapeSqlString = (value: string | null): string => {
-  if (value === null) return 'NULL'
-  // Remove NULL bytes from external data, then escape single quotes for PostgreSQL
-  return `'${value.replace(/\0/g, '').replace(/'/g, "''")}'`
-}
-
-const countFromRow = (row: Record<string, unknown> | undefined, key: string): number => {
-  const value = row?.[key]
-  return Number(value || 0)
-}
-
-type DbExecutor = NonNullable<typeof db>
-
-const NULL_FIREBASE_SENTINEL = '__NULL_FIREBASE__'
-
-const uniqueFirebaseIds = (firebaseIds: string[]): string[] => {
-  const deduped = new Map<string, string>()
-  firebaseIds.forEach((item) => {
-    const trimmed = item.trim()
-    if (!trimmed) return
-    deduped.set(toLookupKey(trimmed), trimmed)
-  })
-  return [...deduped.values()]
-}
-
-const insertSeenFirebaseTempTable = async (
-  executor: DbExecutor,
-  tableName: '_tmp_gtvt_route_seen_ids' | '_tmp_gtvt_schedule_seen_ids',
-  firebaseIds: string[]
-): Promise<void> => {
-  await executor.execute(sql.raw(`DROP TABLE IF EXISTS ${tableName}`))
-  await executor.execute(sql.raw(`
-    CREATE TEMP TABLE ${tableName} (
-      firebase_id TEXT PRIMARY KEY
-    )
-  `))
-
-  const uniqueIds = uniqueFirebaseIds(firebaseIds)
-  if (uniqueIds.length === 0) return
-
-  const chunkSize = 500
-  for (let index = 0; index < uniqueIds.length; index += chunkSize) {
-    const chunk = uniqueIds.slice(index, index + chunkSize)
-    const values = chunk.map((firebaseId) => `(${escapeSqlString(firebaseId)})`).join(',')
-    await executor.execute(sql.raw(`INSERT INTO ${tableName} VALUES ${values}`))
-  }
-}
-
-export function normalizeGtvtRoutes(
-  rawRows: Record<string, unknown>[]
-): { rows: GtvtNormalizedRoute[]; errors: GtvtSyncErrorItem[]; seenFirebaseIds: string[] } {
-  const rows: GtvtNormalizedRoute[] = []
-  const errors: GtvtSyncErrorItem[] = []
-  const seenFirebaseIds = new Set<string>()
-
-  rawRows.forEach((item, index) => {
-    if (!isRecord(item)) return
-
-    const firebaseId = pickString(item, ROUTE_ID_KEYS)
-    if (firebaseId) seenFirebaseIds.add(firebaseId)
-    const rawRouteCode = pickString(item, ROUTE_CODE_KEYS)
-    const rawRouteCodeOld = pickString(item, ROUTE_CODE_OLD_KEYS)
-    const soHieuTuyen = pickString(item, ['SoHieuTuyen', 'so_hieu_tuyen'])
-
-    if (!firebaseId) {
-      errors.push({ entity: 'route', key: `row-${index + 1}`, message: 'Missing route firebase id' })
-      return
-    }
-
-    const baseRouteCode = rawRouteCode || rawRouteCodeOld || soHieuTuyen
-    if (!baseRouteCode) {
-      errors.push({ entity: 'route', key: firebaseId, message: 'Missing route code' })
-      return
-    }
-
-    const routeTypeRaw = pickString(item, ROUTE_TYPE_KEYS)
-    const isBusRoute = Boolean(soHieuTuyen) || baseRouteCode.toUpperCase().startsWith('BUS-') || (routeTypeRaw || '').toLowerCase() === 'bus'
-
-    const normalizedBus = isBusRoute ? ensureBusRouteCode(rawRouteCodeOld || soHieuTuyen || baseRouteCode) : null
-    const routeCode = normalizedBus ? normalizedBus.routeCode : baseRouteCode.trim()
-    if (routeCode.length > MAX_ROUTE_CODE_LENGTH) {
-      errors.push({ entity: 'route', key: firebaseId, message: `Route code exceeds ${MAX_ROUTE_CODE_LENGTH} characters` })
-      return
-    }
-    const routeCodeOld = normalizedBus ? normalizedBus.routeCodeOld : (rawRouteCodeOld || null)
-    const routeType = normalizedBus ? 'bus' : (routeTypeRaw || null)
-
-    rows.push({
-      firebaseId,
-      routeCode,
-      routeCodeOld,
-      routeType,
-      departureStation: pickString(item, DEPARTURE_STATION_KEYS),
-      arrivalStation: pickString(item, ARRIVAL_STATION_KEYS),
-      operationStatus: pickString(item, OPERATION_STATUS_KEYS),
-      distanceKm: pickNumber(item, DISTANCE_KEYS),
-      metadata: {
-        provider: 'gtvt-appsheet',
-      },
-    })
-  })
-
-  return { rows, errors, seenFirebaseIds: [...seenFirebaseIds] }
-}
-
-export function normalizeGtvtSchedules(
-  rawRows: Record<string, unknown>[]
-): { rows: GtvtNormalizedSchedule[]; errors: GtvtSyncErrorItem[]; seenFirebaseIds: string[] } {
-  const rows: GtvtNormalizedSchedule[] = []
-  const errors: GtvtSyncErrorItem[] = []
-  const seenFirebaseIds = new Set<string>()
-
-  rawRows.forEach((item, index) => {
-    if (!isRecord(item)) return
-
-    const firebaseId = pickString(item, SCHEDULE_ID_KEYS)
-    if (!firebaseId) {
-      errors.push({ entity: 'schedule', key: `row-${index + 1}`, message: 'Missing schedule firebase id' })
-      return
-    }
-    seenFirebaseIds.add(firebaseId)
-
-    const departureTime = parseTimeValue(pickString(item, SCHEDULE_TIME_KEYS))
-    if (!departureTime) {
-      errors.push({ entity: 'schedule', key: firebaseId, message: 'Invalid or missing departure time' })
-      return
-    }
-
-    const daysOfWeek = parseIntArray(item[SCHEDULE_DAYS_OF_WEEK_KEYS[0]] ?? item[SCHEDULE_DAYS_OF_WEEK_KEYS[1]], 1, 7)
-    const daysOfMonth = parseIntArray(item[SCHEDULE_DAYS_OF_MONTH_KEYS[0]] ?? item[SCHEDULE_DAYS_OF_MONTH_KEYS[1]] ?? item[SCHEDULE_DAYS_OF_MONTH_KEYS[2]], 1, 31)
-    const direction = normalizeDirection(pickString(item, SCHEDULE_DIRECTION_KEYS))
-    const calendarType = normalizeCalendarType(pickString(item, SCHEDULE_CALENDAR_KEYS))
-    const frequencyType = normalizeFrequencyType(pickString(item, SCHEDULE_FREQUENCY_KEYS), daysOfWeek, daysOfMonth)
-
-    rows.push({
-      firebaseId,
-      routeFirebaseId: pickString(item, SCHEDULE_ROUTE_ID_KEYS),
-      routeCode: pickString(item, SCHEDULE_ROUTE_CODE_KEYS),
-      operatorFirebaseId: pickString(item, SCHEDULE_OPERATOR_ID_KEYS),
-      operatorCode: pickString(item, SCHEDULE_OPERATOR_CODE_KEYS),
-      scheduleCode: pickString(item, SCHEDULE_CODE_KEYS),
-      departureTime,
-      direction,
-      frequencyType,
-      daysOfWeek: daysOfWeek.length > 0 ? daysOfWeek : (frequencyType === 'daily' ? DEFAULT_DAYS_OF_WEEK : []),
-      daysOfMonth,
-      calendarType,
-      effectiveFrom: parseDateValue(pickString(item, SCHEDULE_EFFECTIVE_FROM_KEYS)) || '2025-01-01',
-      notificationNumber: pickString(item, SCHEDULE_NOTIFICATION_KEYS),
-      tripStatus: pickString(item, SCHEDULE_TRIP_STATUS_KEYS) || 'Hoạt động',
-      metadata: {
-        provider: 'gtvt-appsheet',
-      },
-    })
-  })
-
-  return { rows, errors, seenFirebaseIds: [...seenFirebaseIds] }
-}
 
 const runRoutesSync = async (
   executor: DbExecutor,
@@ -777,13 +496,6 @@ const runSchedulesSync = async (
   return { inserted, updated, disabled, failed }
 }
 
-const cleanupTempTables = async (executor: DbExecutor): Promise<void> => {
-  await executor.execute(sql.raw('DROP TABLE IF EXISTS _tmp_gtvt_schedules'))
-  await executor.execute(sql.raw('DROP TABLE IF EXISTS _tmp_gtvt_routes'))
-  await executor.execute(sql.raw('DROP TABLE IF EXISTS _tmp_gtvt_route_seen_ids'))
-  await executor.execute(sql.raw('DROP TABLE IF EXISTS _tmp_gtvt_schedule_seen_ids'))
-}
-
 export async function getGtvtLastSyncStatus(): Promise<GtvtLastSyncResponse> {
   if (!db) throw new GtvtSourceError('Database connection not available')
 
@@ -809,9 +521,6 @@ export async function getGtvtLastSyncStatus(): Promise<GtvtLastSyncResponse> {
     lastScheduleSyncAt: scheduleDate ? new Date(String(scheduleDate)).toISOString() : null,
   }
 }
-
-// Advisory lock key to prevent concurrent sync operations
-const GTVT_SYNC_LOCK_KEY = 737001
 
 export async function syncGtvtRoutesAndSchedules(options: GtvtSyncOptions): Promise<GtvtSyncSummaryResponse> {
   if (!db) throw new GtvtSourceError('Database connection not available')

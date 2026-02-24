@@ -1,8 +1,6 @@
 import { describe, it, expect } from '@jest/globals'
-import {
-  normalizeGtvtRoutes,
-  normalizeGtvtSchedules,
-} from '../gtvt-route-schedule-sync.service.js'
+import { normalizeGtvtRoutes } from '../gtvt-normalize-routes.service.js'
+import { normalizeGtvtSchedules } from '../gtvt-normalize-schedules.service.js'
 
 describe('GTVT Route/Schedule Sync Service', () => {
   describe('normalizeGtvtRoutes', () => {

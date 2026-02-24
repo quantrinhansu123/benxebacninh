@@ -6,7 +6,7 @@ export interface GtvtSyncErrorItem {
   message: string
 }
 
-export interface GtvtSyncSummaryCounters {
+export interface GtvtSyncCounters {
   incomingRoutes: number
   incomingSchedules: number
   insertedRoutes: number
@@ -24,7 +24,7 @@ export interface GtvtSyncSummaryResponse {
   startedAt: string
   finishedAt: string
   durationMs: number
-  summary: GtvtSyncSummaryCounters
+  summary: GtvtSyncCounters
   errors: GtvtSyncErrorItem[]
 }
 
