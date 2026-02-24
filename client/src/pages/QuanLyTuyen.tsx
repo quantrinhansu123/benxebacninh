@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { toast } from "react-toastify"
 import { Search, Eye, RefreshCw, ChevronLeft, ChevronRight, MapPin, FileText, Route, TrendingUp, CheckCircle, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -21,8 +21,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { routeService, LegacyRoute } from "@/services/route.service"
+import { gtvtSyncService } from "@/services/gtvt-sync.service"
+import { isAxiosError } from "axios"
+import type { GtvtLastSyncResponse, GtvtSyncSummaryResponse } from "@/types/gtvt-sync.types"
 import { useUIStore } from "@/store/ui.store"
 import { useDialogHistory } from "@/hooks/useDialogHistory"
+import { useAuthStore } from "@/features/auth/store/authStore"
 
 export default function QuanLyTuyen() {
   const [routes, setRoutes] = useState<LegacyRoute[]>([])
@@ -34,12 +38,20 @@ export default function QuanLyTuyen() {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedRoute, setSelectedRoute] = useState<LegacyRoute | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncDryRun, setSyncDryRun] = useState(false)
+  const [syncResult, setSyncResult] = useState<GtvtSyncSummaryResponse | null>(null)
+  const [lastSync, setLastSync] = useState<GtvtLastSyncResponse | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
+  const currentUser = useAuthStore((state) => state.user)
+  const isAdmin = currentUser?.role === "admin"
 
   // Handle browser back button for dialog
   const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "routeDialogOpen")
+  const { handleDialogOpenChange: handleSyncDialogOpenChange } = useDialogHistory(syncDialogOpen, setSyncDialogOpen, "gtvtSyncDialogOpen")
 
   useEffect(() => {
     setTitle("Quản lý tuyến xe")
@@ -50,8 +62,6 @@ export default function QuanLyTuyen() {
     setIsLoading(true)
     try {
       const data = await routeService.getLegacy(forceRefresh)
-      console.log('[QuanLyTuyen] Loaded routes:', data.length)
-      console.log('[QuanLyTuyen] Sample route type:', data[0]?.routeType)
       setRoutes(data)
     } catch (error) {
       console.error("Failed to load routes:", error)
@@ -60,6 +70,67 @@ export default function QuanLyTuyen() {
       setIsLoading(false)
     }
   }
+
+  const loadLastSync = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const data = await gtvtSyncService.getLastSync()
+      setLastSync(data)
+    } catch (error) {
+      console.error("Failed to load GTVT last sync:", error)
+    }
+  }, [isAdmin])
+
+  const handleOpenSyncDialog = async () => {
+    setSyncDryRun(false)
+    setSyncResult(null)
+    handleSyncDialogOpenChange(true)
+    await loadLastSync()
+  }
+
+  const handleRunSync = async () => {
+    // Confirm before live sync to prevent accidental data overwrites
+    if (!syncDryRun && !window.confirm("Bạn có chắc muốn đồng bộ thật? Dữ liệu sẽ được ghi đè.")) {
+      return
+    }
+
+    setIsSyncing(true)
+    try {
+      const result = await gtvtSyncService.syncRoutesSchedules(syncDryRun)
+      setSyncResult(result)
+
+      if (result.errors.length > 0) {
+        toast.warning(`Đồng bộ hoàn tất với ${result.errors.length} lỗi`)
+      } else if (syncDryRun) {
+        toast.success("Dry-run hoàn tất")
+      } else {
+        toast.success("Đồng bộ dữ liệu thành công")
+      }
+
+      if (!syncDryRun) {
+        await loadRoutes(true)
+        await loadLastSync()
+      }
+    } catch (error: unknown) {
+      console.error("Failed to sync GTVT data:", error)
+      let message = "Không thể đồng bộ dữ liệu từ Sở GTVT"
+      if (isAxiosError(error)) {
+        const apiError = error.response?.data?.error
+        if (typeof apiError === "string" && apiError.trim()) {
+          message = apiError
+        }
+      }
+      toast.error(message)
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isAdmin) {
+      void loadLastSync()
+    }
+  }, [isAdmin, loadLastSync])
 
   // Get unique values for filters
   const departureProvinces = Array.from(new Set(routes.map((r) => r.departureProvince).filter(Boolean))).sort()
@@ -138,6 +209,13 @@ export default function QuanLyTuyen() {
     return dateStr
   }
 
+  const formatDateTime = (dateStr: string | null) => {
+    if (!dateStr) return "Chưa có"
+    const value = new Date(dateStr)
+    if (Number.isNaN(value.getTime())) return "Chưa có"
+    return value.toLocaleString("vi-VN")
+  }
+
   const getStatusColor = (status: string) => {
     const s = status.toLowerCase()
     if (s.includes("mới") || s.includes("hoạt động")) return "bg-emerald-100 text-emerald-700"
@@ -172,10 +250,18 @@ export default function QuanLyTuyen() {
             </div>
           </div>
 
-          <Button onClick={() => loadRoutes(true)} disabled={isLoading} variant="outline" className="px-4 py-2.5 rounded-xl">
-            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            Làm mới
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button onClick={handleOpenSyncDialog} disabled={isSyncing} className="px-4 py-2.5 rounded-xl">
+                <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                Đồng bộ Sở GTVT
+              </Button>
+            )}
+            <Button onClick={() => loadRoutes(true)} disabled={isLoading} variant="outline" className="px-4 py-2.5 rounded-xl">
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              Làm mới
+            </Button>
+          </div>
         </div>
 
         {/* Hero Stats */}
@@ -474,6 +560,114 @@ export default function QuanLyTuyen() {
           </div>
         )}
       </Card>
+
+      {/* Sync Dialog */}
+      <Dialog open={syncDialogOpen} onOpenChange={handleSyncDialogOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Đồng bộ dữ liệu từ Sở GTVT</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-sm text-gray-500">Lần đồng bộ tuyến gần nhất</p>
+                <p className="font-medium">{formatDateTime(lastSync?.lastRouteSyncAt || null)}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-sm text-gray-500">Lần đồng bộ lịch gần nhất</p>
+                <p className="font-medium">{formatDateTime(lastSync?.lastScheduleSyncAt || null)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="syncMode">Chế độ chạy</Label>
+              <Select
+                id="syncMode"
+                value={syncDryRun ? "dry-run" : "live"}
+                onChange={(e) => setSyncDryRun(e.target.value === "dry-run")}
+              >
+                <option value="live">Đồng bộ thật (ghi dữ liệu)</option>
+                <option value="dry-run">Dry-run (chỉ thống kê, không ghi dữ liệu)</option>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => handleSyncDialogOpenChange(false)} disabled={isSyncing}>
+                Đóng
+              </Button>
+              <Button onClick={handleRunSync} disabled={isSyncing}>
+                {isSyncing ? "Đang đồng bộ..." : (syncDryRun ? "Chạy dry-run" : "Đồng bộ ngay")}
+              </Button>
+            </div>
+
+            {syncResult && (
+              <div className="border rounded-lg p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Kết quả lần chạy</h3>
+                  <p className="text-sm text-gray-500">
+                    {formatDateTime(syncResult.finishedAt)}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div className="bg-emerald-50 p-3 rounded">
+                    <p className="text-gray-500">Route thêm mới</p>
+                    <p className="font-semibold">{syncResult.summary.insertedRoutes}</p>
+                  </div>
+                  <div className="bg-indigo-50 p-3 rounded">
+                    <p className="text-gray-500">Route cập nhật</p>
+                    <p className="font-semibold">{syncResult.summary.updatedRoutes}</p>
+                  </div>
+                  <div className="bg-amber-50 p-3 rounded">
+                    <p className="text-gray-500">Route disable</p>
+                    <p className="font-semibold">{syncResult.summary.disabledRoutes}</p>
+                  </div>
+                  <div className="bg-emerald-50 p-3 rounded">
+                    <p className="text-gray-500">Schedule thêm mới</p>
+                    <p className="font-semibold">{syncResult.summary.insertedSchedules}</p>
+                  </div>
+                  <div className="bg-indigo-50 p-3 rounded">
+                    <p className="text-gray-500">Schedule cập nhật</p>
+                    <p className="font-semibold">{syncResult.summary.updatedSchedules}</p>
+                  </div>
+                  <div className="bg-amber-50 p-3 rounded">
+                    <p className="text-gray-500">Schedule disable</p>
+                    <p className="font-semibold">{syncResult.summary.disabledSchedules}</p>
+                  </div>
+                </div>
+
+                {syncResult.errors.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-rose-600">
+                      Lỗi xử lý: {syncResult.errors.length}
+                    </p>
+                    <div className="border rounded max-h-64 overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-center w-[120px]">Entity</TableHead>
+                            <TableHead className="text-center w-[220px]">Key</TableHead>
+                            <TableHead>Message</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {syncResult.errors.map((item, index) => (
+                            <TableRow key={`${item.entity}-${item.key}-${index}`}>
+                              <TableCell className="text-center">{item.entity}</TableCell>
+                              <TableCell className="text-center font-mono text-xs">{item.key}</TableCell>
+                              <TableCell>{item.message}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Detail Dialog */}
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
