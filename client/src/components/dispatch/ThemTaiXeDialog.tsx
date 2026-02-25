@@ -269,7 +269,7 @@ export function ThemTaiXeDialog({
         ) : (
           <>
             {/* Select Driver Mode */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 pr-8">
               <h2 className="text-xl font-bold">Chọn tài xế</h2>
               <Button
                 size="sm"
