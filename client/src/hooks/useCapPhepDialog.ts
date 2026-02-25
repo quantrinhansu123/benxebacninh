@@ -848,7 +848,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     if (!scheduleId) return;
     const selected = schedules.find(s => s.id === scheduleId);
     if (selected?.departureTime) {
-      setDepartureTime(selected.departureTime);
+      // Trim seconds - display HH:mm only (e.g. "06:15" instead of "06:15:00")
+      setDepartureTime(selected.departureTime.slice(0, 5));
     }
   }, [scheduleId, schedules]);
 
