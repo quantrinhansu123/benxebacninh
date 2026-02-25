@@ -371,9 +371,15 @@ export function CapPhepDialogRedesign({
                             Giờ xuất bến <span className="text-rose-500">*</span>
                           </label>
                           <input
-                            type="time"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="HH:mm"
+                            maxLength={5}
                             value={hook.departureTime}
-                            onChange={(e) => hook.setDepartureTime(e.target.value)}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/[^\d:]/g, '');
+                              hook.setDepartureTime(v);
+                            }}
                             readOnly={readOnly}
                             className={`w-full h-11 px-4 rounded-lg border text-base ${
                               hook.validationErrors.departureTime 

@@ -5,7 +5,6 @@ import {
   Search,
   Edit,
   Eye,
-  Trash2,
   Car,
   ChevronLeft,
   ChevronRight,
@@ -14,14 +13,12 @@ import {
   Calendar,
   Building2,
   Users,
-  AlertCircle,
   TrendingUp,
   RefreshCw,
   SlidersHorizontal,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -100,13 +97,12 @@ export default function QuanLyXe() {
   const [filterOperator, setFilterOperator] = useState("")
   const [filterStatus, setFilterStatus] = useState("")
   const [quickFilter, setQuickFilter] = useState<"all" | "active" | "inactive">("all")
-  const [showOnlyBadgeVehicles, setShowOnlyBadgeVehicles] = useState(true)
+  // Always filter to only show badge vehicles (Buýt/TCĐ)
+  const showOnlyBadgeVehicles = true
   const [isLoading, setIsLoading] = useState(false)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [viewMode, setViewMode] = useState<"create" | "edit" | "view">("create")
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [displayMode, setDisplayMode] = useState<"table" | "grid">("table")
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
@@ -123,8 +119,8 @@ export default function QuanLyXe() {
   const loadData = async (forceRefresh = false) => {
     setIsLoading(true)
     try {
-      // Use optimized unified endpoint - single request for vehicles and operators
-      const data = await quanlyDataService.getAll(['vehicles', 'operators'], forceRefresh)
+      // Use optimized unified endpoint - single request for all data
+      const data = await quanlyDataService.getAll(['vehicles', 'operators', 'badges'], forceRefresh)
 
       // Convert to expected formats
       const vehicleData: Vehicle[] = (data.vehicles || []).map(v => ({
@@ -139,7 +135,28 @@ export default function QuanLyXe() {
       } as any))
 
       setVehicles(vehicleData)
-      setOperatorCount((data.operators || []).length)
+
+      // Count only operators with vehicles that have Buýt/Tuyến cố định badges
+      const badges = data.badges || [];
+      const vehicles2 = data.vehicles || [];
+      const allOperators = data.operators || [];
+      const allowedTypes = ["Buýt", "Tuyến cố định"];
+      const normPlate = (p: string) => p?.replace(/[\s.\-]/g, "").toUpperCase() || "";
+      const badgePlates = new Set(
+        badges.filter(b => allowedTypes.includes(b.badge_type)).map(b => normPlate(b.license_plate_sheet)).filter(Boolean)
+      );
+      const opIds = new Set<string>();
+      const opNames = new Set<string>();
+      for (const v of vehicles2) {
+        if (v.plateNumber && badgePlates.has(normPlate(v.plateNumber))) {
+          if (v.operatorId) opIds.add(v.operatorId);
+          if (v.operatorName) opNames.add(v.operatorName.trim().toUpperCase());
+        }
+      }
+      const filteredOpCount = allOperators.filter(
+        op => opIds.has(op.id) || opNames.has(op.name?.trim().toUpperCase())
+      ).length;
+      setOperatorCount(filteredOpCount)
     } catch (error) {
       console.error("Failed to load data:", error)
       toast.error("Không thể tải danh sách xe. Vui lòng thử lại sau.")
@@ -242,26 +259,6 @@ export default function QuanLyXe() {
     } catch (error) {
       console.error("Failed to load vehicle details:", error)
       toast.error("Không thể tải thông tin xe. Vui lòng thử lại.")
-    }
-  }
-
-  const handleDelete = (vehicle: Vehicle) => {
-    setVehicleToDelete(vehicle)
-    setDeleteDialogOpen(true)
-  }
-
-  const confirmDelete = async () => {
-    if (!vehicleToDelete) return
-    
-    try {
-      await vehicleService.delete(vehicleToDelete.id)
-      toast.success("Xóa xe thành công")
-      setDeleteDialogOpen(false)
-      setVehicleToDelete(null)
-      loadData()
-    } catch (error: any) {
-      console.error("Failed to delete vehicle:", error)
-      toast.error(error.response?.data?.error || "Không thể xóa xe. Vui lòng thử lại.")
     }
   }
 
@@ -437,21 +434,6 @@ export default function QuanLyXe() {
           {/* Divider */}
           <div className="hidden lg:block w-px h-10 bg-slate-200" />
 
-          {/* Badge Filter Toggle */}
-          <div className="flex items-center gap-2 px-2">
-            <Switch
-              id="badge-filter"
-              checked={showOnlyBadgeVehicles}
-              onCheckedChange={setShowOnlyBadgeVehicles}
-            />
-            <Label htmlFor="badge-filter" className="text-sm text-slate-600 whitespace-nowrap cursor-pointer">
-              Chỉ Buýt/TCĐ
-            </Label>
-          </div>
-
-          {/* Divider */}
-          <div className="hidden lg:block w-px h-10 bg-slate-200" />
-
           {/* View Toggle */}
           <div className="flex items-center gap-2 px-2">
             <div className="flex items-center bg-slate-100 rounded-xl p-1">
@@ -567,13 +549,13 @@ export default function QuanLyXe() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                       Biển kiểm soát
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-[120px]">
                       Loại xe
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider">
+                    <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider w-[80px]">
                       Số chỗ
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider min-w-[300px]">
                       Đơn vị vận tải
                     </th>
                     <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider">
@@ -642,9 +624,9 @@ export default function QuanLyXe() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 max-w-[250px]">
+                          <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="text-slate-600 truncate">
+                            <span className="text-slate-600">
                               {getOperatorName(vehicle) || "N/A"}
                             </span>
                           </div>
@@ -683,13 +665,7 @@ export default function QuanLyXe() {
                             >
                               <Edit className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => handleDelete(vehicle)}
-                              className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                              title="Xóa"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {/* Nút xóa đã được ẩn theo yêu cầu */}
                           </div>
                         </td>
                       </tr>
@@ -786,12 +762,7 @@ export default function QuanLyXe() {
                     >
                       <Edit className="h-4 w-4" />
                     </button>
-                    <button
-                      onClick={() => handleDelete(vehicle)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {/* Nút xóa đã được ẩn theo yêu cầu */}
                   </div>
                 </div>
               ))
@@ -884,42 +855,6 @@ export default function QuanLyXe() {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation Dialog */}
-        {deleteDialogOpen && (
-          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 rounded-2xl bg-rose-100">
-                  <AlertCircle className="h-6 w-6 text-rose-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Xác nhận xóa xe</h3>
-                  <p className="text-sm text-slate-500">Thao tác này không thể hoàn tác</p>
-                </div>
-              </div>
-              <p className="text-slate-600 mb-6">
-                Bạn có chắc chắn muốn xóa xe <strong className="font-mono text-slate-800">{vehicleToDelete?.plateNumber}</strong>?
-              </p>
-              <div className="flex justify-end gap-3">
-                <Button
-                  onClick={() => {
-                    setDeleteDialogOpen(false)
-                    setVehicleToDelete(null)
-                  }}
-                  className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
-                >
-                  Hủy
-                </Button>
-                <Button
-                  onClick={confirmDelete}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-red-500 text-white hover:from-rose-600 hover:to-red-600 shadow-lg shadow-rose-500/25 transition-all"
-                >
-                  Xóa xe
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* CSS Animation */}

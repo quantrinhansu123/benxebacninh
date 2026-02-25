@@ -76,12 +76,61 @@ export function useOperatorManagement() {
   const loadOperators = async (forceRefresh = false) => {
     setIsLoading(true);
     try {
-      // Use optimized unified endpoint for faster loading
-      const data = await quanlyDataService.getOperators(forceRefresh);
-      setOperators(data as OperatorWithSource[]);
+      // Single API call to avoid cache race conditions
+      const data = await quanlyDataService.getAll(
+        ["operators", "badges", "vehicles"],
+        forceRefresh
+      );
+      const allOperators = data.operators || [];
+      const badges = data.badges || [];
+      const vehicles = data.vehicles || [];
+
+      // Filter badges to only "Buýt" and "Tuyến cố định"
+      const allowedBadgeTypes = ["Buýt", "Tuyến cố định"];
+      const relevantBadges = badges.filter((b) =>
+        allowedBadgeTypes.includes(b.badge_type)
+      );
+
+      // Normalize plate number: remove dots, dashes, spaces for reliable matching
+      const normalizePlate = (plate: string) =>
+        plate?.replace(/[\s.\-]/g, "").toUpperCase() || "";
+
+      // Get normalized plate numbers from relevant badges
+      const badgePlates = new Set(
+        relevantBadges
+          .map((b) => normalizePlate(b.license_plate_sheet))
+          .filter(Boolean)
+      );
+
+      // Collect operator identifiers from vehicles matching badge plates
+      // Use both operatorId AND operatorName as fallback (some vehicles lack operatorId)
+      const operatorIds = new Set<string>();
+      const operatorNames = new Set<string>();
+
+      for (const v of vehicles) {
+        if (
+          v.plateNumber &&
+          badgePlates.has(normalizePlate(v.plateNumber))
+        ) {
+          if (v.operatorId) operatorIds.add(v.operatorId);
+          if (v.operatorName)
+            operatorNames.add(v.operatorName.trim().toUpperCase());
+        }
+      }
+
+      // Filter operators by ID or name match
+      const filteredOperators = allOperators.filter(
+        (op) =>
+          operatorIds.has(op.id) ||
+          operatorNames.has(op.name?.trim().toUpperCase())
+      );
+
+      setOperators(filteredOperators as OperatorWithSource[]);
     } catch (error) {
       console.error("Failed to load operators:", error);
-      toast.error("Không thể tải danh sách đơn vị vận tải. Vui lòng thử lại sau.");
+      toast.error(
+        "Không thể tải danh sách đơn vị vận tải. Vui lòng thử lại sau."
+      );
     } finally {
       setIsLoading(false);
     }

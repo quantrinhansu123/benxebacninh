@@ -37,6 +37,7 @@ export const vehicles = pgTable('vehicles', {
   gpsProvider: varchar('gps_provider', { length: 100 }),
   gpsUsername: varchar('gps_username', { length: 100 }),
   gpsPassword: varchar('gps_password', { length: 100 }),
+  gpsUrl: varchar('gps_url', { length: 500 }),
   // Location
   province: varchar('province', { length: 100 }),
   // Notes

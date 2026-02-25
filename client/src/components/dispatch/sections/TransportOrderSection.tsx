@@ -161,9 +161,15 @@ export function TransportOrderSection({
                 <Clock className="h-5 w-5" />
               </div>
               <StyledInput
-                type="time"
+                type="text"
+                inputMode="numeric"
+                placeholder="HH:mm"
+                maxLength={5}
                 value={departureTime}
-                onChange={(e) => setDepartureTime(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^\d:]/g, '');
+                  setDepartureTime(v);
+                }}
                 readOnly={readOnly}
                 className={`pl-12 font-bold ${validationErrors.departureTime ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/30" : ""}`}
               />

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { toast } from "react-toastify"
-import { Search, Eye, Download, Plus, Edit, Trash2, Upload, FileSpreadsheet, Award, TrendingUp, CheckCircle, XCircle, Clock } from "lucide-react"
+import { Search, Eye, Download, Plus, Upload, FileSpreadsheet, Award, TrendingUp, CheckCircle, XCircle, Clock } from "lucide-react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,29 +29,6 @@ import { useUIStore } from "@/store/ui.store"
 import { useDialogHistory } from "@/hooks/useDialogHistory"
 import { DatePicker } from "@/components/DatePicker"
 import BadgeDetailDialog from "./badge-detail-dialog"
-
-// Helper function to convert dd/MM/yyyy string to Date object
-const parseDateString = (dateStr: string | undefined | null): Date | null => {
-  if (!dateStr) return null
-
-  // If already ISO format (YYYY-MM-DD), parse directly
-  if (dateStr.includes('-') && dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-    const date = new Date(dateStr)
-    return isNaN(date.getTime()) ? null : date
-  }
-
-  // If dd/MM/yyyy format
-  if (dateStr.includes('/')) {
-    const parts = dateStr.split('/')
-    if (parts.length === 3) {
-      const [day, month, year] = parts
-      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
-      return isNaN(date.getTime()) ? null : date
-    }
-  }
-
-  return null
-}
 
 // Helper function to convert Date to ISO string (YYYY-MM-DD)
 const formatDateToISO = (date: Date | null): string => {
@@ -292,31 +269,6 @@ export default function QuanLyPhuHieuXe() {
       notes: "",
     })
     setFormDialogOpen(true)
-  }
-
-  const handleEdit = (badge: VehicleBadge) => {
-    setFormMode("edit")
-    setSelectedBadge(badge)
-    setFormData({
-      badge_number: badge.badge_number,
-      license_plate_sheet: badge.license_plate_sheet,
-      badge_type: badge.badge_type || "",
-      badge_color: badge.badge_color || "",
-      issue_date: parseDateString(badge.issue_date),
-      expiry_date: parseDateString(badge.expiry_date),
-      status: badge.status || "Còn hiệu lực",
-      file_code: badge.file_code || "",
-      issue_type: badge.issue_type || "Cấp mới",
-      bus_route_ref: badge.bus_route_ref || "",
-      vehicle_type: badge.vehicle_type || "",
-      notes: badge.notes || "",
-    })
-    setFormDialogOpen(true)
-  }
-
-  const handleDelete = (badge: VehicleBadge) => {
-    setBadgeToDelete(badge)
-    setDeleteDialogOpen(true)
   }
 
   const confirmDelete = async () => {
@@ -812,49 +764,48 @@ export default function QuanLyPhuHieuXe() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-center">Số phù hiệu</TableHead>
-              <TableHead className="text-center">Biển số xe</TableHead>
-              <TableHead className="text-center">Loại phù hiệu</TableHead>
-              <TableHead className="text-center">Màu phù hiệu</TableHead>
-              <TableHead className="text-center">Ngày cấp</TableHead>
-              <TableHead className="text-center">Ngày hết hạn</TableHead>
-              <TableHead className="text-center">Trạng thái</TableHead>
-              <TableHead className="text-center">Mã hồ sơ</TableHead>
-              <TableHead className="text-center">Thao tác</TableHead>
+              <TableHead className="text-center text-base">Số phù hiệu</TableHead>
+              <TableHead className="text-center text-base">Biển số xe</TableHead>
+              <TableHead className="text-center text-base">Loại phù hiệu</TableHead>
+              <TableHead className="text-center text-base">Màu phù hiệu</TableHead>
+              <TableHead className="text-center text-base">Ngày cấp</TableHead>
+              <TableHead className="text-center text-base">Ngày hết hạn</TableHead>
+              <TableHead className="text-center text-base">Trạng thái</TableHead>
+              <TableHead className="text-center text-base">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8">
+                <TableCell colSpan={8} className="text-center py-8">
                   Đang tải...
                 </TableCell>
               </TableRow>
             ) : filteredBadges.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                   Không có dữ liệu
                 </TableCell>
               </TableRow>
             ) : (
               paginatedBadges.map((badge) => (
                 <TableRow key={badge.id}>
-                  <TableCell className="font-medium text-center">
+                  <TableCell className="font-medium text-center text-base">
                     {badge.badge_number}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center text-base">
                     {badge.license_plate_sheet || "N/A"}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center text-base">
                     {badge.badge_type || "N/A"}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center text-base">
                     {badge.badge_color || "N/A"}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center text-base">
                     {formatDate(badge.issue_date)}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center text-base">
                     {formatDate(badge.expiry_date)}
                   </TableCell>
                   <TableCell className="text-center">
@@ -862,9 +813,6 @@ export default function QuanLyPhuHieuXe() {
                       status={getStatusVariant(badge.status)}
                       label={badge.status || "N/A"}
                     />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {badge.file_code || "N/A"}
                   </TableCell>
                   <TableCell className="text-center">
                     <div className="flex items-center justify-center gap-1">
@@ -875,23 +823,6 @@ export default function QuanLyPhuHieuXe() {
                         aria-label="Xem chi tiết"
                       >
                         <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleEdit(badge)}
-                        aria-label="Sửa"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(badge)}
-                        aria-label="Xóa"
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>

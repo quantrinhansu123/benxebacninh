@@ -9,7 +9,7 @@ import { serviceChargeService } from "@/services/service-charge.service";
 import { quanlyDataService, type QuanLyVehicle, type QuanLyRoute, type QuanLyOperator, type QuanLyBadge } from "@/services/quanly-data.service";
 import { useUIStore } from "@/store/ui.store";
 import type { Shift } from "@/services/shift.service";
-import type { DispatchRecord, Route, Schedule, Vehicle, Driver, ServiceCharge, Operator } from "@/types";
+import type { DispatchRecord, Route, Schedule, Vehicle, Driver, ServiceCharge, Operator, VehicleDocuments } from "@/types";
 
 type DocumentStatus = 'valid' | 'expired' | 'expiring_soon' | 'missing';
 
@@ -47,6 +47,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const [operators, setOperators] = useState<Operator[]>([]);
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
   const [operatorNameFromVehicle, setOperatorNameFromVehicle] = useState<string>("");
+  // Vehicle documents loaded from vehicleService.getById() for document expiry checks
+  const [vehicleDocuments, setVehicleDocuments] = useState<VehicleDocuments | null>(null);
   const [totalAmount, setTotalAmount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -143,6 +145,16 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       setDailyTripCounts({});
     }
   }, [departureDate, cachedDispatchRecords]);
+
+  // Load vehicle documents (registration, inspection, insurance expiry dates)
+  const loadVehicleDocuments = useCallback(async (vehicleId: string) => {
+    try {
+      const vehicle = await vehicleService.getById(vehicleId);
+      setVehicleDocuments(vehicle.documents || null);
+    } catch (error) {
+      console.error("Failed to load vehicle documents:", error);
+    }
+  }, []);
 
   // Helper: Get last dispatch by vehicle plate number for route auto-fill
   const getLastDispatchByVehicle = useCallback((vehiclePlateNumber: string) => {
@@ -404,6 +416,7 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     const matchingBadge = getMatchingBadge();
     const results: DocumentCheckResult[] = [];
 
+    // Phù hiệu xe - from vehicle badge data
     if (matchingBadge) {
       const { status, daysRemaining } = getDocumentStatus(matchingBadge.expiry_date);
       results.push({ name: 'Phù hiệu xe', status, expiryDate: matchingBadge.expiry_date, daysRemaining });
@@ -411,12 +424,23 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       results.push({ name: 'Phù hiệu xe', status: 'valid', expiryDate: undefined, daysRemaining: 999 });
     }
 
-    results.push({ name: 'Đăng ký xe', status: 'valid', expiryDate: undefined, daysRemaining: 999 });
-    results.push({ name: 'Đăng kiểm xe', status: 'valid', expiryDate: undefined, daysRemaining: 999 });
-    results.push({ name: 'Bảo hiểm xe', status: 'valid', expiryDate: undefined, daysRemaining: 999 });
+    // Đăng ký xe - from vehicle documents
+    const regExpiry = vehicleDocuments?.registration?.expiryDate;
+    const regCheck = getDocumentStatus(regExpiry);
+    results.push({ name: 'Đăng ký xe', status: regCheck.status, expiryDate: regExpiry, daysRemaining: regCheck.daysRemaining });
+
+    // Đăng kiểm xe - from vehicle documents
+    const inspExpiry = vehicleDocuments?.inspection?.expiryDate;
+    const inspCheck = getDocumentStatus(inspExpiry);
+    results.push({ name: 'Đăng kiểm xe', status: inspCheck.status, expiryDate: inspExpiry, daysRemaining: inspCheck.daysRemaining });
+
+    // Bảo hiểm xe - from vehicle documents
+    const insExpiry = vehicleDocuments?.insurance?.expiryDate;
+    const insCheck = getDocumentStatus(insExpiry);
+    results.push({ name: 'Bảo hiểm xe', status: insCheck.status, expiryDate: insExpiry, daysRemaining: insCheck.daysRemaining });
 
     return results;
-  }, [getMatchingBadge]);
+  }, [getMatchingBadge, vehicleDocuments]);
 
   const checkAllDocumentsValid = useCallback((): boolean => {
     const results = getDocumentsCheckResults();
@@ -521,19 +545,19 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   const handleEligible = useCallback(async () => {
     setHasAttemptedSubmit(true);
 
-    // TODO: Re-enable document validation after testing phase
-    // if (!checkAllDocumentsValid()) {
-    //   const results = getDocumentsCheckResults();
-    //   const invalidDocs = results
-    //     .filter(r => r.status === 'expired' || r.status === 'missing')
-    //     .map(r => r.name);
-    //   const errorMessage = `Xe không đủ điều kiện. Các giấy tờ sau không hợp lệ:\n• ${invalidDocs.join('\n• ')}\n\nVui lòng nhấn "Không đủ ĐK" để ghi nhận lý do.`;
-    //   toast.error(errorMessage, {
-    //     autoClose: 7000,
-    //     style: { whiteSpace: 'pre-line' }
-    //   });
-    //   return;
-    // }
+    // Validate document conditions - block permit if documents are invalid
+    if (!checkAllDocumentsValid()) {
+      const results = getDocumentsCheckResults();
+      const invalidDocs = results
+        .filter(r => r.status === 'expired' || r.status === 'missing')
+        .map(r => r.name);
+      const errorMessage = `Xe không đủ điều kiện. Các giấy tờ sau không hợp lệ:\n• ${invalidDocs.join('\n• ')}\n\nVui lòng nhấn "Không đủ ĐK" để ghi nhận lý do.`;
+      toast.error(errorMessage, {
+        autoClose: 7000,
+        style: { whiteSpace: 'pre-line' }
+      });
+      return;
+    }
 
     const { isValid, errors, fieldErrors } = validatePermitFields();
     setValidationErrors(fieldErrors);
@@ -616,8 +640,12 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
   }, [departureTime, departureDate, record, transportOrderCode, seatCount, routeId, scheduleId, replacementVehicleId, getShiftIdFromCurrentShift, onSuccess, onClose]);
 
   const handleDocumentDialogSuccess = useCallback(() => {
-    if (record.vehicleId) loadInitialData();
-  }, [record.vehicleId, loadInitialData]);
+    if (record.vehicleId) {
+      loadInitialData();
+      // Reload vehicle documents so check cards reflect updated expiry dates
+      loadVehicleDocuments(record.vehicleId);
+    }
+  }, [record.vehicleId, loadInitialData, loadVehicleDocuments]);
 
   const handleAddServiceSuccess = useCallback(() => {
     if (record.id) {
@@ -642,6 +670,8 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
       setIsInitialLoading(true);
       try {
         await loadInitialData();
+        // Load vehicle documents for expiry date checks (registration, inspection, insurance)
+        if (record.vehicleId) loadVehicleDocuments(record.vehicleId);
       } finally {
         setIsInitialLoading(false);
       }

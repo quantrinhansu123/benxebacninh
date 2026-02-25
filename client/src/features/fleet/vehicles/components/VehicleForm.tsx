@@ -67,6 +67,7 @@ const vehicleSchema = z.object({
   gpsProvider: z.string().optional(),
   gpsUsername: z.string().optional(),
   gpsPassword: z.string().optional(),
+  gpsUrl: z.string().optional(),
   province: z.string().optional(),
   imageUrl: z.string().url().optional().or(z.literal("")),
 })
@@ -92,6 +93,8 @@ export function VehicleForm({
   const [provinces, setProvinces] = useState<Province[]>([])
   const [vehicleBadges, setVehicleBadges] = useState<VehicleBadge[]>([])
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([])
+  // In edit mode, only allow editing insurance, inspection, and GPS fields
+  const isFieldLocked = mode === "edit"
 
   // State for "Thêm mới" vehicle type dialog
   const [showAddVehicleTypeDialog, setShowAddVehicleTypeDialog] = useState(false)
@@ -344,6 +347,7 @@ export function VehicleForm({
       gpsProvider: vehicle.gpsProvider || "",
       gpsUsername: vehicle.gpsUsername || "",
       gpsPassword: vehicle.gpsPassword || "",
+      gpsUrl: (vehicle as any).gpsUrl || "",
       province: vehicle.province || "",
       imageUrl: vehicle.imageUrl || "",
     } : {
@@ -461,6 +465,7 @@ export function VehicleForm({
       if (submitData.gpsProvider === "") delete submitData.gpsProvider
       if (submitData.gpsUsername === "") delete submitData.gpsUsername
       if (submitData.gpsPassword === "") delete submitData.gpsPassword
+      if (submitData.gpsUrl === "") delete submitData.gpsUrl
       if (submitData.province === "") delete submitData.province
 
       if (mode === "create") {
@@ -530,6 +535,7 @@ export function VehicleForm({
                         placeholder="Chọn hoặc nhập tên nhà xe..."
                         className="h-11"
                         displayValue={selectedOperatorName}
+                        disabled={isFieldLocked}
                       />
                     )}
                   />
@@ -546,6 +552,7 @@ export function VehicleForm({
                     className="h-11"
                     value={watch("vehicleTypeId") || ""}
                     onChange={handleVehicleTypeChange}
+                    disabled={isFieldLocked}
                   >
                     <option value="">Chọn loại xe</option>
                     {vehicleTypes.map((vt) => (
@@ -582,6 +589,7 @@ export function VehicleForm({
                         placeholder="Nhập hoặc chọn biển số..."
                         className="h-11"
                         displayValue={mode === "edit" && vehicle?.plateNumber ? vehicle.plateNumber : undefined}
+                        disabled={isFieldLocked}
                       />
                     )}
                   />
@@ -605,6 +613,7 @@ export function VehicleForm({
                     type="number"
                     className="h-11"
                     placeholder="1"
+                    disabled={isFieldLocked}
                     {...register("seatCapacity", { valueAsNumber: true })}
                   />
                   {errors.seatCapacity && (
@@ -622,6 +631,7 @@ export function VehicleForm({
                     type="number"
                     className="h-11"
                     placeholder="0"
+                    disabled={isFieldLocked}
                     {...register("bedCapacity", { valueAsNumber: true })}
                   />
                 </div>
@@ -638,6 +648,7 @@ export function VehicleForm({
                     id="chassisNumber"
                     className="h-11"
                     placeholder="Số khung"
+                    disabled={isFieldLocked}
                     {...register("chassisNumber")}
                   />
                 </div>
@@ -651,6 +662,7 @@ export function VehicleForm({
                     id="engineNumber"
                     className="h-11"
                     placeholder="Số máy"
+                    disabled={isFieldLocked}
                     {...register("engineNumber")}
                   />
                 </div>
@@ -665,6 +677,7 @@ export function VehicleForm({
                   <Select
                     id="province"
                     className="h-11"
+                    disabled={isFieldLocked}
                     {...register("province")}
                   >
                     <option value="">Chọn tỉnh/thành phố</option>
@@ -728,6 +741,7 @@ export function VehicleForm({
                   step="0.1"
                   className="h-11"
                   placeholder="Chiều dài (m)"
+                  disabled={isFieldLocked}
                   {...register("cargoLength", { setValueAs: (v) => {
                     if (v === "" || v === null || v === undefined) return undefined
                     const num = Number(v)
@@ -747,6 +761,7 @@ export function VehicleForm({
                   step="0.1"
                   className="h-11"
                   placeholder="Chiều rộng (m)"
+                  disabled={isFieldLocked}
                   {...register("cargoWidth", { setValueAs: (v) => {
                     if (v === "" || v === null || v === undefined) return undefined
                     const num = Number(v)
@@ -766,6 +781,7 @@ export function VehicleForm({
                   step="0.1"
                   className="h-11"
                   placeholder="Chiều cao (m)"
+                  disabled={isFieldLocked}
                   {...register("cargoHeight", { setValueAs: (v) => {
                     if (v === "" || v === null || v === undefined) return undefined
                     const num = Number(v)
@@ -832,6 +848,19 @@ export function VehicleForm({
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Địa chỉ truy cập - full width row */}
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="gpsUrl" className="text-sm">
+                Địa chỉ truy cập
+              </Label>
+              <Input
+                id="gpsUrl"
+                className="h-11"
+                placeholder="https://..."
+                {...register("gpsUrl")}
+              />
             </div>
           </div>
         </div>

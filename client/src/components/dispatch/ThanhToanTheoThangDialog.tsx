@@ -265,9 +265,15 @@ export function ThanhToanTheoThangDialog({
             <div className="relative mt-1">
               <Input
                 id="departureTime"
-                type="time"
+                type="text"
+                inputMode="numeric"
+                placeholder="HH:mm"
+                maxLength={5}
                 value={departureTime}
-                onChange={(e) => setDepartureTime(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^\d:]/g, '');
+                  setDepartureTime(v);
+                }}
                 required
                 className="pr-10"
               />

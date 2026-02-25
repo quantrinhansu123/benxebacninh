@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Building2, Phone, User, CheckCircle, Eye, Edit, Trash2 } from "lucide-react";
+import { Building2, Phone, User, CheckCircle, Eye, Edit } from "lucide-react";
 import type { Operator } from "@/types";
 
 interface OperatorWithSource extends Operator {
@@ -21,7 +21,7 @@ export const OperatorTableRow = memo(function OperatorTableRow({
   onRowClick,
   onView,
   onEdit,
-  onDelete,
+  onDelete: _onDelete,
 }: OperatorTableRowProps) {
   // Google Sheets data is read-only (managed externally)
   const isReadOnly = operator.source === "legacy" || operator.source === "google_sheets";
@@ -123,22 +123,7 @@ export const OperatorTableRow = memo(function OperatorTableRow({
           >
             <Edit className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(operator);
-            }}
-            className={`p-2 rounded-lg transition-all cursor-pointer ${
-              isReadOnly
-                ? "text-slate-300 cursor-not-allowed pointer-events-none"
-                : "text-slate-500 hover:text-rose-600 hover:bg-rose-50"
-            }`}
-            title={isReadOnly ? "Dữ liệu được quản lý từ Google Sheets" : "Xóa"}
-            disabled={isReadOnly}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {/* Nút xóa đã được ẩn theo yêu cầu */}
         </div>
       </td>
     </tr>

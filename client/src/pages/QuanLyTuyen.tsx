@@ -448,16 +448,16 @@ export default function QuanLyTuyen() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-center w-[120px]">Mã tuyến</TableHead>
-              <TableHead className="text-center">Bến đi</TableHead>
-              <TableHead className="text-center">Tỉnh đi</TableHead>
-              <TableHead className="text-center">Bến đến</TableHead>
-              <TableHead className="text-center">Tỉnh đến</TableHead>
-              <TableHead className="text-center w-[100px]">Loại tuyến</TableHead>
-              <TableHead className="text-center w-[80px]">Cự ly (km)</TableHead>
-              <TableHead className="text-center w-[100px]">Chuyến/tháng</TableHead>
-              <TableHead className="text-center w-[120px]">Tình trạng</TableHead>
-              <TableHead className="text-center w-[80px]">Thao tác</TableHead>
+              <TableHead className="text-left w-[120px] text-sm">Mã tuyến</TableHead>
+              <TableHead className="text-left text-sm">Bến đi</TableHead>
+              <TableHead className="text-left text-sm">Tỉnh đi</TableHead>
+              <TableHead className="text-left text-sm">Bến đến</TableHead>
+              <TableHead className="text-left text-sm">Tỉnh đến</TableHead>
+              <TableHead className="text-left w-[100px] text-sm">Loại tuyến</TableHead>
+              <TableHead className="text-center w-[80px] text-sm">Cự ly (km)</TableHead>
+              <TableHead className="text-center w-[100px] text-sm">Chuyến/tháng</TableHead>
+              <TableHead className="text-left w-[120px] text-sm">Tình trạng</TableHead>
+              <TableHead className="text-center w-[80px] text-sm">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -477,15 +477,15 @@ export default function QuanLyTuyen() {
             ) : (
               paginatedRoutes.map((route) => (
                 <TableRow key={route.id} className="hover:bg-gray-50">
-                  <TableCell className="font-mono text-sm text-center">{route.routeCode}</TableCell>
-                  <TableCell className="text-center">{route.departureStation || "N/A"}</TableCell>
-                  <TableCell className="text-center text-gray-600">{route.departureProvince || "N/A"}</TableCell>
-                  <TableCell className="text-center">{route.arrivalStation || "N/A"}</TableCell>
-                  <TableCell className="text-center text-gray-600">{route.arrivalProvince || "N/A"}</TableCell>
-                  <TableCell className="text-center text-sm">{route.routeType || "N/A"}</TableCell>
-                  <TableCell className="text-center">{route.distanceKm || "N/A"}</TableCell>
-                  <TableCell className="text-center">{route.totalTripsMonth || "N/A"}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="font-mono text-sm text-left font-semibold">{route.routeCode}</TableCell>
+                  <TableCell className="text-left text-sm">{route.departureStation || "N/A"}</TableCell>
+                  <TableCell className="text-left text-sm text-gray-600">{route.departureProvince || "N/A"}</TableCell>
+                  <TableCell className="text-left text-sm">{route.arrivalStation || "N/A"}</TableCell>
+                  <TableCell className="text-left text-sm text-gray-600">{route.arrivalProvince || "N/A"}</TableCell>
+                  <TableCell className="text-left text-sm">{route.routeType || "N/A"}</TableCell>
+                  <TableCell className="text-center text-sm">{route.distanceKm || "N/A"}</TableCell>
+                  <TableCell className="text-center text-sm">{route.totalTripsMonth || "N/A"}</TableCell>
+                  <TableCell className="text-left">
                     <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(route.operationStatus)}`}>
                       {route.operationStatus || "N/A"}
                     </span>
@@ -680,10 +680,10 @@ export default function QuanLyTuyen() {
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 bg-blue-50 p-4 rounded-lg">
-                  <p className="text-sm text-blue-600 font-medium">Mã tuyến</p>
+                  <p className="text-base text-blue-600 font-medium">Mã tuyến</p>
                   <p className="text-2xl font-bold text-blue-900">{selectedRoute.routeCode}</p>
                   {selectedRoute.routeCodeOld && selectedRoute.routeCodeOld !== selectedRoute.routeCode && (
-                    <p className="text-sm text-blue-500">Mã cũ: {selectedRoute.routeCodeOld}</p>
+                    <p className="text-base text-blue-500">Mã cũ: {selectedRoute.routeCodeOld}</p>
                   )}
                 </div>
               </div>
@@ -694,9 +694,9 @@ export default function QuanLyTuyen() {
                   <div className="flex items-start gap-2">
                     <MapPin className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="text-sm text-gray-500">Bến đi</p>
-                      <p className="font-medium">{selectedRoute.departureStation}</p>
-                      <p className="text-sm text-gray-600">{selectedRoute.departureProvince}</p>
+                      <p className="text-base text-gray-500">Bến đi</p>
+                      <p className="text-lg font-medium">{selectedRoute.departureStation}</p>
+                      <p className="text-base text-gray-600">{selectedRoute.departureProvince}</p>
                     </div>
                   </div>
                 </div>
@@ -704,9 +704,9 @@ export default function QuanLyTuyen() {
                   <div className="flex items-start gap-2">
                     <MapPin className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="text-sm text-gray-500">Bến đến</p>
-                      <p className="font-medium">{selectedRoute.arrivalStation}</p>
-                      <p className="text-sm text-gray-600">{selectedRoute.arrivalProvince}</p>
+                      <p className="text-base text-gray-500">Bến đến</p>
+                      <p className="text-lg font-medium">{selectedRoute.arrivalStation}</p>
+                      <p className="text-base text-gray-600">{selectedRoute.arrivalProvince}</p>
                     </div>
                   </div>
                 </div>
@@ -715,27 +715,27 @@ export default function QuanLyTuyen() {
               {/* Route Path */}
               {selectedRoute.routePath && (
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-500 mb-1">Hành trình chạy xe</p>
-                  <p className="text-sm">{selectedRoute.routePath}</p>
+                  <p className="text-base text-gray-500 mb-1">Hành trình chạy xe</p>
+                  <p className="text-base">{selectedRoute.routePath}</p>
                 </div>
               )}
 
               {/* Statistics */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <p className="text-sm text-gray-500">Cự ly</p>
+                  <p className="text-base text-gray-500">Cự ly</p>
                   <p className="text-xl font-bold">{selectedRoute.distanceKm} km</p>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <p className="text-sm text-gray-500">Chuyến/tháng</p>
+                  <p className="text-base text-gray-500">Chuyến/tháng</p>
                   <p className="text-xl font-bold">{selectedRoute.totalTripsMonth}</p>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <p className="text-sm text-gray-500">Đang khai thác</p>
+                  <p className="text-base text-gray-500">Đang khai thác</p>
                   <p className="text-xl font-bold">{selectedRoute.tripsInOperation}</p>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg text-center">
-                  <p className="text-sm text-gray-500">Giãn cách (phút)</p>
+                  <p className="text-base text-gray-500">Giãn cách (phút)</p>
                   <p className="text-xl font-bold">{selectedRoute.minIntervalMinutes}</p>
                 </div>
               </div>
@@ -743,12 +743,12 @@ export default function QuanLyTuyen() {
               {/* Status & Type */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-500">Loại tuyến</p>
-                  <p className="font-medium">{selectedRoute.routeType || "N/A"}</p>
+                  <p className="text-base text-gray-500">Loại tuyến</p>
+                  <p className="text-lg font-medium">{selectedRoute.routeType || "N/A"}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Tình trạng khai thác</p>
-                  <span className={`inline-flex px-2 py-1 text-sm font-medium rounded-full ${getStatusColor(selectedRoute.operationStatus)}`}>
+                  <p className="text-base text-gray-500">Tình trạng khai thác</p>
+                  <span className={`inline-flex px-2 py-1 text-base font-medium rounded-full ${getStatusColor(selectedRoute.operationStatus)}`}>
                     {selectedRoute.operationStatus || "N/A"}
                   </span>
                 </div>
@@ -758,9 +758,9 @@ export default function QuanLyTuyen() {
               <div className="border-t pt-4">
                 <div className="flex items-center gap-2 mb-3">
                   <FileText className="h-5 w-5 text-gray-400" />
-                  <p className="font-medium">Thông tin quyết định</p>
+                  <p className="text-lg font-medium">Thông tin quyết định</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-base">
                   <div>
                     <p className="text-gray-500">Số quyết định</p>
                     <p>{selectedRoute.decisionNumber || "N/A"}</p>
@@ -779,8 +779,8 @@ export default function QuanLyTuyen() {
               {/* Notes */}
               {selectedRoute.notes && (
                 <div className="border-t pt-4">
-                  <p className="text-sm text-gray-500 mb-1">Ghi chú</p>
-                  <p className="text-sm">{selectedRoute.notes}</p>
+                  <p className="text-base text-gray-500 mb-1">Ghi chú</p>
+                  <p className="text-base">{selectedRoute.notes}</p>
                 </div>
               )}
             </div>

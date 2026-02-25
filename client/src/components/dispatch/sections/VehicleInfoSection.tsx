@@ -186,7 +186,7 @@ export function VehicleInfoSection({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div>
           <FormField label="Đơn vị vận tải">
             {selectedOperatorId ? (() => {
               const op = operators.find((o) => o.id === selectedOperatorId);
