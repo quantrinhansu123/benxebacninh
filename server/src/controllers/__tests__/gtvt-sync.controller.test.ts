@@ -1,22 +1,22 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import type { Response } from 'express'
 import type { AuthRequest } from '../../middleware/auth.js'
+import { GtvtConfigError, GtvtSourceError, GtvtInternalError } from '../../types/gtvt-sync.types.js'
 
 const mockSyncGtvtRoutesAndSchedules = jest.fn()
 const mockGetGtvtLastSyncStatus = jest.fn()
 const mockInvalidateQuanLyCache = jest.fn()
 
-jest.unstable_mockModule('../../services/gtvt-route-schedule-sync.service.js', () => ({
-  syncGtvtRoutesAndSchedules: mockSyncGtvtRoutesAndSchedules,
-  getGtvtLastSyncStatus: mockGetGtvtLastSyncStatus,
+jest.mock('../../services/gtvt-route-schedule-sync.service.js', () => ({
+  syncGtvtRoutesAndSchedules: (...args: unknown[]) => mockSyncGtvtRoutesAndSchedules(...args),
+  getGtvtLastSyncStatus: (...args: unknown[]) => mockGetGtvtLastSyncStatus(...args),
 }))
 
-jest.unstable_mockModule('../quanly-data.controller.js', () => ({
-  invalidateQuanLyCache: mockInvalidateQuanLyCache,
+jest.mock('../quanly-data.controller.js', () => ({
+  invalidateQuanLyCache: (...args: unknown[]) => mockInvalidateQuanLyCache(...args),
 }))
 
-const { syncGtvtRoutesSchedules, getGtvtLastSync } = await import('../gtvt-sync.controller.js')
-const { GtvtConfigError, GtvtSourceError } = await import('../../types/gtvt-sync.types.js')
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { syncGtvtRoutesSchedules, getGtvtLastSync } = require('../gtvt-sync.controller.js')
 
 describe('GTVT Sync Controller', () => {
   let req: Partial<AuthRequest>
@@ -32,8 +32,8 @@ describe('GTVT Sync Controller', () => {
       },
     }
     res = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis(),
+      status: jest.fn().mockReturnThis() as unknown as Response['status'],
+      json: jest.fn().mockReturnThis() as unknown as Response['json'],
     }
     jest.clearAllMocks()
   })
@@ -122,7 +122,7 @@ describe('GTVT Sync Controller', () => {
   })
 
   it('should return 409 when a sync is already in progress', async () => {
-    mockSyncGtvtRoutesAndSchedules.mockRejectedValue(new GtvtSourceError('Another sync operation is already in progress'))
+    mockSyncGtvtRoutesAndSchedules.mockRejectedValue(new GtvtInternalError('Another sync operation is already in progress'))
 
     await syncGtvtRoutesSchedules(req as AuthRequest, res as Response)
 

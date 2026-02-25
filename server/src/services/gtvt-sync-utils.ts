@@ -76,6 +76,8 @@ export const parseIntArray = (value: unknown, min: number, max: number): number[
   return []
 }
 
+export const stripBusPrefix = (value: string): string => value.replace(/^BUS-/i, '').trim()
+
 export const escapeSqlString = (value: string | null): string => {
   if (value === null) return 'NULL'
   // Remove NULL bytes from external data, then escape single quotes for PostgreSQL

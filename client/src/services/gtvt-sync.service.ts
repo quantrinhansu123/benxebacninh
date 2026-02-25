@@ -3,7 +3,7 @@ import type { GtvtLastSyncResponse, GtvtSyncSummaryResponse } from '@/types/gtvt
 
 export const gtvtSyncService = {
   syncRoutesSchedules: async (dryRun = false): Promise<GtvtSyncSummaryResponse> => {
-    const response = await api.post<GtvtSyncSummaryResponse>('/integrations/gtvt/sync-routes-schedules', { dryRun })
+    const response = await api.post<GtvtSyncSummaryResponse>('/integrations/gtvt/sync-routes-schedules', { dryRun }, { timeout: 120000 })
     return response.data
   },
 

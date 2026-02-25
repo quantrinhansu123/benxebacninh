@@ -1,5 +1,5 @@
 import { isRecord } from '../utils/type-guards.js'
-import { pickString, pickNumber, MAX_ROUTE_CODE_LENGTH } from './gtvt-sync-utils.js'
+import { pickString, pickNumber, stripBusPrefix, MAX_ROUTE_CODE_LENGTH } from './gtvt-sync-utils.js'
 import type { GtvtNormalizedRoute, GtvtSyncErrorItem } from '../types/gtvt-sync.types.js'
 
 const ROUTE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_TUYEN', 'ID_Tuyen', 'id', 'route_fb_id', 'routeFbId']
@@ -10,8 +10,6 @@ const OPERATION_STATUS_KEYS = ['operation_status', 'operationStatus', 'TinhTrang
 const DEPARTURE_STATION_KEYS = ['departure_station', 'departureStation', 'BenDi', 'from_station']
 const ARRIVAL_STATION_KEYS = ['arrival_station', 'arrivalStation', 'BenDen', 'to_station']
 const DISTANCE_KEYS = ['distance_km', 'distanceKm', 'CuLy', 'cu_ly_km']
-
-const stripBusPrefix = (value: string): string => value.replace(/^BUS-/i, '').trim()
 
 const ensureBusRouteCode = (value: string): { routeCode: string; routeCodeOld: string } => {
   const routeCodeOld = stripBusPrefix(value)

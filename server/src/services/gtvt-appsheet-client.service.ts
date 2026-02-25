@@ -32,9 +32,12 @@ const extractRows = (payload: unknown): ExtractRowsResult => {
     }
   }
 
+  let hasArrayShape = false
   for (const key of ARRAY_KEYS) {
     const candidate = payload[key]
     if (!Array.isArray(candidate)) continue
+    hasArrayShape = true
+    if (candidate.length === 0) continue
     return {
       rows: toObjectArray(candidate),
       hasArrayShape: true,
@@ -44,7 +47,7 @@ const extractRows = (payload: unknown): ExtractRowsResult => {
 
   return {
     rows: [],
-    hasArrayShape: false,
+    hasArrayShape,
     sourceLength: 0,
   }
 }

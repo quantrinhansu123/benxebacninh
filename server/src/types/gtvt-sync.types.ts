@@ -91,3 +91,10 @@ export class GtvtSourceError extends Error {
   }
 }
 
+export class GtvtInternalError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'GtvtInternalError'
+  }
+}
+

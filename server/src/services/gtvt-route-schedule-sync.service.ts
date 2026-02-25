@@ -11,6 +11,7 @@ import {
   NULL_FIREBASE_SENTINEL,
   MAX_SCHEDULE_CODE_LENGTH,
   toLookupKey,
+  stripBusPrefix,
   escapeSqlString,
   countFromRow,
   uniqueFirebaseIds,
@@ -20,6 +21,7 @@ import {
 import {
   GTVT_SYNC_SOURCE,
   GtvtSourceError,
+  GtvtInternalError,
   type GtvtLastSyncResponse,
   type GtvtNormalizedRoute,
   type GtvtNormalizedSchedule,
@@ -28,15 +30,13 @@ import {
   type GtvtSyncSummaryResponse,
 } from '../types/gtvt-sync.types.js'
 
-const stripBusPrefix = (value: string): string => value.replace(/^BUS-/i, '').trim()
-
 const runRoutesSync = async (
   executor: DbExecutor,
   routeRows: GtvtNormalizedRoute[],
   seenFirebaseIds: string[],
   dryRun: boolean,
   errors: GtvtSyncErrorItem[]
-): Promise<{ inserted: number; updated: number; disabled: number }> => {
+): Promise<{ inserted: number; updated: number; disabled: number; persistedRouteKeys: string[] }> => {
   const existingRouteCodes = await executor.select({
     firebaseId: routes.firebaseId,
     routeCode: routes.routeCode,
@@ -175,7 +175,14 @@ const runRoutesSync = async (
     }
   }
 
-  return { inserted, updated, disabled }
+  const persistedRouteKeys = new Set<string>()
+  persistedRows.forEach((row) => {
+    persistedRouteKeys.add(toLookupKey(row.firebaseId))
+    persistedRouteKeys.add(toLookupKey(row.routeCode))
+    if (row.routeCodeOld) persistedRouteKeys.add(toLookupKey(row.routeCodeOld))
+  })
+
+  return { inserted, updated, disabled, persistedRouteKeys: [...persistedRouteKeys] }
 }
 
 interface ResolvedScheduleRow {
@@ -198,7 +205,7 @@ interface ResolvedScheduleRow {
 const runSchedulesSync = async (
   executor: DbExecutor,
   scheduleRows: GtvtNormalizedSchedule[],
-  routeRows: GtvtNormalizedRoute[],
+  persistedRouteKeys: string[],
   seenFirebaseIds: string[],
   dryRun: boolean,
   errors: GtvtSyncErrorItem[]
@@ -234,12 +241,7 @@ const runSchedulesSync = async (
     if (item.routeCodeOld) routeByCode.set(toLookupKey(item.routeCodeOld), mapped)
   })
 
-  const incomingRouteKeys = new Set<string>()
-  routeRows.forEach((item) => {
-    incomingRouteKeys.add(toLookupKey(item.firebaseId))
-    incomingRouteKeys.add(toLookupKey(item.routeCode))
-    if (item.routeCodeOld) incomingRouteKeys.add(toLookupKey(item.routeCodeOld))
-  })
+  const incomingRouteKeys = new Set(persistedRouteKeys.map((key) => toLookupKey(key)))
 
   const codeCounter = new Map<string, number>()
   const resolvedRows: ResolvedScheduleRow[] = []
@@ -497,7 +499,7 @@ const runSchedulesSync = async (
 }
 
 export async function getGtvtLastSyncStatus(): Promise<GtvtLastSyncResponse> {
-  if (!db) throw new GtvtSourceError('Database connection not available')
+  if (!db) throw new GtvtInternalError('Database connection not available')
 
   const [routeResult, scheduleResult] = await Promise.all([
     db.execute(sql.raw(`
@@ -523,38 +525,36 @@ export async function getGtvtLastSyncStatus(): Promise<GtvtLastSyncResponse> {
 }
 
 export async function syncGtvtRoutesAndSchedules(options: GtvtSyncOptions): Promise<GtvtSyncSummaryResponse> {
-  if (!db) throw new GtvtSourceError('Database connection not available')
+  if (!db) throw new GtvtInternalError('Database connection not available')
 
   const startedAt = new Date()
   const mode = options.dryRun ? 'dry-run' : 'live'
-  const errors: GtvtSyncErrorItem[] = []
 
   try {
-    const [rawRoutes, rawSchedules] = await Promise.all([
-      fetchGtvtRoutes(),
-      fetchGtvtSchedules(),
-    ])
-
-    const normalizedRoutes = normalizeGtvtRoutes(rawRoutes)
-    const normalizedSchedules = normalizeGtvtSchedules(rawSchedules)
-    // Track normalization errors separately to avoid double-counting in summary.failed
-    const normalizationErrorCount = normalizedRoutes.errors.length + normalizedSchedules.errors.length
-    errors.push(...normalizedRoutes.errors, ...normalizedSchedules.errors)
-
-    const hasSeenUpstreamData = (
-      normalizedRoutes.seenFirebaseIds.length > 0 ||
-      normalizedSchedules.seenFirebaseIds.length > 0
-    )
-    if (!options.dryRun && !hasSeenUpstreamData) {
-      throw new GtvtSourceError('Upstream API returned empty datasets; sync aborted to prevent mass deactivation')
-    }
-
     const result = await db.transaction(async (tx) => {
       const executor = tx as unknown as DbExecutor
       const lockRows = await executor.execute(sql.raw(`SELECT pg_try_advisory_xact_lock(${GTVT_SYNC_LOCK_KEY}) AS acquired`))
       const acquired = (lockRows[0] as Record<string, unknown>)?.acquired
       if (!acquired) {
-        throw new GtvtSourceError('Another sync operation is already in progress')
+        throw new GtvtInternalError('Another sync operation is already in progress')
+      }
+
+      const [rawRoutes, rawSchedules] = await Promise.all([
+        fetchGtvtRoutes(),
+        fetchGtvtSchedules(),
+      ])
+
+      const normalizedRoutes = normalizeGtvtRoutes(rawRoutes)
+      const normalizedSchedules = normalizeGtvtSchedules(rawSchedules)
+      const errors: GtvtSyncErrorItem[] = []
+      errors.push(...normalizedRoutes.errors, ...normalizedSchedules.errors)
+
+      const hasSeenUpstreamData = (
+        normalizedRoutes.seenFirebaseIds.length > 0 ||
+        normalizedSchedules.seenFirebaseIds.length > 0
+      )
+      if (!options.dryRun && !hasSeenUpstreamData) {
+        throw new GtvtSourceError('Upstream API returned empty datasets; sync aborted to prevent mass deactivation')
       }
 
       const routeSyncStats = await runRoutesSync(
@@ -567,17 +567,23 @@ export async function syncGtvtRoutesAndSchedules(options: GtvtSyncOptions): Prom
       const scheduleSyncStats = await runSchedulesSync(
         executor,
         normalizedSchedules.rows,
-        normalizedRoutes.rows,
+        routeSyncStats.persistedRouteKeys,
         normalizedSchedules.seenFirebaseIds,
         options.dryRun,
         errors
       )
       await cleanupTempTables(executor)
       return {
+        errors,
+        normalizedRoutes,
+        normalizedSchedules,
         routeSyncStats,
         scheduleSyncStats,
       }
     })
+    const errors = result.errors
+    const normalizedRoutes = result.normalizedRoutes
+    const normalizedSchedules = result.normalizedSchedules
     const routeStats = result.routeSyncStats
     const scheduleStats = result.scheduleSyncStats
 
@@ -602,7 +608,7 @@ export async function syncGtvtRoutesAndSchedules(options: GtvtSyncOptions): Prom
         insertedSchedules: scheduleStats.inserted,
         updatedSchedules: scheduleStats.updated,
         disabledSchedules: scheduleStats.disabled,
-        failed: normalizationErrorCount + scheduleStats.failed,
+        failed: errors.length,
       },
       errors,
     }

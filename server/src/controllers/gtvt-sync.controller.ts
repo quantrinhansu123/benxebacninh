@@ -2,7 +2,7 @@ import { Response } from 'express'
 import { z } from 'zod'
 import { invalidateQuanLyCache } from './quanly-data.controller.js'
 import { getGtvtLastSyncStatus, syncGtvtRoutesAndSchedules } from '../services/gtvt-route-schedule-sync.service.js'
-import { GtvtConfigError, GtvtSourceError } from '../types/gtvt-sync.types.js'
+import { GtvtConfigError, GtvtSourceError, GtvtInternalError } from '../types/gtvt-sync.types.js'
 import type { AuthRequest } from '../middleware/auth.js'
 
 const syncRequestSchema = z.object({
@@ -37,11 +37,15 @@ export const syncGtvtRoutesSchedules = async (req: AuthRequest, res: Response): 
       console.error('[GTVT Sync] configuration error', error)
       return res.status(400).json({ error: SYNC_CONFIG_ERROR_MESSAGE })
     }
-    if (error instanceof GtvtSourceError) {
-      console.error('[GTVT Sync] upstream source error', error)
+    if (error instanceof GtvtInternalError) {
+      console.error('[GTVT Sync] internal error', error)
       if (error.message.includes('already in progress')) {
         return res.status(409).json({ error: SYNC_CONFLICT_ERROR_MESSAGE })
       }
+      return res.status(503).json({ error: SYNC_INTERNAL_ERROR_MESSAGE })
+    }
+    if (error instanceof GtvtSourceError) {
+      console.error('[GTVT Sync] upstream source error', error)
       return res.status(502).json({ error: SYNC_SOURCE_ERROR_MESSAGE })
     }
     console.error('[GTVT Sync] unexpected error', error)
