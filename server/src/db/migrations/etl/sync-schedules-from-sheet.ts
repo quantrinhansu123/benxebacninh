@@ -9,10 +9,10 @@ import { db } from '../../drizzle.js'
 import { sql } from 'drizzle-orm'
 
 const SCHEDULE_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/export?format=csv&gid=230690868'
+  'https://docs.google.com/spreadsheets/d/1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI/export?format=csv&gid=230690868'
 
 const NOTIFICATION_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/export?format=csv&gid=1033980793'
+  'https://docs.google.com/spreadsheets/d/1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI/export?format=csv&gid=1033980793'
 
 interface ScheduleSheetRow {
   ID_NutChay: string; Ref_ThongBaoKhaiThac: string; SoThongBao: string

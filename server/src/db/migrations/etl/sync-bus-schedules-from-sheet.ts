@@ -14,7 +14,7 @@ import 'dotenv/config'
 import { db } from '../../drizzle.js'
 import { sql } from 'drizzle-orm'
 
-const SHEET_ID = '16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY'
+const SHEET_ID = '1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI'
 const BASE_GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`
 const BIEUDO_BUYT_CSV_URL = `${BASE_GVIZ_URL}&gid=1985887920`
 const GIOCHAY_BUYT_CSV_URL = `${BASE_GVIZ_URL}&gid=1047672631`

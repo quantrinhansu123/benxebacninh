@@ -77,7 +77,7 @@ routes ←--→ dispatch_records (routeId FK)
 
 ### Data Origin Notes (Google Sheet → Firebase → Supabase)
 
-**Google Sheet source:** `16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY`
+**Google Sheet source:** `1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI` (updated 2026-02-26, was `16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY`)
 
 | gid | Sheet/Tab name | Target table | Key columns |
 |-----|---------------|--------------|-------------|

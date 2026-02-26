@@ -156,24 +156,6 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     }
   }, []);
 
-  // Helper: Get last dispatch by vehicle plate number for route auto-fill
-  const getLastDispatchByVehicle = useCallback((vehiclePlateNumber: string) => {
-    if (!cachedDispatchRecords || !vehiclePlateNumber) return null;
-
-    const lastDispatch = cachedDispatchRecords
-      .filter(dr =>
-        dr.vehiclePlateNumber === vehiclePlateNumber &&
-        dr.currentStatus === 'departed' &&
-        dr.routeId
-      )
-      .sort((a, b) => {
-        const timeA = a.exitTime ? new Date(a.exitTime).getTime() : 0;
-        const timeB = b.exitTime ? new Date(b.exitTime).getTime() : 0;
-        return timeB - timeA;
-      })[0];
-
-    return lastDispatch;
-  }, [cachedDispatchRecords]);
 
   // Helper: Get routes from vehicle badges for auto-fill
   const getBadgeRoutesForVehicle = useCallback((vehiclePlateNumber: string) => {
@@ -757,68 +739,55 @@ export function useCapPhepDialog(record: DispatchRecord, onClose: () => void, on
     }
   }, [selectedVehicle, record.seatCount]);
 
-  // Auto-fill routeId: prefer badge route (active, closest schedule to entryTime), fallback to last dispatch
+  // Auto-fill routeId: only from active badge routes (no fallback to expired badges or dispatch records)
   useEffect(() => {
     if (routeAutoFilledRef.current) return;
     if (!record.vehiclePlateNumber) return;
 
-    // Strategy 1: From vehicle badges (more reliable)
     const badgeRoutes = getBadgeRoutesForVehicle(record.vehiclePlateNumber);
-    if (badgeRoutes.length > 0) {
-      // Filter active (non-expired) badges first
-      const activeBadgeRoutes = badgeRoutes.filter(r => !r.isExpired);
-      const candidates = activeBadgeRoutes.length > 0 ? activeBadgeRoutes : badgeRoutes;
+    // Only use active (non-expired) badges
+    const activeBadgeRoutes = badgeRoutes.filter(r => !r.isExpired);
+    if (activeBadgeRoutes.length === 0) return;
 
-      if (candidates.length === 1) {
+    if (activeBadgeRoutes.length === 1) {
+      routeAutoFilledRef.current = true;
+      setRouteId(activeBadgeRoutes[0].routeId);
+      return;
+    }
+
+    // 2+ active routes: pick route with closest departureTime to entryTime
+    let cancelled = false;
+    (async () => {
+      const entryMinutes = getMinutesFromTime(record.entryTime);
+      if (entryMinutes === null) {
         routeAutoFilledRef.current = true;
-        setRouteId(candidates[0].routeId);
+        setRouteId(activeBadgeRoutes[0].routeId);
         return;
       }
+      let bestRouteId = activeBadgeRoutes[0].routeId;
+      let bestDiff = Infinity;
 
-      // 2+ routes: fetch schedules, pick route with closest departureTime to entryTime
-      let cancelled = false;
-      (async () => {
-        const entryMinutes = getMinutesFromTime(record.entryTime);
-        if (entryMinutes === null) {
-          // No entry time → just pick first active candidate
-          routeAutoFilledRef.current = true;
-          setRouteId(candidates[0].routeId);
-          return;
-        }
-        let bestRouteId = candidates[0].routeId;
-        let bestDiff = Infinity;
-
-        for (const candidate of candidates) {
-          if (cancelled) return;
-          const scheds = await scheduleService.getAll(candidate.routeId, undefined, true, 'Đi');
-          if (cancelled) return;
-          for (const s of scheds) {
-            const schedMinutes = parseTimeToMinutes(s.departureTime);
-            const diff = timeDiffMinutes(schedMinutes, entryMinutes);
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestRouteId = candidate.routeId;
-            }
+      for (const candidate of activeBadgeRoutes) {
+        if (cancelled) return;
+        const scheds = await scheduleService.getAll(candidate.routeId, undefined, true, 'Đi');
+        if (cancelled) return;
+        for (const s of scheds) {
+          const schedMinutes = parseTimeToMinutes(s.departureTime);
+          const diff = timeDiffMinutes(schedMinutes, entryMinutes);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestRouteId = candidate.routeId;
           }
         }
-
-        if (!cancelled) {
-          routeAutoFilledRef.current = true;
-          setRouteId(bestRouteId);
-        }
-      })();
-      return () => { cancelled = true; };
-    }
-
-    // Strategy 2: From last dispatch (fallback)
-    if (cachedDispatchRecords && cachedDispatchRecords.length > 0) {
-      const lastDispatch = getLastDispatchByVehicle(record.vehiclePlateNumber);
-      if (lastDispatch?.routeId) {
-        routeAutoFilledRef.current = true;
-        setRouteId(lastDispatch.routeId);
       }
-    }
-  }, [record.vehiclePlateNumber, record.entryTime, vehicleBadges, routes, cachedDispatchRecords, getBadgeRoutesForVehicle, getLastDispatchByVehicle]);
+
+      if (!cancelled) {
+        routeAutoFilledRef.current = true;
+        setRouteId(bestRouteId);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [record.vehiclePlateNumber, record.entryTime, vehicleBadges, routes, getBadgeRoutesForVehicle]);
 
   // Auto-fill scheduleId: pick schedule closest to entryTime
   useEffect(() => {

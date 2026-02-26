@@ -15,7 +15,7 @@ import { vehicles } from '../../schema'
 import { sql } from 'drizzle-orm'
 
 const SHEET_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/export?format=csv&gid=40001005'
+  'https://docs.google.com/spreadsheets/d/1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI/export?format=csv&gid=40001005'
 
 interface ParsedSoCho {
   seats: number

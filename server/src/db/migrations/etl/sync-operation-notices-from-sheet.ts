@@ -7,7 +7,7 @@ import { db } from '../../drizzle.js'
 import { operationNotices } from '../../schema/index.js'
 import { sql } from 'drizzle-orm'
 
-const SHEET_ID = '16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY'
+const SHEET_ID = '1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI'
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=1033980793`
 
 interface SheetRow {

@@ -11,11 +11,11 @@ import { sql } from 'drizzle-orm'
 
 // Use /export?format=csv (NOT gviz) — gviz drops date values for some rows
 const BADGE_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/export?format=csv&gid=1560762265'
+  'https://docs.google.com/spreadsheets/d/1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI/export?format=csv&gid=1560762265'
 
 // Sheet DANHMUCXE - maps IDXe -> BienSo
 const VEHICLE_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY/export?format=csv&gid=40001005'
+  'https://docs.google.com/spreadsheets/d/1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI/export?format=csv&gid=40001005'
 
 interface SheetRow {
   ID_PhuHieu: string; MaHoSo: string; LoaiPH: string; SoPhuHieu: string; BienSoXe: string
