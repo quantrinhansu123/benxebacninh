@@ -79,17 +79,52 @@ routes ←--→ dispatch_records (routeId FK)
 
 **Google Sheet source:** `16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY`
 
-| gid | Sheet name | Target table |
-|-----|-----------|--------------|
-| `1560762265` | PHUHIEUXE | `vehicle_badges` |
-| `40001005` | DANHMUCXE | `vehicles` (plate mapping) |
-| `230690868` | (Schedules) | `schedules` |
-| `1033980793` | (Operation notices) | `operation_notices` |
+| gid | Sheet/Tab name | Target table | Key columns |
+|-----|---------------|--------------|-------------|
+| `1560762265` | PHUHIEUXE | `vehicle_badges` | ID_PhuHieu |
+| `40001005` | Xe | `vehicles` | IDXe, BienSo |
+| `230690868` | BieuDoChayXeChiTiet | `schedules` (via join) | ID_NutChay, Ref_ThongBaoKhaiThac |
+| `1033980793` | THONGBAO_KHAITHAC | `operation_notices` | ID_TB, Ref_Tuyen, Ref_DonVi |
+| `2025728801` | DANHMUCTUYENBUYT | `routes` (bus) | ID_Tuyen, SoHieuTuyen |
+| `328499076` | DANHMUCTUYENCODINH | `routes` (fixed) | MaSoTuyen, TinhDi, BenDi |
+| `1985887920` | BIEUDOCHAY_BUYT | bus schedule diagram | ID_BieuDo |
+| `1047672631` | GIOCHAY_BUYT | bus departure times | ID_GioChay |
+| `415536628` | QUYETDINH_KHAITHAC_BUYT | bus operation decisions | IDQD |
 
 **`issuing_authority` field origin:**
 - **`routes` table**: Extracted from `original_info` text in sheet "Danh mục tuyến cố định". The decision number column (e.g. `1752/SGTVT-QLVT PT&NL`) was resolved client-side (Firebase app) to full authority name (e.g. `Sở Giao thông Vận tải Bắc Giang`). Data already imported via `datasheet_routes.json`.
 - **`vehicle_badges` table**: Sheet PHUHIEUXE has `Ref_DonViCapPhuHieu` (reference ID only, not name). Stored in `metadata.issuing_authority_ref` JSONB, not a dedicated column.
 - **`vehicle_documents` table**: Manually entered in app (e.g. "Cục Đăng kiểm Việt Nam").
+
+### GTVT AppSheet Integration (Sở GTVT Bắc Giang)
+
+**AppSheet App:** SMARTTRANSPORTBG_V11_Core
+**AppID:** `7ee20176-7cb1-4ad4-9d13-e541c8b1b3dc`
+**API Version:** v2 (POST-based, NOT GET)
+
+**API Endpoint Pattern:**
+```
+POST https://www.appsheet.com/api/v2/apps/{appId}/tables/{tableName}/Action
+Header: ApplicationAccessKey: {apiKey}
+Body: {"Action": "Find", "Properties": {}, "Rows": []}
+```
+
+**AppSheet Table → Sync mapping:**
+| AppSheet Table | Env var endpoint | Purpose |
+|---|---|---|
+| `DANHMUCTUYENCODINH` | `GTVT_APPSHEET_ROUTES_ENDPOINT` | Routes (tuyến cố định) |
+| `DANHMUCTUYENBUYT` | `GTVT_APPSHEET_BUS_ROUTES_ENDPOINT` | Routes (tuyến buýt) |
+| `BieuDoChayXeChiTiet` | `GTVT_APPSHEET_SCHEDULES_ENDPOINT` | Schedule rows (nút chạy cố định) |
+| `GIOCHAY_BUYT` | `GTVT_APPSHEET_BUS_SCHEDULES_ENDPOINT` | Schedule rows (giờ chạy buýt) |
+| `THONGBAO_KHAITHAC` | `GTVT_APPSHEET_NOTIFICATIONS_ENDPOINT` | Enrichment: Ref_Tuyen, Ref_DonVi (cố định) |
+| `BIEUDOCHAY_BUYT` | `GTVT_APPSHEET_BUS_LOOKUP_ENDPOINT` | Enrichment: TuyenBuyt, DonViKhaiThac (buýt) |
+
+**Key relationship:** Both types follow same join pattern:
+- **Fixed**: BieuDoChayXeChiTiet.`Ref_ThongBaoKhaiThac` → THONGBAO_KHAITHAC.`ID_TB` → get `Ref_Tuyen`, `Ref_DonVi`
+- **Bus**: GIOCHAY_BUYT.`BieuDo` → BIEUDOCHAY_BUYT.`ID_BieuDo` → get `TuyenBuyt`, `DonViKhaiThac`
+
+**Sync code:** `server/src/services/gtvt-*.ts`, `server/src/config/gtvt-appsheet.config.ts`, `server/src/controllers/gtvt-sync.controller.ts`
+**Implementation plan:** `plans/260225-1643-gtvt-appsheet-api-fix-and-sync/plan.md`
 
 ## Documentation Management
 
