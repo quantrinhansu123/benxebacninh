@@ -8,11 +8,11 @@ import {
 } from './gtvt-sync-utils.js'
 import type { GtvtNormalizedSchedule, GtvtSyncErrorItem } from '../types/gtvt-sync.types.js'
 
-const SCHEDULE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_NutChay', 'id', 'schedule_id']
+const SCHEDULE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_NutChay', 'id', 'schedule_id', 'ID_GioChay']
 const SCHEDULE_CODE_KEYS = ['schedule_code', 'scheduleCode', 'MaBieuDo']
-const SCHEDULE_ROUTE_ID_KEYS = ['route_fb_id', 'routeFbId', 'route_firebase_id', 'Ref_Tuyen']
+const SCHEDULE_ROUTE_ID_KEYS = ['route_fb_id', 'routeFbId', 'route_firebase_id', 'Ref_Tuyen', 'TuyenBuyt']
 const SCHEDULE_ROUTE_CODE_KEYS = ['route_code', 'routeCode', 'MaTuyen', 'SoHieuTuyen']
-const SCHEDULE_OPERATOR_ID_KEYS = ['operator_fb_id', 'operatorFbId', 'Ref_DonVi', 'operator_firebase_id']
+const SCHEDULE_OPERATOR_ID_KEYS = ['operator_fb_id', 'operatorFbId', 'Ref_DonVi', 'operator_firebase_id', 'DonViKhaiThac']
 const SCHEDULE_OPERATOR_CODE_KEYS = ['operator_code', 'operatorCode', 'MaDonVi']
 const SCHEDULE_TIME_KEYS = ['departure_time', 'departureTime', 'GioXuatBen']
 const SCHEDULE_DIRECTION_KEYS = ['direction', 'Chieu']
@@ -20,8 +20,8 @@ const SCHEDULE_FREQUENCY_KEYS = ['frequency_type', 'frequencyType']
 const SCHEDULE_DAYS_OF_WEEK_KEYS = ['days_of_week', 'daysOfWeek']
 const SCHEDULE_DAYS_OF_MONTH_KEYS = ['days_of_month', 'daysOfMonth', 'NgayHoatDong']
 const SCHEDULE_CALENDAR_KEYS = ['calendar_type', 'calendarType', 'LoaiNgay']
-const SCHEDULE_EFFECTIVE_FROM_KEYS = ['effective_from', 'effectiveFrom', 'NgayBanHanh', 'ngay_ban_hanh']
-const SCHEDULE_NOTIFICATION_KEYS = ['notification_number', 'notificationNumber', 'SoThongBao']
+const SCHEDULE_EFFECTIVE_FROM_KEYS = ['effective_from', 'effectiveFrom', 'NgayBanHanh', 'ngay_ban_hanh', 'NgayApDung']
+const SCHEDULE_NOTIFICATION_KEYS = ['notification_number', 'notificationNumber', 'SoThongBao', 'QD_KhaiThac']
 const SCHEDULE_TRIP_STATUS_KEYS = ['trip_status', 'tripStatus', 'TrangThaiChuyen']
 
 const normalizeDirection = (value: string | null): string => {

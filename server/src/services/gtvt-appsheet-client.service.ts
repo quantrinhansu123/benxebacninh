@@ -66,12 +66,18 @@ async function fetchRows(endpoint: string): Promise<Record<string, unknown>[]> {
 
   try {
     const response = await fetch(url, {
-      method: 'GET',
+      method: 'POST',
       signal: controller.signal,
       headers: {
         [config.authHeader]: config.apiKey,
+        'Content-Type': 'application/json',
         Accept: 'application/json',
       },
+      body: JSON.stringify({
+        Action: 'Find',
+        Properties: {},
+        Rows: [],
+      }),
     })
 
     if (!response.ok) {
@@ -116,4 +122,28 @@ export async function fetchGtvtRoutes(): Promise<Record<string, unknown>[]> {
 export async function fetchGtvtSchedules(): Promise<Record<string, unknown>[]> {
   const config = loadGtvtAppsheetConfig()
   return fetchRows(config.schedulesEndpoint)
+}
+
+export async function fetchGtvtNotifications(): Promise<Record<string, unknown>[]> {
+  const config = loadGtvtAppsheetConfig()
+  if (!config.notificationsEndpoint) return []
+  return fetchRows(config.notificationsEndpoint)
+}
+
+export async function fetchGtvtBusRoutes(): Promise<Record<string, unknown>[]> {
+  const config = loadGtvtAppsheetConfig()
+  if (!config.busRoutesEndpoint) return []
+  return fetchRows(config.busRoutesEndpoint)
+}
+
+export async function fetchGtvtBusSchedules(): Promise<Record<string, unknown>[]> {
+  const config = loadGtvtAppsheetConfig()
+  if (!config.busSchedulesEndpoint) return []
+  return fetchRows(config.busSchedulesEndpoint)
+}
+
+export async function fetchGtvtBusLookup(): Promise<Record<string, unknown>[]> {
+  const config = loadGtvtAppsheetConfig()
+  if (!config.busLookupEndpoint) return []
+  return fetchRows(config.busLookupEndpoint)
 }

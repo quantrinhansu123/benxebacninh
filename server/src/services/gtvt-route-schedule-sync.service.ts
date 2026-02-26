@@ -1,7 +1,14 @@
 import { sql } from 'drizzle-orm'
 import { db } from '../db/drizzle.js'
 import { operators, routes, schedules } from '../db/schema/index.js'
-import { fetchGtvtRoutes, fetchGtvtSchedules } from './gtvt-appsheet-client.service.js'
+import {
+  fetchGtvtRoutes,
+  fetchGtvtSchedules,
+  fetchGtvtNotifications,
+  fetchGtvtBusRoutes,
+  fetchGtvtBusSchedules,
+  fetchGtvtBusLookup,
+} from './gtvt-appsheet-client.service.js'
 import { cachedData } from './cached-data.service.js'
 import { normalizeGtvtRoutes } from './gtvt-normalize-routes.service.js'
 import { normalizeGtvtSchedules, buildScheduleCode } from './gtvt-normalize-schedules.service.js'
@@ -29,6 +36,46 @@ import {
   type GtvtSyncOptions,
   type GtvtSyncSummaryResponse,
 } from '../types/gtvt-sync.types.js'
+
+interface LookupConfig {
+  refKey: string
+  lookupIdKey: string
+  mappings: { from: string; to: string }[]
+}
+
+/** Enrich schedule rows by joining with a lookup table */
+function enrichScheduleRows(
+  scheduleRows: Record<string, unknown>[],
+  lookupRows: Record<string, unknown>[],
+  config: LookupConfig
+): Record<string, unknown>[] {
+  if (lookupRows.length === 0) return scheduleRows
+
+  // Build lookup map: lookupIdKey value → lookup row
+  const lookupMap = new Map<string, Record<string, unknown>>()
+  for (const row of lookupRows) {
+    const id = toLookupKey(String(row[config.lookupIdKey] ?? ''))
+    if (id) lookupMap.set(id, row)
+  }
+
+  return scheduleRows.map((scheduleRow) => {
+    const refValue = toLookupKey(String(scheduleRow[config.refKey] ?? ''))
+    if (!refValue) return scheduleRow
+
+    const lookupRow = lookupMap.get(refValue)
+    if (!lookupRow) return scheduleRow
+
+    // Copy mapped fields from lookup into schedule row
+    const enriched = { ...scheduleRow }
+    for (const mapping of config.mappings) {
+      const value = lookupRow[mapping.from]
+      if (value !== undefined && value !== null && value !== '') {
+        enriched[mapping.to] = value
+      }
+    }
+    return enriched
+  })
+}
 
 const runRoutesSync = async (
   executor: DbExecutor,
@@ -539,10 +586,30 @@ export async function syncGtvtRoutesAndSchedules(options: GtvtSyncOptions): Prom
         throw new GtvtInternalError('Another sync operation is already in progress')
       }
 
-      const [rawRoutes, rawSchedules] = await Promise.all([
+      const [rawFixedRoutes, rawFixedSchedules, rawBusRoutes, rawBusSchedules, rawNotifications, rawBusLookup] = await Promise.all([
         fetchGtvtRoutes(),
         fetchGtvtSchedules(),
+        fetchGtvtBusRoutes(),
+        fetchGtvtBusSchedules(),
+        fetchGtvtNotifications(),
+        fetchGtvtBusLookup(),
       ])
+
+      // Enrich schedule rows with lookup data before normalization
+      const enrichedFixedSchedules = enrichScheduleRows(rawFixedSchedules, rawNotifications, {
+        refKey: 'Ref_ThongBaoKhaiThac',
+        lookupIdKey: 'ID_TB',
+        mappings: [{ from: 'Ref_Tuyen', to: 'Ref_Tuyen' }, { from: 'Ref_DonVi', to: 'Ref_DonVi' }],
+      })
+      const enrichedBusSchedules = enrichScheduleRows(rawBusSchedules, rawBusLookup, {
+        refKey: 'BieuDo',
+        lookupIdKey: 'ID_BieuDo',
+        mappings: [{ from: 'TuyenBuyt', to: 'Ref_Tuyen' }, { from: 'DonViKhaiThac', to: 'Ref_DonVi' }],
+      })
+
+      // Merge fixed + bus data
+      const rawRoutes = [...rawFixedRoutes, ...rawBusRoutes]
+      const rawSchedules = [...enrichedFixedSchedules, ...enrichedBusSchedules]
 
       const normalizedRoutes = normalizeGtvtRoutes(rawRoutes)
       const normalizedSchedules = normalizeGtvtSchedules(rawSchedules)

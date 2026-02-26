@@ -3,13 +3,13 @@ import { pickString, pickNumber, stripBusPrefix, MAX_ROUTE_CODE_LENGTH } from '.
 import type { GtvtNormalizedRoute, GtvtSyncErrorItem } from '../types/gtvt-sync.types.js'
 
 const ROUTE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_TUYEN', 'ID_Tuyen', 'id', 'route_fb_id', 'routeFbId']
-const ROUTE_CODE_KEYS = ['route_code', 'routeCode', 'MaTuyen', 'ma_tuyen', 'SoHieuTuyen', 'so_hieu_tuyen', 'Ref_Tuyen']
+const ROUTE_CODE_KEYS = ['route_code', 'routeCode', 'MaTuyen', 'ma_tuyen', 'SoHieuTuyen', 'so_hieu_tuyen', 'Ref_Tuyen', 'MaSoTuyen', 'MaSoTuyen_Fix']
 const ROUTE_CODE_OLD_KEYS = ['route_code_old', 'routeCodeOld', 'so_hieu_tuyen_old']
-const ROUTE_TYPE_KEYS = ['route_type', 'routeType', 'LoaiTuyen']
-const OPERATION_STATUS_KEYS = ['operation_status', 'operationStatus', 'TinhTrangKhaiThac']
-const DEPARTURE_STATION_KEYS = ['departure_station', 'departureStation', 'BenDi', 'from_station']
-const ARRIVAL_STATION_KEYS = ['arrival_station', 'arrivalStation', 'BenDen', 'to_station']
-const DISTANCE_KEYS = ['distance_km', 'distanceKm', 'CuLy', 'cu_ly_km']
+const ROUTE_TYPE_KEYS = ['route_type', 'routeType', 'LoaiTuyen', 'PhanLoaiTuyen']
+const OPERATION_STATUS_KEYS = ['operation_status', 'operationStatus', 'TinhTrangKhaiThac', 'TrangThai']
+const DEPARTURE_STATION_KEYS = ['departure_station', 'departureStation', 'BenDi', 'from_station', 'NoiDi', 'DiemDau', 'TinhDi']
+const ARRIVAL_STATION_KEYS = ['arrival_station', 'arrivalStation', 'BenDen', 'to_station', 'NoiDen', 'DiemCuoi', 'TinhDen']
+const DISTANCE_KEYS = ['distance_km', 'distanceKm', 'CuLy', 'cu_ly_km', 'CuLyTuyen_km']
 
 const ensureBusRouteCode = (value: string): { routeCode: string; routeCodeOld: string } => {
   const routeCodeOld = stripBusPrefix(value)
