@@ -23,7 +23,7 @@ import {
 import { routeService, LegacyRoute } from "@/services/route.service"
 import { gtvtSyncService } from "@/services/gtvt-sync.service"
 import { isAxiosError } from "axios"
-import type { GtvtLastSyncResponse, GtvtSyncSummaryResponse } from "@/types/gtvt-sync.types"
+import type { GtvtContractStatus, GtvtLastSyncResponse, GtvtSyncSummaryResponse } from "@/types/gtvt-sync.types"
 import { useUIStore } from "@/store/ui.store"
 import { useDialogHistory } from "@/hooks/useDialogHistory"
 import { useAuthStore } from "@/features/auth/store/authStore"
@@ -43,6 +43,7 @@ export default function QuanLyTuyen() {
   const [syncDryRun, setSyncDryRun] = useState(false)
   const [syncResult, setSyncResult] = useState<GtvtSyncSummaryResponse | null>(null)
   const [lastSync, setLastSync] = useState<GtvtLastSyncResponse | null>(null)
+  const [contractStatus, setContractStatus] = useState<GtvtContractStatus | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
@@ -84,8 +85,16 @@ export default function QuanLyTuyen() {
   const handleOpenSyncDialog = async () => {
     setSyncDryRun(false)
     setSyncResult(null)
+    setContractStatus(null)
     handleSyncDialogOpenChange(true)
     await loadLastSync()
+    // Fetch contract status to show config readiness
+    try {
+      const status = await gtvtSyncService.getContractStatus()
+      setContractStatus(status)
+    } catch {
+      setContractStatus(null)
+    }
   }
 
   const handleRunSync = async () => {
@@ -571,6 +580,22 @@ export default function QuanLyTuyen() {
             <DialogTitle className="text-xl">Đồng bộ dữ liệu từ Sở GTVT</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Contract status card */}
+            {contractStatus && (
+              <div className={`rounded-lg p-3 ${contractStatus.ready ? "bg-emerald-50 border border-emerald-200" : "bg-amber-50 border border-amber-200"}`}>
+                <p className={`text-sm font-medium mb-2 ${contractStatus.ready ? "text-emerald-700" : "text-amber-700"}`}>
+                  {contractStatus.ready ? "Cấu hình đầy đủ" : "Thiếu cấu hình bắt buộc"}
+                </p>
+                <div className="grid grid-cols-2 gap-1 text-sm">
+                  {contractStatus.fields.filter((f) => f.required).map((field) => (
+                    <div key={field.name} className="flex items-center gap-1">
+                      {field.present ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> : <XCircle className="h-3.5 w-3.5 text-red-500" />}
+                      <span className={field.present ? "text-gray-700" : "text-red-600"}>{field.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-sm text-gray-500">Lần đồng bộ tuyến gần nhất</p>
@@ -598,7 +623,7 @@ export default function QuanLyTuyen() {
               <Button variant="outline" onClick={() => handleSyncDialogOpenChange(false)} disabled={isSyncing}>
                 Đóng
               </Button>
-              <Button onClick={handleRunSync} disabled={isSyncing}>
+              <Button onClick={handleRunSync} disabled={isSyncing || (!syncDryRun && contractStatus !== null && !contractStatus.ready)}>
                 {isSyncing ? "Đang đồng bộ..." : (syncDryRun ? "Chạy dry-run" : "Đồng bộ ngay")}
               </Button>
             </div>

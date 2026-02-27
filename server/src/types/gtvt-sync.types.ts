@@ -77,6 +77,18 @@ export interface GtvtAppsheetPayload {
   schedules: Record<string, unknown>[]
 }
 
+export interface GtvtContractField {
+  name: string
+  label: string
+  required: boolean
+  present: boolean
+}
+
+export interface GtvtContractStatus {
+  ready: boolean
+  fields: GtvtContractField[]
+}
+
 export class GtvtConfigError extends Error {
   constructor(message: string) {
     super(message)

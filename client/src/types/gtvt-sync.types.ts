@@ -34,3 +34,15 @@ export interface GtvtLastSyncResponse {
   lastScheduleSyncAt: string | null
 }
 
+export interface GtvtContractField {
+  name: string
+  label: string
+  required: boolean
+  present: boolean
+}
+
+export interface GtvtContractStatus {
+  ready: boolean
+  fields: GtvtContractField[]
+}
+

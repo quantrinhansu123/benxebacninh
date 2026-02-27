@@ -1,5 +1,5 @@
 import api from '@/lib/api'
-import type { GtvtLastSyncResponse, GtvtSyncSummaryResponse } from '@/types/gtvt-sync.types'
+import type { GtvtContractStatus, GtvtLastSyncResponse, GtvtSyncSummaryResponse } from '@/types/gtvt-sync.types'
 
 export const gtvtSyncService = {
   syncRoutesSchedules: async (dryRun = false): Promise<GtvtSyncSummaryResponse> => {
@@ -9,6 +9,11 @@ export const gtvtSyncService = {
 
   getLastSync: async (): Promise<GtvtLastSyncResponse> => {
     const response = await api.get<GtvtLastSyncResponse>('/integrations/gtvt/last-sync')
+    return response.data
+  },
+
+  getContractStatus: async (): Promise<GtvtContractStatus> => {
+    const response = await api.get<GtvtContractStatus>('/integrations/gtvt/contract-status')
     return response.data
   },
 }

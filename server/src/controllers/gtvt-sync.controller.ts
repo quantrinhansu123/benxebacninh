@@ -2,6 +2,7 @@ import { Response } from 'express'
 import { z } from 'zod'
 import { invalidateQuanLyCache } from './quanly-data.controller.js'
 import { getGtvtLastSyncStatus, syncGtvtRoutesAndSchedules } from '../services/gtvt-route-schedule-sync.service.js'
+import { getContractStatus } from '../services/gtvt-contract-status.service.js'
 import { GtvtConfigError, GtvtSourceError, GtvtInternalError } from '../types/gtvt-sync.types.js'
 import type { AuthRequest } from '../middleware/auth.js'
 
@@ -60,5 +61,15 @@ export const getGtvtLastSync = async (_req: AuthRequest, res: Response): Promise
   } catch (error) {
     console.error('[GTVT Sync] get last sync error', error)
     return res.status(500).json({ error: LAST_SYNC_INTERNAL_ERROR_MESSAGE })
+  }
+}
+
+export const getGtvtContractStatus = (_req: AuthRequest, res: Response): Response => {
+  try {
+    const result = getContractStatus()
+    return res.json(result)
+  } catch (error) {
+    console.error('[GTVT Contract] status check error', error)
+    return res.status(500).json({ error: 'Failed to check contract status' })
   }
 }
