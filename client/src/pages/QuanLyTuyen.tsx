@@ -230,7 +230,6 @@ export default function QuanLyTuyen() {
       return s.includes("ngừng") || s.includes("đóng") || s.includes("hết hiệu lực")
     }).length
     const active = routes.length - inactive
-    const inactive = routes.length - active
     const uniqueProvinces = new Set([...routes.map(r => r.departureProvince), ...routes.map(r => r.arrivalProvince)].filter(Boolean)).size
     return { total: routes.length, active, inactive, uniqueProvinces }
   }, [routes])
