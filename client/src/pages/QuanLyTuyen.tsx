@@ -251,13 +251,12 @@ export default function QuanLyTuyen() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* TODO: Tạm ẩn nút đồng bộ Sở GTVT */}
-            {/* {isAdmin && (
+            {isAdmin && (
               <Button onClick={handleOpenSyncDialog} disabled={isSyncing} className="px-4 py-2.5 rounded-xl">
                 <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
                 Đồng bộ Sở GTVT
               </Button>
-            )} */}
+            )}
             <Button onClick={() => loadRoutes(true)} disabled={isLoading} variant="outline" className="px-4 py-2.5 rounded-xl">
               <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               Làm mới
