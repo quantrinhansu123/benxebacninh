@@ -90,12 +90,17 @@ const runRoutesSync = async (
   }).from(routes)
 
   const existingCodeToFirebase = new Map<string, string>()
+  // Store original firebase_id for adopting when incoming uses fallback ID
+  const existingCodeToOriginalId = new Map<string, string>()
   existingRouteCodes.forEach((item) => {
     if (!item.routeCode) return
     existingCodeToFirebase.set(
       toLookupKey(item.routeCode),
       item.firebaseId ? toLookupKey(item.firebaseId) : NULL_FIREBASE_SENTINEL
     )
+    if (item.firebaseId) {
+      existingCodeToOriginalId.set(toLookupKey(item.routeCode), item.firebaseId)
+    }
   })
 
   const dedupedByFirebase = new Map<string, GtvtNormalizedRoute>()
@@ -103,15 +108,30 @@ const runRoutesSync = async (
     dedupedByFirebase.set(toLookupKey(item.firebaseId), item)
   })
 
+  const adoptedFirebaseIds: string[] = []
   const incomingCodeToFirebase = new Map<string, string>()
   const persistedRows: GtvtNormalizedRoute[] = []
   for (const row of dedupedByFirebase.values()) {
-    const firebaseKey = toLookupKey(row.firebaseId)
+    let firebaseKey = toLookupKey(row.firebaseId)
     const routeCodeKey = toLookupKey(row.routeCode)
     const existingFirebase = existingCodeToFirebase.get(routeCodeKey)
     if (existingFirebase && existingFirebase !== firebaseKey) {
-      errors.push({ entity: 'route', key: row.firebaseId, message: `Route code conflict: ${row.routeCode}` })
-      continue
+      // If incoming firebaseId is a fallback (equals routeCode, not a real UUID),
+      // adopt the existing DB firebase_id so the upsert matches correctly
+      if (firebaseKey === routeCodeKey) {
+        const originalId = existingCodeToOriginalId.get(routeCodeKey)
+        if (originalId) {
+          row.firebaseId = originalId
+          firebaseKey = toLookupKey(originalId)
+          adoptedFirebaseIds.push(originalId)
+        } else {
+          errors.push({ entity: 'route', key: row.firebaseId, message: `Route code conflict: ${row.routeCode}` })
+          continue
+        }
+      } else {
+        errors.push({ entity: 'route', key: row.firebaseId, message: `Route code conflict: ${row.routeCode}` })
+        continue
+      }
     }
     const incomingFirebase = incomingCodeToFirebase.get(routeCodeKey)
     if (incomingFirebase && incomingFirebase !== firebaseKey) {
@@ -150,7 +170,8 @@ const runRoutesSync = async (
     }
   }
 
-  const seenRouteIds = uniqueFirebaseIds(seenFirebaseIds)
+  // Merge adopted firebase_ids so disable logic doesn't deactivate adopted routes
+  const seenRouteIds = uniqueFirebaseIds([...seenFirebaseIds, ...adoptedFirebaseIds])
   const canDisableRoutes = seenRouteIds.length > 0
   if (canDisableRoutes) {
     await insertSeenFirebaseTempTable(executor, '_tmp_gtvt_route_seen_ids', seenRouteIds)
