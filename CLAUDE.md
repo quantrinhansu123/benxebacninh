@@ -70,10 +70,17 @@ routes ←--→ dispatch_records (routeId FK)
 - 7 indexes for query optimization
 - Fields: settlement, driver settlement, fees, fuel consumption
 
+**routes table - Normalized Fields:**
+- `route_type`: MUST be one of 3 values: `"Liên tỉnh"`, `"Nội tỉnh"`, `"Xe buýt"`. Normalized in `gtvt-normalize-routes.service.ts:normalizeRouteType()`. Controller uses `isBusRouteType()` helper (checks both `"bus"` and `"xe buýt"` for backward compat).
+- `operation_status`: Active statuses include "Đã công bố", "Đang khai thác", "Hoạt động", "Mới". Inactive keywords: "ngừng", "đóng", "hết hiệu lực". Frontend counts inactive first, then `active = total - inactive`.
+- `departure_province`/`arrival_province`: Stored as Vietnamese text names (e.g. "Bắc Giang"), NOT numeric codes. No external province API dependency.
+- `departure_station`/`arrival_station`: Plain text. Watch for UTF-8 encoding corruption from Google Sheet → Firebase → Supabase migration pipeline.
+
 **Data Flow Patterns:**
 - Backend query via Drizzle ORM → Controller mapping → Frontend service → UI state
 - **CRITICAL:** Always preserve backend data fields when mapping in frontend (don't overwrite with empty defaults)
 - Use normalized lookups (`.trim().toUpperCase()`) for string matching (route names, etc.)
+- **3-Layer Normalization Rule:** When changing DB enum/category values, MUST update all 3 layers: (1) DB migration for existing data, (2) sync service for future data, (3) controller/helpers that hardcode old values. Always grep codebase for old string values before changing.
 
 ### Data Origin Notes (Google Sheet → Firebase → Supabase)
 
@@ -125,6 +132,23 @@ Body: {"Action": "Find", "Properties": {}, "Rows": []}
 
 **Sync code:** `server/src/services/gtvt-*.ts`, `server/src/config/gtvt-appsheet.config.ts`, `server/src/controllers/gtvt-sync.controller.ts`
 **Implementation plan:** `plans/260225-1643-gtvt-appsheet-api-fix-and-sync/plan.md`
+
+### GTVT Sync Known Issues & Patterns
+
+**Fallback ID Conflict (DANHMUCTUYENCODINH):**
+- DANHMUCTUYENCODINH has no UUID field → AppSheet uses `MaSoTuyen` (route code) as fallback `firebaseId`
+- When syncing, if `firebaseId === routeCode` (normalized), it's a fallback ID. Must adopt existing DB firebase_id instead of treating as conflict.
+- Logic in `gtvt-route-schedule-sync.service.ts`: `existingCodeToOriginalId` map detects fallback IDs, `adoptedFirebaseIds` merged into `seenFirebaseIds` for disable logic.
+
+**UTF-8 Encoding Corruption:**
+- Data pipeline Google Sheet → Firebase → JSON export → Supabase import corrupts Vietnamese diacritics (ế→��, ạ→��, ê→��)
+- Detection query: `WHERE column ~ '[^\x20-\x7E\u00C0-\u024F\u1E00-\u1EFF\u0300-\u036F]' OR column LIKE '%�%'`
+- Fix via Supabase migration with exact string replacement. Verify by comparing with sibling records (same route prefix).
+- Known fixed fields: `departure_province`, `arrival_province`, `departure_station`, `arrival_station`
+
+**TypeScript Build (Render deploy):**
+- Raw SQL results (`RowList<Record<string, unknown>[]>`) need `as unknown as Type` double cast pattern
+- Pre-existing TS errors in test files/ETL migrations are non-blocking for production build
 
 ## Documentation Management
 
