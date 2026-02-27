@@ -2,9 +2,10 @@ import { isRecord } from '../utils/type-guards.js'
 import { pickString, pickNumber, stripBusPrefix, MAX_ROUTE_CODE_LENGTH } from './gtvt-sync-utils.js'
 import type { GtvtNormalizedRoute, GtvtSyncErrorItem } from '../types/gtvt-sync.types.js'
 
-const ROUTE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_TUYEN', 'ID_Tuyen', 'id', 'route_fb_id', 'routeFbId']
+// MaSoTuyen/MaSoTuyen_Fix as fallback ID for fixed routes (DANHMUCTUYENCODINH has no UUID field)
+const ROUTE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_TUYEN', 'ID_Tuyen', 'id', 'route_fb_id', 'routeFbId', 'MaSoTuyen', 'MaSoTuyen_Fix']
 const ROUTE_CODE_KEYS = ['route_code', 'routeCode', 'MaTuyen', 'ma_tuyen', 'SoHieuTuyen', 'so_hieu_tuyen', 'Ref_Tuyen', 'MaSoTuyen', 'MaSoTuyen_Fix']
-const ROUTE_CODE_OLD_KEYS = ['route_code_old', 'routeCodeOld', 'so_hieu_tuyen_old']
+const ROUTE_CODE_OLD_KEYS = ['route_code_old', 'routeCodeOld', 'so_hieu_tuyen_old', 'MaSoTuyen_Cu']
 const ROUTE_TYPE_KEYS = ['route_type', 'routeType', 'LoaiTuyen', 'PhanLoaiTuyen']
 const OPERATION_STATUS_KEYS = ['operation_status', 'operationStatus', 'TinhTrangKhaiThac', 'TrangThai']
 const DEPARTURE_STATION_KEYS = ['departure_station', 'departureStation', 'BenDi', 'from_station', 'NoiDi', 'DiemDau', 'TinhDi']
