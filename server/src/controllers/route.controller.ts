@@ -48,12 +48,17 @@ const getProvinceNameMap = async (): Promise<Map<string, string>> => {
   }
 }
 
+// Check if route type indicates a bus route (handles both old "bus" and normalized "Xe buýt")
+const isBusRouteType = (routeType?: string | null, routeCode?: string | null): boolean => {
+  const type = (routeType || '').trim().toLowerCase()
+  const code = (routeCode || '').trim().toUpperCase()
+  return type === 'bus' || type === 'xe buýt' || code.startsWith('BUS-')
+}
+
 const shouldUseRouteCodeOld = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): boolean => {
   const oldCode = (routeCodeOld || '').trim()
   if (!oldCode) return false
-  const type = (routeType || '').trim().toLowerCase()
-  const code = (routeCode || '').trim().toUpperCase()
-  return type === 'bus' || code.startsWith('BUS-')
+  return isBusRouteType(routeType, routeCode)
 }
 
 const getDisplayRouteCode = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): string => {
@@ -224,8 +229,8 @@ export const createRoute = async (req: Request, res: Response) => {
     const provinceNameMap = await getProvinceNameMap()
 
     const validated = routeSchema.parse(req.body)
-    const isBusRoute = (validated.routeType || '').trim().toLowerCase() === 'bus'
-    const normalizedRoute = isBusRoute
+    const isBus = isBusRouteType(validated.routeType, validated.routeCode)
+    const normalizedRoute = isBus
       ? normalizeBusRouteCode(validated.routeCode, validated.routeCodeOld || null)
       : { routeCode: validated.routeCode, routeCodeOld: validated.routeCodeOld || null }
 
@@ -292,8 +297,8 @@ export const updateRoute = async (req: Request, res: Response) => {
 
     // Build update object
     const updateData: any = {}
-    const effectiveRouteType = (validated.routeType ?? currentRoute.routeType ?? '').trim().toLowerCase()
-    if (effectiveRouteType === 'bus') {
+    const effectiveRouteType = (validated.routeType ?? currentRoute.routeType ?? '').trim()
+    if (isBusRouteType(effectiveRouteType, currentRoute.routeCode)) {
       const candidateRouteCode =
         validated.routeCode ??
         validated.routeCodeOld ??

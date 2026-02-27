@@ -12,6 +12,15 @@ const DEPARTURE_STATION_KEYS = ['departure_station', 'departureStation', 'BenDi'
 const ARRIVAL_STATION_KEYS = ['arrival_station', 'arrivalStation', 'BenDen', 'to_station', 'NoiDen', 'DiemCuoi', 'TinhDen']
 const DISTANCE_KEYS = ['distance_km', 'distanceKm', 'CuLy', 'cu_ly_km', 'CuLyTuyen_km']
 
+// Normalize raw route type to 3 standard categories: "Liên tỉnh", "Nội tỉnh", "Xe buýt"
+const normalizeRouteType = (raw: string | null, isBus: boolean): string => {
+  if (isBus) return 'Xe buýt'
+  const v = (raw || '').trim().toLowerCase()
+  if (v.includes('nội tỉnh') || v.includes('noi tinh') || v === 'intracity') return 'Nội tỉnh'
+  // Everything else (liên tỉnh, fixed, intercity, tuyến mới, đã công bố, etc.) → Liên tỉnh
+  return 'Liên tỉnh'
+}
+
 const ensureBusRouteCode = (value: string): { routeCode: string; routeCodeOld: string } => {
   const routeCodeOld = stripBusPrefix(value)
   return {
@@ -57,7 +66,7 @@ export function normalizeGtvtRoutes(
       return
     }
     const routeCodeOld = normalizedBus ? normalizedBus.routeCodeOld : (rawRouteCodeOld || null)
-    const routeType = normalizedBus ? 'bus' : (routeTypeRaw || null)
+    const routeType = normalizeRouteType(routeTypeRaw, isBusRoute)
 
     rows.push({
       firebaseId,
