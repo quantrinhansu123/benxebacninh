@@ -11,7 +11,7 @@ import type { GtvtNormalizedSchedule, GtvtSyncErrorItem } from '../types/gtvt-sy
 const SCHEDULE_ID_KEYS = ['firebase_id', 'firebaseId', 'ID_NutChay', 'id', 'schedule_id', 'ID_GioChay']
 const SCHEDULE_CODE_KEYS = ['schedule_code', 'scheduleCode', 'MaBieuDo']
 const SCHEDULE_ROUTE_ID_KEYS = ['route_fb_id', 'routeFbId', 'route_firebase_id', 'Ref_Tuyen', 'TuyenBuyt']
-const SCHEDULE_ROUTE_CODE_KEYS = ['route_code', 'routeCode', 'MaTuyen', 'SoHieuTuyen']
+const SCHEDULE_ROUTE_CODE_KEYS = ['route_code', 'routeCode', 'MaTuyen', 'SoHieuTuyen', 'Ref_Tuyen']
 const SCHEDULE_OPERATOR_ID_KEYS = ['operator_fb_id', 'operatorFbId', 'Ref_DonVi', 'operator_firebase_id', 'DonViKhaiThac']
 const SCHEDULE_OPERATOR_CODE_KEYS = ['operator_code', 'operatorCode', 'MaDonVi']
 const SCHEDULE_TIME_KEYS = ['departure_time', 'departureTime', 'GioXuatBen']
