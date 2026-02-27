@@ -225,7 +225,11 @@ export default function QuanLyTuyen() {
 
   // Stats calculations
   const stats = useMemo(() => {
-    const active = routes.filter(r => r.operationStatus?.toLowerCase().includes("hoạt động") || r.operationStatus?.toLowerCase().includes("mới")).length
+    const inactive = routes.filter(r => {
+      const s = (r.operationStatus || '').toLowerCase()
+      return s.includes("ngừng") || s.includes("đóng") || s.includes("hết hiệu lực")
+    }).length
+    const active = routes.length - inactive
     const inactive = routes.length - active
     const uniqueProvinces = new Set([...routes.map(r => r.departureProvince), ...routes.map(r => r.arrivalProvince)].filter(Boolean)).size
     return { total: routes.length, active, inactive, uniqueProvinces }
