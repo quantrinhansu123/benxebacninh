@@ -314,7 +314,7 @@ const runSchedulesSync = async (
       ON CONFLICT (firebase_id) DO NOTHING
       RETURNING id, firebase_id
     `))
-    for (const row of inserted as Array<{ id: string; firebase_id: string }>) {
+    for (const row of inserted as unknown as Array<{ id: string; firebase_id: string }>) {
       if (row.firebase_id && row.id) {
         operatorByFirebase.set(toLookupKey(row.firebase_id), row.id)
       }
