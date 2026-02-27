@@ -99,7 +99,10 @@ export default function DieuDo() {
         buttons.push(<ActionButton key="departure-order" icon={ShieldCheck} onClick={(e) => { e.stopPropagation(); handleAction(record, "departure-order"); }} title="Cấp lệnh xuất bến" variant="success" />);
       }
       if (record.permitStatus === "rejected" || !record.permitStatus) {
-        buttons.push(<ActionButton key="exit" icon={BusEnterIcon} onClick={async (e) => { e.stopPropagation(); await handleRecordExit(record); }} title="Cho xe ra bến" variant="danger" />);
+        buttons.push(
+          <ActionButton key="exit" icon={BusEnterIcon} onClick={async (e) => { e.stopPropagation(); await handleRecordExit(record); }} title="Cho xe ra bến" variant="danger" />,
+          <ActionButton key="delete" icon={Trash2} onClick={(e) => { e.stopPropagation(); handleDelete(record); }} title="Xóa" variant="danger" />
+        );
       }
     } else if (status === "departed" && record.currentStatus === "departure_ordered") {
       buttons.push(<ActionButton key="depart" icon={BusEnterIcon} onClick={(e) => { e.stopPropagation(); handleAction(record, "depart"); }} title="Cho xe ra bến" variant="success" />);
