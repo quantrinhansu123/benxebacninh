@@ -290,6 +290,42 @@ const runSchedulesSync = async (
 
   const incomingRouteKeys = new Set(persistedRouteKeys.map((key) => toLookupKey(key)))
 
+  // Auto-create operators referenced by schedule rows but missing from DB
+  const missingOperators = new Map<string, { firebaseId: string; name: string }>()
+  for (const row of scheduleRows) {
+    if (!row.operatorFirebaseId) continue
+    const fbKey = toLookupKey(row.operatorFirebaseId)
+    if (operatorByFirebase.has(fbKey)) continue
+    if (missingOperators.has(fbKey)) continue
+    const opName = row.operatorCode || row.operatorFirebaseId
+    missingOperators.set(fbKey, { firebaseId: row.operatorFirebaseId, name: opName })
+  }
+
+  if (missingOperators.size > 0 && !dryRun) {
+    const values = [...missingOperators.values()].map((op) => {
+      const code = escapeSqlString(`GTVT-${op.firebaseId}`)
+      const name = escapeSqlString(op.name)
+      const fbId = escapeSqlString(op.firebaseId)
+      return `(gen_random_uuid(),${fbId},${code},${name},'gtvt-appsheet',true,NOW(),NOW())`
+    }).join(',')
+    const inserted = await executor.execute(sql.raw(`
+      INSERT INTO operators (id,firebase_id,code,name,source,is_active,created_at,updated_at)
+      VALUES ${values}
+      ON CONFLICT (firebase_id) DO NOTHING
+      RETURNING id, firebase_id
+    `))
+    for (const row of inserted as Array<{ id: string; firebase_id: string }>) {
+      if (row.firebase_id && row.id) {
+        operatorByFirebase.set(toLookupKey(row.firebase_id), row.id)
+      }
+    }
+  } else if (missingOperators.size > 0 && dryRun) {
+    // In dry-run: treat missing operators as resolvable (don't count as failures)
+    for (const [fbKey, op] of missingOperators.entries()) {
+      operatorByFirebase.set(fbKey, `dry-run-${op.firebaseId}`)
+    }
+  }
+
   const codeCounter = new Map<string, number>()
   const resolvedRows: ResolvedScheduleRow[] = []
   let failed = 0
