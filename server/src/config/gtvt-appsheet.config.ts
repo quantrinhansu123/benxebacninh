@@ -85,7 +85,8 @@ export function loadGtvtAppsheetConfig(): GtvtAppsheetConfig {
     busRoutesEndpoint: config.busRoutesEndpoint || '',
     busSchedulesEndpoint: config.busSchedulesEndpoint || '',
     busLookupEndpoint: config.busLookupEndpoint || '',
-    apiKey: config.apiKey,
+    // Strip curly braces - AppSheet UI shows keys as {V2-xxx} but API expects V2-xxx
+    apiKey: config.apiKey.replace(/^\{/, '').replace(/\}$/, ''),
     authHeader: config.authHeader,
     timeoutMs: config.timeoutMs,
   }
