@@ -28,11 +28,8 @@ interface BadgeVehicle {
   id: string;
   plateNumber: string;
   vehicleType: { id: string | null; name: string };
-  vehicleTypeName: string;
   seatCapacity: number;
   bedCapacity: number;
-  manufacturer: string;
-  modelCode: string;
   manufactureYear: number | null;
   color: string;
   chassisNumber: string;
@@ -47,6 +44,7 @@ interface BadgeVehicle {
   badgeType: string;
   badgeExpiryDate: string;
   documents: Record<string, never>;
+  province: string;
 }
 
 export function useOperatorDetail(operator: OperatorWithSource | null, open: boolean) {
@@ -71,35 +69,47 @@ export function useOperatorDetail(operator: OperatorWithSource | null, open: boo
     setIsLoading(true);
     setError(null);
     try {
-      // Check if operator is from Google Sheets or legacy source (not from database)
-      const isExternalOperator = operator.source === "google_sheets" || operator.source === "legacy" || operator.id.startsWith("legacy_");
-      
-      // Load badge vehicles by issuing_authority_ref (Ref_DonViCapPhuHieu)
       let vehiclesData: Vehicle[] = [];
       let badgesData: VehicleBadge[] = [];
-      
-      if (isExternalOperator) {
-        // Load all badges and filter by issuing_authority_ref matching operator.id
-        const allBadges = await vehicleBadgeService.getAll();
-        badgesData = allBadges.filter(badge => 
-          badge.issuing_authority_ref === operator.id
-        );
-        console.log('[OperatorDetail] Badges for operator', operator.id, '(', operator.name, '):', badgesData.length);
-        
-        // Convert badges to vehicle format for display
-        vehiclesData = badgesData.map(badge => ({
+
+      // Strategy: find operator's vehicles → match their plates to badges
+      // This mirrors how useOperatorManagement filters operators (badge plate → vehicle → operator)
+      const allBadges = await vehicleBadgeService.getAll();
+      const allowedBadgeTypes = ["Buýt", "Tuyến cố định"];
+      const relevantBadges = allBadges.filter(b => allowedBadgeTypes.includes(b.badge_type));
+
+      // Get operator's vehicles from DB (backend has operatorName fallback for missing FK)
+      let operatorVehicles: Vehicle[] = [];
+      if (!operator.id.startsWith("legacy_")) {
+        operatorVehicles = await vehicleService.getAll(operator.id, undefined, false);
+      }
+
+      // Build plate-to-vehicle map for enriching badge data with seat/bed capacity
+      const normalizePlate = (p: string) => p?.replace(/[\s.\-]/g, '').toUpperCase() || '';
+      const vehicleByPlate = new Map(
+        operatorVehicles.map(v => [normalizePlate(v.plateNumber), v])
+      );
+      const operatorPlates = new Set(vehicleByPlate.keys());
+
+      // Match badges by plate number
+      badgesData = relevantBadges.filter(badge =>
+        operatorPlates.has(normalizePlate(badge.license_plate_sheet))
+      );
+      setBadges(badgesData);
+
+      // Convert matched badges to vehicle format, enriched with DB vehicle data
+      vehiclesData = badgesData.map(badge => {
+        const dbVehicle = vehicleByPlate.get(normalizePlate(badge.license_plate_sheet));
+        return {
           id: badge.id,
           plateNumber: badge.license_plate_sheet,
-          vehicleType: { id: null, name: badge.badge_type || '' },
-          vehicleTypeName: badge.badge_type || '',
-          seatCapacity: 0,
-          bedCapacity: 0,
-          manufacturer: '',
-          modelCode: '',
-          manufactureYear: null,
-          color: '',
-          chassisNumber: '',
-          engineNumber: '',
+          vehicleType: dbVehicle?.vehicleType || { id: null, name: badge.badge_type || '' },
+          seatCapacity: dbVehicle?.seatCapacity || 0,
+          bedCapacity: dbVehicle?.bedCapacity || 0,
+          manufactureYear: dbVehicle?.manufactureYear || null,
+          color: dbVehicle?.color || '',
+          chassisNumber: dbVehicle?.chassisNumber || '',
+          engineNumber: dbVehicle?.engineNumber || '',
           operatorId: operator.id,
           operator: { id: operator.id, name: operator.name || '', code: '' },
           operatorName: operator.name || '',
@@ -110,12 +120,10 @@ export function useOperatorDetail(operator: OperatorWithSource | null, open: boo
           badgeType: badge.badge_type,
           badgeExpiryDate: badge.expiry_date,
           documents: {},
-        } as BadgeVehicle)) as unknown as Vehicle[];
-        
-        setBadges(badgesData);
-      } else {
-        vehiclesData = await vehicleService.getAll(operator.id, undefined, false);
-      }
+          province: dbVehicle?.province || '',
+        } as BadgeVehicle;
+      }) as unknown as Vehicle[];
+
       setVehicles(Array.isArray(vehiclesData) ? vehiclesData : []);
 
       // Get vehicle plate numbers for filtering dispatch records

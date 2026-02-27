@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Building2, Truck, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,9 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/layout/StatusBadge";
-import { VehicleCard, EmptyVehicles, VehiclesSkeleton, SummaryCards } from "./detail";
+import { VehicleCard, VehicleBadgeDetailDialog, EmptyVehicles, VehiclesSkeleton, SummaryCards } from "./detail";
 import { useOperatorDetail } from "@/hooks/useOperatorDetail";
-import type { Operator } from "@/types";
+import type { Operator, Vehicle } from "@/types";
 
 interface OperatorDetailDialogProps {
   open: boolean;
@@ -48,6 +48,8 @@ export function OperatorDetailDialog({
     formatCurrency,
     resetTab,
   } = useOperatorDetail(operator, open);
+
+  const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
 
   // Handle browser back button - close dialog instead of navigating away
   const closedViaBackButtonRef = useRef(false);
@@ -197,7 +199,7 @@ export function OperatorDetailDialog({
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {vehicles.map((vehicle, index) => (
-                    <VehicleCard key={vehicle.id} vehicle={vehicle} index={index} />
+                    <VehicleCard key={vehicle.id} vehicle={vehicle} index={index} onClick={setSelectedVehicle} />
                   ))}
                 </div>
               )}
@@ -480,6 +482,11 @@ export function OperatorDetailDialog({
           </Tabs>
         </div>
       </div>
+      <VehicleBadgeDetailDialog
+        vehicle={selectedVehicle}
+        open={!!selectedVehicle}
+        onOpenChange={(open) => { if (!open) setSelectedVehicle(null); }}
+      />
     </div>,
     document.body
   );

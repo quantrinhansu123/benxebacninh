@@ -8,7 +8,7 @@ import { AlreadyExistsError, ValidationError } from '../../../shared/errors/app-
 import { vehicleRepository, VehicleRepository } from '../repositories/vehicle.repository.js';
 import { vehicleCacheService, LegacyVehicleData, BadgeVehicleData } from './vehicle-cache.service.js';
 import { db } from '../../../db/drizzle.js';
-import { vehicleDocuments, vehicleBadges } from '../../../db/schema/index.js';
+import { vehicleDocuments, vehicleBadges, operators } from '../../../db/schema/index.js';
 import { eq, desc } from 'drizzle-orm';
 
 export interface CreateVehicleDTO {
@@ -95,7 +95,27 @@ export class VehicleService {
     });
 
     if (operatorId) {
-      vehicles = vehicles.filter((v) => v.operatorId === operatorId);
+      const byFK = vehicles.filter((v) => v.operatorId === operatorId);
+      if (byFK.length > 0) {
+        vehicles = byFK;
+      } else if (db) {
+        // Fallback: some vehicles have operatorName set but operator_id FK is NULL
+        // Lookup operator name and match by denormalized operatorName field
+        const operatorRows = await db.select({ name: operators.name })
+          .from(operators)
+          .where(eq(operators.id, operatorId))
+          .limit(1);
+        if (operatorRows.length > 0) {
+          const normalizedName = operatorRows[0].name.trim().toUpperCase();
+          vehicles = vehicles.filter((v) =>
+            v.operatorName?.trim().toUpperCase() === normalizedName
+          );
+        } else {
+          vehicles = [];
+        }
+      } else {
+        vehicles = [];
+      }
     }
 
     if (isActive !== 'all' && isActive !== undefined) {

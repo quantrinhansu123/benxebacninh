@@ -5,16 +5,18 @@ import type { Vehicle } from "@/types";
 interface VehicleCardProps {
   vehicle: Vehicle;
   index: number;
+  onClick?: (vehicle: Vehicle) => void;
 }
 
-export const VehicleCard = memo(function VehicleCard({ vehicle, index }: VehicleCardProps) {
+export const VehicleCard = memo(function VehicleCard({ vehicle, index, onClick }: VehicleCardProps) {
   const isActive = vehicle.isActive;
   const hasSeats = vehicle.seatCapacity && vehicle.seatCapacity > 0;
   const hasBeds = vehicle.bedCapacity && vehicle.bedCapacity > 0;
 
   return (
     <div
-      className="group relative bg-white rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1"
+      className="group relative bg-white rounded-2xl border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1 cursor-pointer"
+      onClick={() => onClick?.(vehicle)}
       style={{
         animationDelay: `${index * 0.05}s`,
         animation: "slideUp 0.4s ease-out backwards",
