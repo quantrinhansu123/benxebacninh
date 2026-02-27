@@ -56,23 +56,19 @@ const formatDate = (dateString: string | undefined | null): string => {
   }
 }
 
-// Helper function to get status badge variant based on Vietnamese status text
+// Helper function to get status badge variant
 const getStatusVariant = (status: string): "active" | "inactive" | "maintenance" => {
   if (!status) return "inactive"
-  const statusLower = status.toLowerCase()
-  // "Còn hiệu lực", "Cấp mới" etc. are active
-  if (statusLower.includes("hiệu lực") || statusLower.includes("cấp mới") || statusLower.includes("cap moi")) {
-    return "active"
-  }
-  // "Hết hạn" is expired/inactive
-  if (statusLower.includes("hết") || statusLower.includes("het")) {
-    return "inactive"
-  }
-  // "Thu hồi" is revoked/maintenance
-  if (statusLower.includes("thu hồi") || statusLower.includes("thu hoi")) {
-    return "maintenance"
-  }
-  return "active" // Default to active for other statuses
+  const s = status.toLowerCase()
+  // English enum from DB
+  if (s === "active") return "active"
+  if (s === "expired") return "inactive"
+  if (s === "revoked") return "maintenance"
+  // Vietnamese text (legacy/display values)
+  if (s.includes("hiệu lực") || s.includes("cấp mới") || s.includes("cap moi")) return "active"
+  if (s.includes("hết") || s.includes("het")) return "inactive"
+  if (s.includes("thu hồi") || s.includes("thu hoi")) return "maintenance"
+  return "inactive"
 }
 
 export default function QuanLyPhuHieuXe() {
