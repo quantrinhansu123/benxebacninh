@@ -4,14 +4,14 @@
 
 QuanLyBenXe (Bus Management) is a full-stack web application designed to streamline operations at bus stations, including dispatch management, fleet tracking, driver management, financial reporting, and route planning.
 
-**Status:** Migration Complete - Supabase Production Ready (Phase 6 Pending)
+**Status:** Production Ready - Supabase + GTVT Sync Active (Phase 7 Pending)
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
-- Node.js 16+
+- Node.js 20+
 - npm or yarn
 - Supabase account with PostgreSQL database enabled
 
@@ -43,7 +43,7 @@ quanlybenxe/
 ├── client/                 # React 18 frontend (Vite)
 │   └── src/
 │       ├── features/       # Feature modules (auth, dispatch, fleet, chat)
-│       ├── pages/          # 47 lazy-loaded page components
+│       ├── pages/          # 45+ lazy-loaded page components
 │       ├── components/     # 132 shared UI components (ui/, dispatch/, fleet/, dashboard/, etc.)
 │       ├── services/       # 21 API client services
 │       ├── hooks/          # 9 custom React hooks
@@ -58,10 +58,10 @@ quanlybenxe/
 │       ├── services/       # Business logic layer (fleet: 247 LOC service)
 │       ├── repositories/   # Data access layer
 │       ├── middleware/     # 3 middleware files (auth, error, validation)
-│       ├── db/             # Drizzle ORM schemas (19 tables)
+│       ├── db/             # Drizzle ORM schemas (22 tables)
 │       └── types/          # Shared TypeScript types
 │
-└── docs/                   # Technical documentation (7 files)
+└── docs/                   # Technical documentation (9 files)
 ```
 
 ---
@@ -117,6 +117,8 @@ quanlybenxe/
 - Pickup/drop-off location management
 - Geographic mapping integration
 - Schedule coordination and optimization
+- GTVT AppSheet sync: manual pull from Sở GTVT Bắc Giang (routes + schedules)
+- Admin action "Đồng bộ Sở GTVT" with live/dry-run mode and sync summary
 
 ### 5. Shift Management (Ca Làm Việc)
 - Shift scheduling and assignment
@@ -206,7 +208,10 @@ npm run test
 - **[Codebase Summary](./docs/codebase-summary.md)** - Complete codebase structure
 - **[System Architecture](./docs/system-architecture.md)** - Architecture decisions
 - **[Project Roadmap](./docs/project-roadmap.md)** - Current status and roadmap
-- **[Troubleshooting](./docs/troubleshoot_tips.md)** - Common issues and solutions
+- **[Project Overview & PDR](./docs/project-overview-pdr.md)** - Product requirements
+- **[API Reference](./docs/api-reference.md)** - API endpoints documentation
+- **[Operations Guide](./docs/operations-guide.md)** - Deployment and ops
+- **[Design Guidelines](./docs/design-guidelines.md)** - UI/UX standards
 
 ---
 
@@ -218,11 +223,11 @@ npm run test
 - Database: Supabase PostgreSQL (primary)
 
 ### Frontend
-- Deployed to Vercel or similar
+- Deployed to Vercel
 - Automatic builds on main branch push
 - Environment variables configured in deployment platform
 
-See `DEPLOYMENT_CONFIG.md` for detailed setup.
+See `docs/operations-guide.md` for detailed setup.
 
 ---
 
@@ -249,15 +254,15 @@ See `DEPLOYMENT_CONFIG.md` for detailed setup.
 - **vendor-toast**: ~30KB
 
 ### Code Quality
-- **Total files**: 578 files (286 client TS/TSX + 178 server TS)
-- **Total LOC**: ~51,467 client + ~33,000 server = ~84,467 LOC
+- **Total files**: ~578 files (286 client TS/TSX + 178 server TS)
+- **Total LOC**: ~87,000 (client: ~53K | server: ~34K)
 - TypeScript strict mode enabled
-- Controller max: 300 lines (current max: 510 LOC dispatch controller)
+- Controller max: 300 lines target
 - Service/Helper functions: <250 lines average
-- Database: 19 tables with 7 indexes on dispatch_records
+- Database: 22 schema files, 7 indexes on dispatch_records
 
 ---
 
-**Last Updated:** 2026-01-22
+**Last Updated:** 2026-03-01
 **Maintainers:** Development Team
-**Status:** Migration Complete - Supabase Production Ready
+**Status:** Production Ready - Supabase + GTVT Sync Active
