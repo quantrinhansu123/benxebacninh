@@ -20,6 +20,7 @@ import {
   Users,
   Package,
   History,
+  BedDouble,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DocumentHistoryDialog } from "@/components/dispatch/DocumentHistoryDialog"
@@ -224,7 +225,22 @@ export function VehicleView({ vehicle }: VehicleViewProps) {
                   <Label className="text-sm text-gray-500">Số ghế</Label>
                   <p className="text-lg font-semibold text-gray-900">
                     {vehicle.seatCapacity || 0}
-                    {vehicle.bedCapacity ? ` / ${vehicle.bedCapacity} giường` : ''}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <BedDouble className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div>
+                  <Label className="text-sm text-gray-500">Số giường</Label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {vehicle.bedCapacity || 0}
                   </p>
                 </div>
               </div>
