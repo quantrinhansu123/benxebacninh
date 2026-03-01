@@ -49,6 +49,15 @@ export const vehicleApi = {
       return []
     }
   },
+
+  /** Push AppSheet-polled vehicles to backend for DB persistence */
+  syncFromAppSheet: async (vehicles: unknown[]): Promise<void> => {
+    try {
+      await api.post('/vehicles/appsheet-sync', { vehicles })
+    } catch (error) {
+      console.warn('AppSheet vehicle sync to DB failed:', error)
+    }
+  },
 }
 
 // Re-export for backward compatibility

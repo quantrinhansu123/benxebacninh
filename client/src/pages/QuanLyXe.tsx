@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { toast } from "react-toastify"
 import {
   Plus,
@@ -28,6 +28,8 @@ import {
 } from "@/components/ui/dialog"
 import { vehicleService, VehicleForm, VehicleView } from "@/features/fleet/vehicles"
 import { quanlyDataService } from "@/services/quanly-data.service"
+import { useAppSheetPolling } from "@/hooks/use-appsheet-polling"
+import { normalizeVehicleRows, type NormalizedAppSheetVehicle } from "@/services/appsheet-normalize-vehicles"
 import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { format, isValid, parseISO } from "date-fns"
@@ -110,6 +112,38 @@ export default function QuanLyXe() {
 
   // Handle browser back button for dialog
   const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "vehicleDialogOpen")
+
+  // AppSheet polling: auto-update vehicles every 10s from GTVT
+  const normPlate = (p: string) => (p || '').replace(/[\s.\-]/g, '').toUpperCase()
+
+  const handleAppSheetData = useCallback((data: NormalizedAppSheetVehicle[], _isInitial: boolean) => {
+    setVehicles(prev => {
+      const plateMap = new Map(prev.map(v => [normPlate(v.plateNumber), v]))
+      let changed = false
+
+      for (const av of data) {
+        const existing = plateMap.get(av.plateNumber)
+        if (existing) {
+          // Only update AppSheet-sourced fields, never overwrite user edits
+          if (av.seatCapacity && av.seatCapacity !== (existing as any).seatCapacity) {
+            (existing as any).seatCapacity = av.seatCapacity
+            changed = true
+          }
+        }
+        // Don't add new vehicles from AppSheet - they need operator resolution
+      }
+
+      return changed ? [...plateMap.values()] : prev
+    })
+  }, [])
+
+  const { lastPollAt } = useAppSheetPolling({
+    endpointKey: 'vehicles',
+    normalize: normalizeVehicleRows,
+    onData: handleAppSheetData,
+    onSyncToDb: (data) => vehicleService.syncFromAppSheet(data),
+    enabled: true,
+  })
 
   useEffect(() => {
     setTitle("Quản lý xe")
@@ -535,6 +569,11 @@ export default function QuanLyXe() {
         <div className="flex items-center justify-between text-sm text-slate-500">
           <span>
             Hiển thị <strong className="text-slate-700">{paginatedVehicles.length}</strong> trong tổng số <strong className="text-slate-700">{filteredVehicles.length.toLocaleString()}</strong> xe
+            {lastPollAt && (
+              <span className="ml-3 text-xs text-slate-400">
+                GTVT cập nhật: {format(lastPollAt, "HH:mm:ss")}
+              </span>
+            )}
           </span>
           {totalPages > 1 && (
             <span>Trang {currentPage} / {totalPages}</span>
