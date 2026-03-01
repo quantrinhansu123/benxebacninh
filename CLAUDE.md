@@ -103,6 +103,11 @@ routes ←--→ dispatch_records (routeId FK)
 - **`vehicle_badges` table**: Sheet PHUHIEUXE has `Ref_DonViCapPhuHieu` (reference ID only, not name). Stored in `metadata.issuing_authority_ref` JSONB, not a dedicated column.
 - **`vehicle_documents` table**: Manually entered in app (e.g. "Cục Đăng kiểm Việt Nam").
 
+**`TenDangKyXe` column (Sheet tab "Xe", gid=40001005):**
+- NOT an operator name. Contains classification code (e.g. "K" = xe có KDVT).
+- Stored in `vehicles.metadata.registration_name`, NOT in `operator_name`.
+- `operator_name` for sheet_sync vehicles should remain NULL (resolved via operator_id FK or badge reference).
+
 ### GTVT AppSheet Integration (Sở GTVT Bắc Giang)
 
 **AppSheet App:** SMARTTRANSPORTBG_V11_Core

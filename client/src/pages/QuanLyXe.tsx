@@ -165,26 +165,28 @@ export default function QuanLyXe() {
     }
   }
 
+  // Filter base for dropdown options: only badge vehicles when badge filter is on
+  const badgeBaseVehicles = useMemo(() =>
+    showOnlyBadgeVehicles ? vehicles.filter(v => v.hasBadge) : vehicles,
+    [vehicles, showOnlyBadgeVehicles]
+  )
   // Get unique vehicle types and operators for filter options
   const vehicleTypes = useMemo(() =>
-    Array.from(new Set(vehicles.map(getVehicleTypeName).filter(Boolean))).sort(),
-    [vehicles]
+    Array.from(new Set(badgeBaseVehicles.map(getVehicleTypeName).filter(Boolean))).sort(),
+    [badgeBaseVehicles]
   )
   const operatorNames = useMemo(() =>
-    Array.from(new Set(vehicles.map(getOperatorName).filter(Boolean))).sort(),
-    [vehicles]
+    Array.from(new Set(badgeBaseVehicles.map(getOperatorName).filter(Boolean))).sort(),
+    [badgeBaseVehicles]
   )
 
-  // Stats calculations - respect badge filter
+  // Stats calculations - reuse badge-filtered base
   const stats = useMemo(() => {
-    const baseVehicles = showOnlyBadgeVehicles
-      ? vehicles.filter(v => v.hasBadge)
-      : vehicles
-    const active = baseVehicles.filter(v => v.isActive).length
-    const inactive = baseVehicles.length - active
+    const active = badgeBaseVehicles.filter(v => v.isActive).length
+    const inactive = badgeBaseVehicles.length - active
     // Use operatorCount from same data source as Đơn vị vận tải page for consistency
-    return { total: baseVehicles.length, active, inactive, uniqueOperators: operatorCount }
-  }, [vehicles, operatorCount, showOnlyBadgeVehicles])
+    return { total: badgeBaseVehicles.length, active, inactive, uniqueOperators: operatorCount }
+  }, [badgeBaseVehicles, operatorCount])
 
   const filteredVehicles = useMemo(() => {
     return vehicles.filter((vehicle: Vehicle) => {

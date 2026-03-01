@@ -2,7 +2,9 @@
  * Sync vehicles from Google Sheet CSV (tab "Xe", gid=40001005) to Supabase vehicles table.
  * - Fetches sheet, maps columns, upserts via temp table bulk approach
  * - Does NOT update operator_id or vehicle_type_id (resolved separately)
- * Usage: npx tsx sync-vehicles-from-sheet.ts [--dry-run]
+ * Usage: npx tsx sync-vehicles-from-sheet.ts [--dry-run] [--force-overwrite]
+ *   --force-overwrite: Overwrite ALL data fields from Sheet (instead of COALESCE).
+ *                      FK fields (operator_id, vehicle_type_id) are always preserved.
  */
 import 'dotenv/config'
 import { db } from '../../drizzle.js'
@@ -86,13 +88,16 @@ function buildMeta(r: SheetRow): Record<string, string> {
   if (r.LyDoThuBienDinhDanh) m.numbered_plate_revoke_reason = r.LyDoThuBienDinhDanh
   if (r.ThongTinDangKyXe) m.registration_info = r.ThongTinDangKyXe
   if (r.CoKDVT) m.has_transport_license = r.CoKDVT
+  if (r.TenDangKyXe) m.registration_name = r.TenDangKyXe
   return m
 }
 
 async function main() {
   const isDryRun = process.argv.includes('--dry-run')
+  const isForceOverwrite = process.argv.includes('--force-overwrite')
   if (!db) { console.error('DATABASE_URL not set'); process.exit(1) }
-  console.log(`=== Sync vehicles from Sheet ===\nMode: ${isDryRun ? 'DRY RUN' : 'LIVE'}`)
+  const modeLabel = [isForceOverwrite ? 'FORCE OVERWRITE' : 'INCREMENTAL', isDryRun ? '(DRY RUN)' : '(LIVE)'].join(' ')
+  console.log(`=== Sync vehicles from Sheet ===\nMode: ${modeLabel}`)
 
   // Step 1: Fetch CSV
   console.log('\n[1/6] Fetching CSV...')
@@ -130,7 +135,7 @@ async function main() {
     return {
       firebase_id: r.IDXe.trim(),
       plate_number: r.BienSo.trim().substring(0, 20),
-      operator_name: r.TenDangKyXe || null,
+      operator_name: null,  // TenDangKyXe is a classification code, not operator name; stored in metadata.registration_name
       brand: r.NhanHieu || null,
       chassis_number: r.SoKhung || null,
       engine_number: r.SoMay || null,
@@ -180,37 +185,118 @@ async function main() {
   }
   console.log(`  Inserted ${insertedTmp} rows into temp table`)
 
-  // Step 4: Bulk UPDATE existing vehicles
-  // - bed_capacity: only update when has_bed_data=true (don't wipe beds if SoCho was empty)
-  console.log('[4/6] Bulk update existing vehicles...')
-  const updateSql = `
-    UPDATE vehicles v SET
-      operator_name = COALESCE(NULLIF(t.operator_name, ''), v.operator_name),
-      brand = COALESCE(NULLIF(t.brand, ''), v.brand),
-      chassis_number = COALESCE(NULLIF(t.chassis_number, ''), v.chassis_number),
-      engine_number = COALESCE(NULLIF(t.engine_number, ''), v.engine_number),
-      color = COALESCE(NULLIF(t.color, ''), v.color),
-      year_of_manufacture = COALESCE(t.year_of_manufacture, v.year_of_manufacture),
-      seat_count = CASE WHEN t.seat_count IS NOT NULL THEN t.seat_count ELSE v.seat_count END,
-      bed_capacity = CASE WHEN t.has_bed_data THEN t.bed_capacity ELSE v.bed_capacity END,
-      metadata = COALESCE(v.metadata, '{}'::jsonb) || t.metadata,
-      source = 'sheet_sync',
-      synced_at = NOW(),
-      updated_at = NOW()
-    FROM _tmp_vehicles t
-    WHERE v.firebase_id = t.firebase_id
-  `
-  if (isDryRun) {
-    const cnt = await db.execute(sql.raw(
-      `SELECT COUNT(*) as cnt FROM vehicles v JOIN _tmp_vehicles t ON v.firebase_id = t.firebase_id`
-    ))
-    console.log(`  [DRY] Would update: ${(cnt as any)[0]?.cnt || 0}`)
-  } else {
-    const upd = await db.execute(sql.raw(updateSql))
-    console.log(`  Updated: ${(upd as any).count ?? 'ok'}`)
+  // Step 4: Detect plate_number conflicts (force-overwrite only)
+  let conflictIds: string[] = []
+  if (isForceOverwrite) {
+    console.log('[3.5/6] Detecting plate_number conflicts...')
+    const conflicts = await db.execute(sql.raw(`
+      SELECT t.firebase_id, t.plate_number AS new_plate, v.plate_number AS old_plate, v2.firebase_id AS conflict_fid
+      FROM _tmp_vehicles t
+      JOIN vehicles v ON v.firebase_id = t.firebase_id
+      JOIN vehicles v2 ON v2.plate_number = t.plate_number AND v2.firebase_id != t.firebase_id
+      WHERE t.plate_number != v.plate_number
+    `))
+    const conflictRows = conflicts as any[]
+    if (conflictRows.length > 0) {
+      conflictIds = conflictRows.map((r: any) => r.firebase_id)
+      console.warn(`  ⚠ ${conflictRows.length} plate conflicts found (plate update skipped for these):`)
+      conflictRows.slice(0, 10).forEach((r: any) =>
+        console.warn(`    ${r.firebase_id}: ${r.old_plate} → ${r.new_plate} (conflicts with ${r.conflict_fid})`)
+      )
+      if (conflictRows.length > 10) console.warn(`    ... and ${conflictRows.length - 10} more`)
+    } else {
+      console.log('  No plate conflicts detected')
+    }
   }
 
-  // Step 5: Bulk INSERT new vehicles (not existing by firebase_id)
+  // Step 5: Bulk UPDATE existing vehicles
+  // Force-overwrite: 2 queries (data fields first, then plate_number separately for safety)
+  // Normal sync: COALESCE (only fill empty fields)
+  console.log('[4/6] Bulk update existing vehicles...')
+
+  if (isForceOverwrite) {
+    // Query 1: Update ALL data fields EXCEPT plate_number (always safe, no UNIQUE conflicts)
+    const updateDataSql = `
+      UPDATE vehicles v SET
+        operator_name = t.operator_name,
+        brand = t.brand,
+        chassis_number = t.chassis_number,
+        engine_number = t.engine_number,
+        color = t.color,
+        year_of_manufacture = t.year_of_manufacture,
+        seat_count = t.seat_count,
+        bed_capacity = t.bed_capacity,
+        metadata = COALESCE(v.metadata, '{}'::jsonb) || t.metadata,
+        source = 'sheet_sync',
+        synced_at = NOW(),
+        updated_at = NOW()
+      FROM _tmp_vehicles t
+      WHERE v.firebase_id = t.firebase_id
+    `
+    // Query 2: Update plate_number only where safe (no duplicates in temp, no conflicts with other vehicles)
+    const updatePlateSql = `
+      UPDATE vehicles v SET
+        plate_number = t.plate_number
+      FROM _tmp_vehicles t
+      WHERE v.firebase_id = t.firebase_id
+        AND v.plate_number != t.plate_number
+        AND NOT EXISTS (
+          SELECT 1 FROM vehicles v2
+          WHERE v2.plate_number = t.plate_number AND v2.id != v.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM _tmp_vehicles t2
+          WHERE t2.plate_number = t.plate_number AND t2.firebase_id != t.firebase_id
+        )
+    `
+    if (isDryRun) {
+      const cnt = await db.execute(sql.raw(
+        `SELECT COUNT(*) as cnt FROM vehicles v JOIN _tmp_vehicles t ON v.firebase_id = t.firebase_id`
+      ))
+      const plateCnt = await db.execute(sql.raw(
+        `SELECT COUNT(*) as cnt FROM vehicles v JOIN _tmp_vehicles t ON v.firebase_id = t.firebase_id
+         WHERE v.plate_number != t.plate_number
+         AND NOT EXISTS (SELECT 1 FROM vehicles v2 WHERE v2.plate_number = t.plate_number AND v2.id != v.id)
+         AND NOT EXISTS (SELECT 1 FROM _tmp_vehicles t2 WHERE t2.plate_number = t.plate_number AND t2.firebase_id != t.firebase_id)`
+      ))
+      console.log(`  [DRY] Would update data fields: ${(cnt as any)[0]?.cnt || 0}`)
+      console.log(`  [DRY] Would update plate_number: ${(plateCnt as any)[0]?.cnt || 0}`)
+    } else {
+      const upd = await db.execute(sql.raw(updateDataSql))
+      console.log(`  Updated data fields: ${(upd as any).count ?? 'ok'}`)
+      const updPlate = await db.execute(sql.raw(updatePlateSql))
+      console.log(`  Updated plate_number: ${(updPlate as any).count ?? 'ok'}`)
+    }
+  } else {
+    const updateSql = `
+      UPDATE vehicles v SET
+        operator_name = COALESCE(NULLIF(t.operator_name, ''), v.operator_name),
+        brand = COALESCE(NULLIF(t.brand, ''), v.brand),
+        chassis_number = COALESCE(NULLIF(t.chassis_number, ''), v.chassis_number),
+        engine_number = COALESCE(NULLIF(t.engine_number, ''), v.engine_number),
+        color = COALESCE(NULLIF(t.color, ''), v.color),
+        year_of_manufacture = COALESCE(t.year_of_manufacture, v.year_of_manufacture),
+        seat_count = CASE WHEN t.seat_count IS NOT NULL THEN t.seat_count ELSE v.seat_count END,
+        bed_capacity = CASE WHEN t.has_bed_data THEN t.bed_capacity ELSE v.bed_capacity END,
+        metadata = COALESCE(v.metadata, '{}'::jsonb) || t.metadata,
+        source = 'sheet_sync',
+        synced_at = NOW(),
+        updated_at = NOW()
+      FROM _tmp_vehicles t
+      WHERE v.firebase_id = t.firebase_id
+    `
+    if (isDryRun) {
+      const cnt = await db.execute(sql.raw(
+        `SELECT COUNT(*) as cnt FROM vehicles v JOIN _tmp_vehicles t ON v.firebase_id = t.firebase_id`
+      ))
+      console.log(`  [DRY] Would update: ${(cnt as any)[0]?.cnt || 0}`)
+    } else {
+      const upd = await db.execute(sql.raw(updateSql))
+      console.log(`  Updated: ${(upd as any).count ?? 'ok'}`)
+    }
+  }
+
+  // Step 6: Bulk INSERT new vehicles (not existing by firebase_id)
   console.log('[5/6] Bulk insert new vehicles...')
   const insertSql = `
     INSERT INTO vehicles (
@@ -238,16 +324,19 @@ async function main() {
     console.log(`  Inserted: ${(ins as any).count ?? 'ok'}`)
   }
 
-  // Step 6: Summary
+  // Step 7: Summary
   console.log('[6/6] Summary...')
   await db.execute(sql.raw(`DROP TABLE IF EXISTS _tmp_vehicles`))
   const total = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM vehicles`))
   const synced = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM vehicles WHERE source = 'sheet_sync'`))
   const noSeat = await db.execute(sql.raw(`SELECT COUNT(*) as cnt FROM vehicles WHERE seat_count IS NULL`))
-  console.log(`\nDone!`)
+  console.log(`\nDone! (${isForceOverwrite ? 'FORCE OVERWRITE' : 'INCREMENTAL'})`)
   console.log(`  Total vehicles in DB: ${(total as any)[0]?.cnt}`)
   console.log(`  Synced from sheet: ${(synced as any)[0]?.cnt}`)
   console.log(`  Missing seat_count: ${(noSeat as any)[0]?.cnt}`)
+  if (isForceOverwrite && conflictIds.length > 0) {
+    console.log(`  Plate conflicts skipped: ${conflictIds.length}`)
+  }
 }
 
 main().catch(err => { console.error('Fatal:', err); process.exit(1) })
