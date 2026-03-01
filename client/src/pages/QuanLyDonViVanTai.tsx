@@ -274,9 +274,6 @@ export default function QuanLyDonViVanTai() {
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-800 to-slate-900">
                     <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                      Mã ĐV
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                       Tên đơn vị
                     </th>
                     <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider">
@@ -301,7 +298,7 @@ export default function QuanLyDonViVanTai() {
                     Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
                   ) : paginatedOperators.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center">
+                      <td colSpan={6} className="px-6 py-16 text-center">
                         <div className="flex flex-col items-center">
                           <div className="relative mb-4">
                             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center">

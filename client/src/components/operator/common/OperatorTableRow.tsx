@@ -37,16 +37,11 @@ export const OperatorTableRow = memo(function OperatorTableRow({
       }}
     >
       <td className="px-6 py-4">
-        <span className="font-mono text-sm font-medium bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg">
-          {operator.code || operator.id?.substring(0, 8) || "-"}
-        </span>
-      </td>
-      <td className="px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-amber-100 flex items-center justify-center group-hover:from-orange-500 group-hover:to-amber-500 transition-colors">
             <Building2 className="h-5 w-5 text-orange-600 group-hover:text-white transition-colors" />
           </div>
-          <span className="font-semibold text-slate-800 max-w-[300px] truncate">
+          <span className="font-semibold text-slate-800">
             {operator.name}
           </span>
         </div>
