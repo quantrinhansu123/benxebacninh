@@ -106,6 +106,7 @@ export interface Vehicle {
 
   isActive: boolean
   hasBadge?: boolean
+  hasValidBadge?: boolean
   notes?: string
   documents?: VehicleDocuments
   createdAt?: string

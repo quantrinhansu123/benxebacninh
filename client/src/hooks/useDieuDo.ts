@@ -73,6 +73,7 @@ export function useDieuDo() {
         operatorName: v.operatorName,
         isActive: v.isActive,
         hasBadge: v.hasBadge,
+        hasValidBadge: v.hasValidBadge,
       }));
       setVehicles(vehicles);
     } catch (error) {
@@ -237,11 +238,13 @@ export function useDieuDo() {
     const options = vehicles
       .filter((v) => {
         // Only show vehicles with valid badges (Buýt / Tuyến cố định)
+        // Entry mode: require at least 1 non-expired badge
+        if (dialogType === "entry") {
+          if (!v.hasValidBadge) return false;
+          return true;
+        }
+        // Other modes: keep using hasBadge (backward compat)
         if (!v.hasBadge) return false;
-
-        // For "entry" dialog, allow all badged vehicles (no filtering by active status)
-        // This allows the same vehicle to enter multiple times per day
-        if (dialogType === "entry") return true;
 
         const normalizedPlate = v.plateNumber?.replace(/[.\-\s]/g, '').toUpperCase();
         const isEditingThisVehicle = dialogType === "edit" &&

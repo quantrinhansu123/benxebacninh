@@ -56,6 +56,12 @@ export interface CreateVehicleBadgeInput {
 
 export interface UpdateVehicleBadgeInput extends Partial<CreateVehicleBadgeInput> {}
 
+export interface AllBadgesResponse {
+  badges: (VehicleBadge & { is_expired: boolean })[]
+  validCount: number
+  expiredCount: number
+}
+
 // Frontend cache for badges
 let badgesCache: VehicleBadge[] | null = null
 let badgesCacheTime = 0
@@ -103,6 +109,18 @@ export const vehicleBadgeService = {
     } catch (error) {
       console.error('Error fetching vehicle badge by plate number:', error)
       return null
+    }
+  },
+
+  getAllByPlateNumber: async (plateNumber: string): Promise<AllBadgesResponse> => {
+    try {
+      const response = await api.get<AllBadgesResponse>(
+        `/vehicle-badges/by-plate/${encodeURIComponent(plateNumber)}/all`
+      )
+      return response.data
+    } catch (error) {
+      console.error('Error fetching all badges by plate number:', error)
+      return { badges: [], validCount: 0, expiredCount: 0 }
     }
   },
 

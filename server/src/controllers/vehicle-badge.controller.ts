@@ -326,6 +326,58 @@ export const getVehicleBadgeByPlateNumber = async (req: Request, res: Response):
   }
 }
 
+// Get ALL badges for a plate number (for KiemTraGiayToDialog - multiple badges per plate)
+export const getAllBadgesByPlateNumber = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!db) throw new Error('Database not initialized')
+
+    const { plateNumber } = req.params
+    if (!plateNumber) {
+      res.status(400).json({ error: 'Plate number is required' })
+      return
+    }
+
+    const activePlates = await getActiveDispatchPlates()
+    const normalizedPlate = plateNumber.replace(/[.\-\s]/g, '').toUpperCase()
+    const normalizedPlateExpr = sql<string>`UPPER(REPLACE(REPLACE(REPLACE(${vehicleBadges.plateNumber}, '.', ''), '-', ''), ' ', ''))`
+
+    const results = await db
+      .select()
+      .from(vehicleBadges)
+      .where(sql`${normalizedPlateExpr} = ${normalizedPlate}`)
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const badges = results.map(data => {
+      const badge = mapFirebaseDataToBadge(data, activePlates)
+      const expiryDate = data.expiryDate ? new Date(data.expiryDate) : null
+      if (expiryDate) expiryDate.setHours(0, 0, 0, 0)
+      return {
+        ...badge,
+        is_expired: expiryDate ? expiryDate < today : true,
+      }
+    })
+
+    // Sort: valid first, then expired; within each group sort by expiry desc
+    badges.sort((a, b) => {
+      if (a.is_expired !== b.is_expired) return a.is_expired ? 1 : -1
+      return (b.expiry_date || '').localeCompare(a.expiry_date || '')
+    })
+
+    const validCount = badges.filter(b => !b.is_expired).length
+    const expiredCount = badges.filter(b => b.is_expired).length
+
+    res.json({ badges, validCount, expiredCount })
+  } catch (error) {
+    console.error('Error fetching all badges by plate number:', error)
+    res.status(500).json({
+      error: 'Failed to fetch badges',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
+
 // Create a new vehicle badge
 export const createVehicleBadge = async (req: Request, res: Response): Promise<void> => {
   try {

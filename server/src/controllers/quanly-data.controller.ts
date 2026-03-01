@@ -167,10 +167,13 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
 
       // Filter badges by allowed types (Drizzle data is array)
       const allowedPlates = new Set<string>()
+      const platesWithValidBadge = new Set<string>() // plates with ≥1 non-expired badge
       const operatorIdsWithBadges = new Set<string>()
       const vehicleOperatorMap = new Map<string, string>() // plate -> operator name
       const vehicleBadgeExpiryMap = new Map<string, string>() // plate -> badge expiry date
       const badges: any[] = []
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
 
       for (const badge of badgeData) {
         const b = badge as any
@@ -201,10 +204,20 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
             vehicleOperatorMap.set(normalizedPlate, operatorNameMap.get(operatorId)!)
           }
 
-          // Map vehicle plate to badge expiry date
+          // Map vehicle plate to badge expiry date (keep latest expiry)
           const badgeExpiry = b.expiryDate || ''
           if (badgeExpiry) {
-            vehicleBadgeExpiryMap.set(normalizedPlate, badgeExpiry)
+            const existing = vehicleBadgeExpiryMap.get(normalizedPlate)
+            if (!existing || badgeExpiry > existing) {
+              vehicleBadgeExpiryMap.set(normalizedPlate, badgeExpiry)
+            }
+
+            // Check if badge is not expired → mark plate as having valid badge
+            const expiryDate = new Date(badgeExpiry)
+            expiryDate.setHours(0, 0, 0, 0)
+            if (expiryDate >= today) {
+              platesWithValidBadge.add(normalizedPlate)
+            }
           }
         }
 
@@ -316,6 +329,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           inspectionExpiryDate: badgeExpiryDate || v.roadWorthinessExpiry || '',
           isActive: v.isActive !== false,
           hasBadge: platesWithBadge.has(normalizedPlate),
+          hasValidBadge: platesWithValidBadge.has(normalizedPlate),
           source: v.source || 'drizzle',
         })
       }

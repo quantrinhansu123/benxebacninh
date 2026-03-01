@@ -12,6 +12,7 @@ import {
 import { DatePicker } from "@/components/DatePicker"
 import { vehicleService } from "@/services/vehicle.service"
 import { vehicleBadgeService } from "@/services/vehicle-badge.service"
+import type { AllBadgesResponse } from "@/services/vehicle-badge.service"
 import { DocumentHistoryDialog } from "./DocumentHistoryDialog"
 import type { Vehicle, VehicleDocuments } from "@/types"
 import { format } from "date-fns"
@@ -33,9 +34,14 @@ export function KiemTraGiayToDialog({
   const [documents, setDocuments] = useState<VehicleDocuments>({})
   const [isLoading, setIsLoading] = useState(false)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  // Multiple badges state
+  const [allBadges, setAllBadges] = useState<AllBadgesResponse['badges']>([])
+  // Track modified badge expiry dates: badgeId -> newExpiryDate
+  const [modifiedBadgeExpiries, setModifiedBadgeExpiries] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     if (open && vehicleId) {
+      setModifiedBadgeExpiries(new Map())
       loadVehicle()
     }
   }, [open, vehicleId])
@@ -46,19 +52,23 @@ export function KiemTraGiayToDialog({
       setVehicle(data)
       const docs: VehicleDocuments = { ...(data.documents || {}) }
 
-      // Lấy hạn phù hiệu từ bảng vehicle_badges nếu có
+      // Fetch ALL badges for this plate number
       if (data.plateNumber) {
         try {
-          const badge = await vehicleBadgeService.getByPlateNumber(data.plateNumber)
-          if (badge?.expiry_date) {
+          const result = await vehicleBadgeService.getAllByPlateNumber(data.plateNumber)
+          setAllBadges(result.badges)
+
+          // Use first valid badge for operation_permit (backward compat with cap phep dialog)
+          const firstValidBadge = result.badges.find(b => !b.is_expired)
+          if (firstValidBadge?.expiry_date) {
             docs.operation_permit = {
               ...(docs.operation_permit || { number: '', issueDate: '', isValid: false }),
-              expiryDate: badge.expiry_date,
-              isValid: checkDocumentValidity(badge.expiry_date),
+              expiryDate: firstValidBadge.expiry_date,
+              isValid: checkDocumentValidity(firstValidBadge.expiry_date),
             }
           }
         } catch {
-          // Badge không tồn tại - bỏ qua, giữ nguyên dữ liệu từ vehicle
+          setAllBadges([])
         }
       }
 
@@ -71,8 +81,8 @@ export function KiemTraGiayToDialog({
   const handleSave = async () => {
     if (!vehicle) return
 
-    // Validate required fields - chỉ kiểm tra expiryDate vì đây là dialog sửa hiệu lực
-    const requiredDocs = ['registration', 'operation_permit', 'inspection', 'insurance'] as const
+    // Validate required docs (badges validated separately)
+    const requiredDocs = ['registration', 'inspection', 'insurance'] as const
     for (const docType of requiredDocs) {
       const doc = documents[docType]
       if (!doc || !doc.expiryDate) {
@@ -83,74 +93,68 @@ export function KiemTraGiayToDialog({
 
     setIsLoading(true)
     try {
-      // Update vehicle documents - đảm bảo gửi đầy đủ thông tin
-      // Lấy thông tin hiện có từ vehicle, chỉ cập nhật expiryDate
+      // Update modified badge expiry dates in vehicle_badges table
+      for (const [badgeId, newExpiry] of modifiedBadgeExpiries.entries()) {
+        try {
+          await vehicleBadgeService.update(badgeId, { expiry_date: newExpiry })
+        } catch (error) {
+          console.error(`Failed to update badge ${badgeId} expiry:`, error)
+          toast.error(`Không thể cập nhật hạn phù hiệu. Vui lòng thử lại.`)
+          setIsLoading(false)
+          return
+        }
+      }
+
+      // Update vehicle documents (registration, inspection, insurance)
       const documentsToUpdate: VehicleDocuments = {}
       for (const docType of requiredDocs) {
         const doc = documents[docType]
         if (doc && doc.expiryDate) {
           const existingDoc = vehicle.documents?.[docType]
-          
-          // Đảm bảo tất cả trường bắt buộc là string, không được null/undefined
           const number = existingDoc?.number || `AUTO-${docType}-${vehicle.plateNumber}`
           const issueDate = existingDoc?.issueDate || new Date().toISOString().split('T')[0]
           const expiryDate = doc.expiryDate
-          
-          // Nếu document đã tồn tại, giữ nguyên thông tin cũ, chỉ cập nhật expiryDate
+
           if (existingDoc) {
             documentsToUpdate[docType] = {
-              number: number,
-              issueDate: issueDate,
-              expiryDate: expiryDate,
+              number,
+              issueDate,
+              expiryDate,
               isValid: checkDocumentValidity(expiryDate),
-              // Chỉ thêm các trường optional nếu chúng có giá trị (không phải null/undefined)
               ...(existingDoc.issuingAuthority && { issuingAuthority: existingDoc.issuingAuthority }),
               ...(existingDoc.documentUrl && { documentUrl: existingDoc.documentUrl }),
               ...(existingDoc.notes && { notes: existingDoc.notes }),
             }
           } else {
-            // Nếu document chưa tồn tại, tạo mới với thông tin tối thiểu
             documentsToUpdate[docType] = {
-              number: number,
-              issueDate: issueDate,
-              expiryDate: expiryDate,
+              number,
+              issueDate,
+              expiryDate,
               isValid: checkDocumentValidity(expiryDate),
             }
           }
         }
       }
 
-      await vehicleService.update(vehicle.id, {
-        documents: documentsToUpdate
-      })
+      await vehicleService.update(vehicle.id, { documents: documentsToUpdate })
 
       toast.success("Cập nhật hiệu lực giấy tờ thành công!")
-      
-      // Reload vehicle data to get updated documents
       await loadVehicle()
-      
-      if (onSuccess) {
-        onSuccess()
-      }
+      if (onSuccess) onSuccess()
       onClose()
     } catch (error: any) {
       console.error("Failed to update documents:", error)
-      console.error("Error response:", error?.response?.data)
-      
-      // Hiển thị thông báo lỗi chi tiết hơn
       let errorMessage = "Không thể cập nhật hiệu lực giấy tờ. Vui lòng thử lại sau."
       if (error?.response?.data?.error) {
         errorMessage = error.response.data.error
       } else if (error?.response?.data?.errors) {
-        // Nếu có nhiều lỗi validation
         const errors = error.response.data.errors
-        errorMessage = Array.isArray(errors) 
+        errorMessage = Array.isArray(errors)
           ? errors.map((e: any) => e.message || e).join('\n')
           : JSON.stringify(errors)
       } else if (error?.message) {
         errorMessage = error.message
       }
-      
       toast.error(errorMessage)
     } finally {
       setIsLoading(false)
@@ -172,7 +176,6 @@ export function KiemTraGiayToDialog({
     setDocuments(prev => {
       const updated = { ...prev }
       if (!updated[docType]) {
-        // Nếu document chưa tồn tại, tạo mới với thông tin từ vehicle hiện tại hoặc giá trị mặc định
         const existingDoc = vehicle?.documents?.[docType]
         updated[docType] = {
           number: existingDoc?.number || '',
@@ -209,19 +212,17 @@ export function KiemTraGiayToDialog({
     const isValid = checkDocumentValidity(expiryDate)
     return {
       isValid,
-      icon: isValid 
+      icon: isValid
         ? <CheckCircle className="h-5 w-5 text-green-500" />
         : <X className="h-5 w-5 text-red-500" />
     }
   }
 
   const registrationExpiry = documents.registration?.expiryDate || ''
-  const permitExpiry = documents.operation_permit?.expiryDate || ''
   const inspectionExpiry = documents.inspection?.expiryDate || ''
   const insuranceExpiry = documents.insurance?.expiryDate || ''
 
   const registrationStatus = getDocumentStatus(registrationExpiry)
-  const permitStatus = getDocumentStatus(permitExpiry)
   const inspectionStatus = getDocumentStatus(inspectionExpiry)
   const insuranceStatus = getDocumentStatus(insuranceExpiry)
 
@@ -264,24 +265,69 @@ export function KiemTraGiayToDialog({
             </div>
           </div>
 
-          {/* Hạn phù hiệu */}
-          <div>
-            <Label htmlFor="permitExpiry">
-              Hạn phù hiệu <span className="text-red-500">(*)</span>
-            </Label>
-            <div className="relative mt-1 flex items-center gap-2">
-              <div className="flex-1">
-                <DatePicker
-                  date={permitExpiry ? new Date(permitExpiry) : null}
-                  onDateChange={(date) => updateDocumentDate('operation_permit', date)}
-                  placeholder="Chọn ngày hết hạn"
-                />
-              </div>
-              <div>
-                {permitStatus.icon}
+          {/* Phù hiệu xe — multiple badges */}
+          {allBadges.length > 0 ? (
+            <div>
+              <Label className="text-sm font-semibold">
+                Phù hiệu xe ({allBadges.filter(b => !b.is_expired).length} còn hạn / {allBadges.length} tổng)
+              </Label>
+              <div className="space-y-3 mt-2">
+                {allBadges.map((badge) => {
+                  // Use modified expiry if edited, otherwise original
+                  const currentExpiry = modifiedBadgeExpiries.get(badge.id) ?? badge.expiry_date ?? ''
+                  const status = getDocumentStatus(currentExpiry)
+                  return (
+                    <div key={badge.id}>
+                      <Label className="text-xs">
+                        {badge.badge_type} - {badge.route_name || badge.route_code || badge.badge_number}
+                        {badge.is_expired && (
+                          <span className="ml-2 text-red-500 font-medium">(Hết hạn)</span>
+                        )}
+                      </Label>
+                      <div className="relative mt-1 flex items-center gap-2">
+                        <div className="flex-1">
+                          <DatePicker
+                            date={currentExpiry ? new Date(currentExpiry) : null}
+                            onDateChange={(date) => {
+                              if (badge.is_expired) return
+                              const value = date ? format(date, "yyyy-MM-dd") : ""
+                              setModifiedBadgeExpiries(prev => {
+                                const next = new Map(prev)
+                                next.set(badge.id, value)
+                                return next
+                              })
+                            }}
+                            placeholder="Chọn ngày hết hạn"
+                            disabled={badge.is_expired}
+                          />
+                        </div>
+                        <div>{status.icon}</div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
-          </div>
+          ) : (
+            /* Fallback: no badges found — show legacy single permit field */
+            <div>
+              <Label htmlFor="permitExpiry">
+                Hạn phù hiệu <span className="text-red-500">(*)</span>
+              </Label>
+              <div className="relative mt-1 flex items-center gap-2">
+                <div className="flex-1">
+                  <DatePicker
+                    date={documents.operation_permit?.expiryDate ? new Date(documents.operation_permit.expiryDate) : null}
+                    onDateChange={(date) => updateDocumentDate('operation_permit', date)}
+                    placeholder="Chọn ngày hết hạn"
+                  />
+                </div>
+                <div>
+                  {getDocumentStatus(documents.operation_permit?.expiryDate).icon}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Hạn đăng kiểm */}
           <div>
@@ -324,15 +370,15 @@ export function KiemTraGiayToDialog({
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-2 pt-4 border-t mt-6">
-          <Button 
-            type="button" 
-            variant="outline" 
+          <Button
+            type="button"
+            variant="outline"
             onClick={onClose}
             disabled={isLoading}
           >
             HỦY
           </Button>
-          <Button 
+          <Button
             type="button"
             onClick={handleSave}
             disabled={isLoading}
@@ -351,4 +397,3 @@ export function KiemTraGiayToDialog({
     </Dialog>
   )
 }
-
