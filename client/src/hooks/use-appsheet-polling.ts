@@ -19,6 +19,8 @@ interface UseAppSheetPollingOptions<TNormalized> {
   intervalMs?: number
   /** Enable/disable polling (default: true) */
   enabled?: boolean
+  /** Extract unique key per record for per-record diff */
+  getKey?: (item: TNormalized, index: number) => string
 }
 
 interface UseAppSheetPollingResult {
@@ -59,7 +61,7 @@ export function useAppSheetPolling<TNormalized>(
   const [error, setError] = useState<string | null>(null)
 
   // Refs to avoid stale closures
-  const lastHashRef = useRef<string>('')
+  const prevHashMapRef = useRef<Map<string, string>>(new Map())
   const isFirstPollRef = useRef(true)
   const abortRef = useRef<AbortController | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -71,6 +73,8 @@ export function useAppSheetPolling<TNormalized>(
   onDataRef.current = onData
   const onSyncToDbRef = useRef(onSyncToDb)
   onSyncToDbRef.current = onSyncToDb
+  const getKeyRef = useRef(options.getKey)
+  getKeyRef.current = options.getKey
 
   const endpoint = appsheetConfig.endpoints[endpointKey]
 
@@ -87,17 +91,33 @@ export function useAppSheetPolling<TNormalized>(
       const rawRows = await appsheetClient.fetchTable(endpoint, controller.signal)
       const normalized = normalizeRef.current(rawRows)
 
-      // Hash-based diff: skip update if data unchanged
-      const hash = hashData(normalized)
-      if (hash !== lastHashRef.current) {
-        lastHashRef.current = hash
+      // Per-record diff: only sync changed records to DB
+      const getKey = getKeyRef.current || ((_: TNormalized, i: number) => String(i))
+      const changedRecords: TNormalized[] = []
+      const newHashMap = new Map<string, string>()
+
+      for (let i = 0; i < normalized.length; i++) {
+        const item = normalized[i]
+        const key = getKey(item, i)
+        const itemHash = hashData(item)
+        newHashMap.set(key, itemHash)
+        if (prevHashMapRef.current.get(key) !== itemHash) {
+          changedRecords.push(item)
+        }
+      }
+
+      const hasChanges = changedRecords.length > 0 || prevHashMapRef.current.size !== newHashMap.size
+      console.log(`[AppSheet diff] ${endpointKey}: prev=${prevHashMapRef.current.size} new=${newHashMap.size} changed=${changedRecords.length} hasChanges=${hasChanges}`)
+      prevHashMapRef.current = newHashMap
+
+      if (hasChanges) {
         const isInitial = isFirstPollRef.current
         isFirstPollRef.current = false
         onDataRef.current(normalized, isInitial)
 
-        // Background DB sync (fire-and-forget, properly handle async)
-        if (onSyncToDbRef.current) {
-          Promise.resolve().then(() => onSyncToDbRef.current?.(normalized)).catch(() => {/* silent */})
+        // Background DB sync - only changed records (fire-and-forget)
+        if (changedRecords.length > 0 && onSyncToDbRef.current) {
+          Promise.resolve().then(() => onSyncToDbRef.current?.(changedRecords)).catch(() => {/* silent */})
         }
       }
 

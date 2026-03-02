@@ -142,6 +142,7 @@ export default function QuanLyXe() {
     normalize: normalizeVehicleRows,
     onData: handleAppSheetData,
     onSyncToDb: (data) => vehicleService.syncFromAppSheet(data),
+    getKey: (v) => v.plateNumber,
     enabled: true,
   })
 

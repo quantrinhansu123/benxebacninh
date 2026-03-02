@@ -9,8 +9,9 @@ import { vehicles } from '../../../db/schema/vehicles.js'
 import { db } from '../../../db/drizzle.js'
 import { sql } from 'drizzle-orm'
 
-const MAX_BATCH_SIZE = 500
+const MAX_BATCH_SIZE = 20_000
 const MAX_STRING_LENGTH = 100
+const BATCH_CHUNK_SIZE = 1000
 
 interface SyncVehiclePayload {
   firebaseId: string
@@ -43,12 +44,12 @@ export async function syncVehiclesFromAppSheet(req: Request, res: Response) {
       return res.status(400).json({ error: 'vehicles array required' })
     }
 
-    // Prevent oversized payloads
     if (payload.length > MAX_BATCH_SIZE) {
       return res.status(400).json({ error: `Max ${MAX_BATCH_SIZE} vehicles per batch` })
     }
 
-    let upserted = 0
+    // Phase 1: Validate all records, build valid batch
+    const validRecords: (typeof vehicles.$inferInsert)[] = []
     const errors: string[] = []
 
     for (const v of payload) {
@@ -64,40 +65,46 @@ export async function syncVehiclesFromAppSheet(req: Request, res: Response) {
       }
 
       const regName = sanitize(v.registrationName)
-      // Use parameterized jsonb value (safe from injection)
       const metadataObj = regName ? { registration_name: regName } : {}
 
+      // Validate syncedAt to avoid Invalid Date crashing entire chunk
+      const syncDate = new Date(v.syncedAt)
+      const safeSyncedAt = isNaN(syncDate.getTime()) ? new Date() : syncDate
+
+      validRecords.push({
+        plateNumber: plate,
+        firebaseId: sanitize(v.firebaseId) || null,
+        seatCount: typeof v.seatCapacity === 'number' ? v.seatCapacity : null,
+        source: 'appsheet',
+        syncedAt: safeSyncedAt,
+        metadata: metadataObj,
+        isActive: true,
+      })
+    }
+
+    // Phase 2: Batch upsert in chunks (1000 per chunk)
+    let upserted = 0
+    for (let i = 0; i < validRecords.length; i += BATCH_CHUNK_SIZE) {
+      const chunk = validRecords.slice(i, i + BATCH_CHUNK_SIZE)
       try {
         await db
           .insert(vehicles)
-          .values({
-            plateNumber: plate,
-            firebaseId: sanitize(v.firebaseId) || null,
-            seatCount: typeof v.seatCapacity === 'number' ? v.seatCapacity : null,
-            source: 'appsheet',
-            syncedAt: new Date(v.syncedAt),
-            metadata: metadataObj,
-            isActive: true,
-          })
+          .values(chunk)
           .onConflictDoUpdate({
             target: vehicles.plateNumber,
             set: {
-              syncedAt: new Date(v.syncedAt),
-              source: sql`COALESCE(${vehicles.source}, 'appsheet')`,
-              // Parameterized: Drizzle binds jsonb safely via $1
-              metadata: sql`COALESCE(${vehicles.metadata}, '{}'::jsonb) || ${sql.param(JSON.stringify(metadataObj))}::jsonb`,
-              // Also update seatCount if AppSheet provides it
-              ...(typeof v.seatCapacity === 'number'
-                ? { seatCount: v.seatCapacity }
-                : {}),
-              updatedAt: new Date(),
+              syncedAt: sql`excluded.synced_at`,
+              source: sql`excluded.source`,
+              // JSONB shallow merge: preserves existing keys (image_url, notes, etc.)
+              metadata: sql`COALESCE(${vehicles.metadata}, '{}'::jsonb) || excluded.metadata::jsonb`,
+              seatCount: sql`excluded.seat_count`,
+              updatedAt: sql`now()`,
             },
           })
-
-        upserted++
+        upserted += chunk.length
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error'
-        errors.push(`plate=${plate}: ${msg}`)
+        errors.push(`Batch ${i}-${i + chunk.length}: ${msg}`)
       }
     }
 

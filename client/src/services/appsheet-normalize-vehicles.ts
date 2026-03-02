@@ -1,15 +1,15 @@
 /**
  * Normalize raw AppSheet Xe (vehicle) rows into app-compatible format
  * Column names discovered from AppSheet "Xe" table (gid=40001005)
+ *
+ * NOTE: Only stable fields here (for per-record diff hashing).
+ * Unstable fields (firebaseId, syncedAt) added at sync time in vehicleApi.ts
  */
 
 export interface NormalizedAppSheetVehicle {
-  firebaseId: string
   plateNumber: string
   registrationName?: string
   seatCapacity?: number
-  source: 'appsheet'
-  syncedAt: string
 }
 
 /** Normalize plate: remove dots, dashes, spaces → uppercase */
@@ -30,25 +30,29 @@ const int = (val: unknown): number | undefined => {
 export function normalizeVehicleRows(
   rows: Record<string, unknown>[],
 ): NormalizedAppSheetVehicle[] {
-  const results: NormalizedAppSheetVehicle[] = []
-  const now = new Date().toISOString()
+  // Dedup by plate: Map ensures each plate appears once
+  // Merge strategy: if duplicate, keep non-null values from either row
+  // AppSheet Xe table has ~215 duplicate plates out of ~19K rows
+  const byPlate = new Map<string, NormalizedAppSheetVehicle>()
 
   for (const row of rows) {
-    const id = str(row['IDXe'] ?? row['_RowNumber'] ?? row['Id'])
     const plate = str(row['BienSo'] ?? row['BienKiemSoat'])
-
-    // Skip rows without plate number (unusable)
     if (!plate) continue
+    const normalized = normPlate(plate)
 
-    results.push({
-      firebaseId: id || normPlate(plate),
-      plateNumber: normPlate(plate),
+    // Merge strategy: prefer non-null values from either duplicate row
+    const newVal: NormalizedAppSheetVehicle = {
+      plateNumber: normalized,
       registrationName: str(row['TenDangKyXe']) || undefined,
       seatCapacity: int(row['SoChoNgoi'] ?? row['SoCho']),
-      source: 'appsheet',
-      syncedAt: now,
-    })
+    }
+    const existing = byPlate.get(normalized)
+    byPlate.set(normalized, existing ? {
+      plateNumber: normalized,
+      registrationName: newVal.registrationName ?? existing.registrationName,
+      seatCapacity: newVal.seatCapacity ?? existing.seatCapacity,
+    } : newVal)
   }
 
-  return results
+  return Array.from(byPlate.values())
 }
