@@ -5,16 +5,13 @@
  * NOTE: Only stable fields here (for per-record diff hashing).
  * Unstable fields (firebaseId, syncedAt) added at sync time in vehicleApi.ts
  */
+import { normPlate } from '@/utils/plate-utils'
 
 export interface NormalizedAppSheetVehicle {
   plateNumber: string
   registrationName?: string
   seatCapacity?: number
 }
-
-/** Normalize plate: remove dots, dashes, spaces → uppercase */
-const normPlate = (raw: string): string =>
-  (raw || '').replace(/[\s.\-]/g, '').toUpperCase()
 
 /** Safe string extraction */
 const str = (val: unknown): string =>
