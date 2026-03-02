@@ -21,6 +21,166 @@ Your role is to analyze user requirements, delegate tasks to appropriate sub-age
 **IMPORTANT:** In reports, list any unresolved questions at the end, if any.
 **IMPORTANT**: Date format is configured in `.ck.json` and injected by session hooks via `$CK_PLAN_DATE_FORMAT` env var. Use this format for plan/report naming.
 
+## Development Commands
+
+**npm workspaces monorepo** — root `package.json` defines `client` and `server` workspaces.
+
+### Common Commands (from repo root)
+
+```bash
+npm install              # Install all workspace dependencies
+npm run dev              # Start both client + server concurrently (blue=BE, green=FE)
+npm run dev:client       # Client only (Vite dev server → localhost:5173)
+npm run dev:server       # Server only (tsx watch → port from APP_PORT env, default 3000)
+npm run build            # Build all workspaces
+npm run build:client     # tsc && vite build (client)
+npm run build:server     # tsc -p tsconfig.build.json (server)
+```
+
+### Server-specific (from `server/`)
+
+```bash
+npm run test                    # Jest (ESM mode) — all tests
+npm run test -- --testPathPattern=fleet  # Run single test file/module
+npm run test:watch              # Jest watch mode
+npm run test:coverage           # Jest with coverage (threshold: 50%)
+npm run db:generate             # Drizzle Kit — generate migration
+npm run db:push                 # Drizzle Kit — push schema to DB
+npm run db:migrate              # Drizzle Kit — run migrations
+npm run db:studio               # Drizzle Kit — open studio UI
+npm run db:test                 # Test Drizzle connection
+npm run smoke-test              # Production smoke test
+npm run create-admin            # Create admin user script
+```
+
+### Client-specific (from `client/`)
+
+```bash
+npm run build        # tsc && vite build
+npm run lint         # ESLint (ts,tsx) — max-warnings 0
+npm run preview      # Vite preview of build output
+```
+
+### TypeScript Verification
+
+```bash
+cd client && npx tsc --noEmit    # Check client types (uses path aliases @/*)
+cd server && npx tsc -p tsconfig.build.json --noEmit  # Check server types (excludes tests/ETL)
+```
+
+## Architecture Overview
+
+### Monorepo Structure
+
+```
+quanlybenxe/
+├── client/          # React 18 + Vite + TypeScript
+│   └── src/
+│       ├── pages/           # Lazy-loaded page components
+│       ├── components/      # Shared UI (shadcn/ui + Radix + Tailwind)
+│       ├── features/        # Feature modules (auth, dispatch, fleet)
+│       ├── services/        # API client services + AppSheet sync
+│       ├── hooks/           # Custom React hooks
+│       ├── store/           # Zustand global stores
+│       ├── workers/         # SharedWorker (AppSheet polling)
+│       ├── utils/           # Shared utilities
+│       ├── config/          # App configuration
+│       ├── lib/             # Core utilities (api.ts, utils.ts)
+│       └── types/           # TypeScript definitions
+│
+├── server/          # Express.js + TypeScript
+│   └── src/
+│       ├── modules/         # Feature modules (fleet, dispatch, auth, etc.)
+│       ├── controllers/     # Legacy (non-modular) controllers
+│       ├── services/        # Legacy + GTVT sync services
+│       ├── routes/          # Legacy route files
+│       ├── middleware/      # Auth, error, validation
+│       ├── db/              # Drizzle ORM schemas + migrations
+│       └── config/          # Server configuration
+│
+└── docs/            # Technical docs (gitignored, local only)
+```
+
+### Server Module Pattern
+
+Modules follow **feature-based** organization. The fully refactored pattern (fleet, dispatch):
+
+```
+modules/{name}/
+├── controllers/         # HTTP handlers
+├── repositories/        # Data access layer (Drizzle queries)
+├── services/            # Business logic
+├── __tests__/           # Jest tests
+├── {name}-types.ts      # Shared types
+├── {name}-mappers.ts    # DB → API field mapping
+├── {name}-validation.ts # Zod schemas
+├── {name}.routes.ts     # Express router
+└── index.ts             # Barrel file (public API)
+```
+
+**Hybrid routing:** Refactored modules register routes at `modules/{name}/{name}.routes.ts`. Legacy modules still use `routes/{name}.routes.ts`. Both patterns coexist — check both locations when working with routes.
+
+**GTVT sync routes** use a different prefix: `app.use('/api/integrations/gtvt', gtvtSyncRoutes)` — separate from standard `/api/{resource}` routes.
+
+### Frontend Patterns
+
+**Routing:** React Router v6 with lazy-loaded pages via `React.lazy()` + `Suspense`. Routes use Vietnamese kebab-case: `/quan-ly-xe`, `/dieu-do`, `/bao-cao/*`. `ProtectedRoute` wraps authenticated routes.
+
+**API Client:** `client/src/lib/api.ts` — Axios instance with `VITE_API_URL` base. Auth token stored in `localStorage` key `auth_token`, sent as `Authorization: Bearer {token}`. 401 → clear token + redirect `/login`.
+
+**Frontend Services:** Object literal pattern:
+```typescript
+export const vehicleService = {
+  getAll: async (): Promise<T[]> => { ... },
+  getById: async (id: string): Promise<T> => { ... },
+  create: async (input): Promise<T> => { ... },
+}
+```
+
+**State Management:** Zustand stores — global stores at `client/src/store/`, feature-local stores at `client/src/features/{name}/store/`. Follow existing pattern when adding new stores.
+
+**Path Aliases (client):** `@` → `./src`, `@features/*`, `@hooks/*`, `@types/*`
+
+### Frontend AppSheet Realtime Polling (SharedWorker)
+
+Frontend polls GTVT AppSheet API directly from browser (CORS allowed) using a SharedWorker:
+
+```
+useAppSheetPolling hook → workerBridge (singleton) → SharedWorker
+                                                      ├── fetch AppSheet API
+                                                      ├── normalize (TABLE_CONFIG registry)
+                                                      ├── cyrb53 hash diff (per-record)
+                                                      └── broadcast to subscribers
+```
+
+**Key behaviors:**
+- N browser tabs → 1 SharedWorker → 1 API request (dedup across tabs)
+- Adaptive intervals: `[10s, 10s, 10s, 30s, 60s, 5min]` — escalates when no changes, resets on change
+- Leader election (BroadcastChannel): only 1 tab POSTs changed data to backend
+- Tab visibility: pauses polling when all tabs hidden, resumes on visible
+- iOS Safari fallback: main-thread polling in bridge (no SharedWorker support)
+- New tabs receive cached data immediately
+
+**Files:** `client/src/workers/appsheet-shared-worker.ts`, `client/src/services/appsheet-worker-bridge.ts`, `client/src/services/appsheet-leader-election.ts`, `client/src/hooks/use-appsheet-polling.ts`, `client/src/config/appsheet.config.ts`
+
+### Environment Variables
+
+**Server (`server/.env.example`):** `APP_PORT` (NOT `PORT` — reserved by Firebase), `DATABASE_URL` (Supabase pgbouncer port 6543), `JWT_SECRET`, `CORS_ORIGIN` (comma-separated), `CLOUDINARY_*`, `GEMINI_API_KEY`, `GTVT_APPSHEET_*`
+
+**Client (`client/.env.example`):** `VITE_API_URL`, `VITE_GTVT_APPSHEET_API_KEY`, `VITE_GTVT_APPSHEET_VEHICLES_ENDPOINT`
+
+**Deployment:** Backend → Render.com, Frontend → Vercel. `client/.env.production` is committed (not gitignored).
+
+### Database Connection
+
+Supabase PostgreSQL via `postgres` driver (not `pg`). Connection pool: `max: 20`, `idle_timeout: 30s`, `prepare: false` (required for Supabase Transaction/pgbouncer mode), port 6543.
+
+**Drizzle config:** Schema at `server/src/db/schema/index.ts`, migrations at `server/src/db/migrations/`.
+
+### Express Body Parser Gotcha
+
+Default `express.json()` limit is 100KB. AppSheet vehicle sync endpoint sends ~19K records → route-specific `express.json({ limit: '5mb' })` on `/api/vehicles`. When adding large-payload endpoints, apply route-specific limit.
+
 ## Database Schema (Drizzle ORM + Supabase PostgreSQL)
 
 **Location:** `server/src/db/schema/`
@@ -136,7 +296,6 @@ Body: {"Action": "Find", "Properties": {}, "Rows": []}
 - **Bus**: GIOCHAY_BUYT.`BieuDo` → BIEUDOCHAY_BUYT.`ID_BieuDo` → get `TuyenBuyt`, `DonViKhaiThac`
 
 **Sync code:** `server/src/services/gtvt-*.ts`, `server/src/config/gtvt-appsheet.config.ts`, `server/src/controllers/gtvt-sync.controller.ts`
-**Implementation plan:** `plans/260225-1643-gtvt-appsheet-api-fix-and-sync/plan.md`
 
 ### GTVT Sync Known Issues & Patterns
 
@@ -153,14 +312,20 @@ Body: {"Action": "Find", "Properties": {}, "Rows": []}
 
 **TypeScript Build (Render deploy):**
 - Raw SQL results (`RowList<Record<string, unknown>[]>`) need `as unknown as Type` double cast pattern
-- Pre-existing TS errors in test files/ETL migrations are non-blocking for production build
+- Pre-existing TS errors in test files/ETL migrations are non-blocking for production build (excluded in `tsconfig.build.json`)
 
-## Documentation Management
+**AppSheet Vehicle Sync (Frontend → Backend):**
+- ~19K vehicle rows with ~215 duplicate plates → normalizer dedup with merge strategy (prefer non-null)
+- Frontend chunks into 500-record batches before POST
+- Backend uses `COALESCE(metadata, '{}') || excluded.metadata` for JSONB merge in upsert
+- Batch INSERT: `db.insert(table).values(batch).onConflictDoUpdate()` with `excluded.*` uses **snake_case SQL column names**, NOT camelCase Drizzle props
 
-We keep all important docs in `./docs` folder and keep updating them, structure like below:
+## Documentation
+
+Local-only docs (gitignored) at `./docs/`:
 
 ```
-./docs
+docs/
 ├── project-overview-pdr.md
 ├── code-standards.md
 ├── codebase-summary.md
@@ -170,4 +335,4 @@ We keep all important docs in `./docs` folder and keep updating them, structure 
 └── project-roadmap.md
 ```
 
-**IMPORTANT:** *MUST READ* and *MUST COMPLY* all *INSTRUCTIONS* in project `./CLAUDE.md`, especially *WORKFLOWS* section is *CRITICALLY IMPORTANT*, this rule is *MANDATORY. NON-NEGOTIABLE. NO EXCEPTIONS. MUST REMEMBER AT ALL TIMES!!!*
+Plans at `./plans/` (also gitignored). Both directories persist locally only.
