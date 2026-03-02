@@ -10,6 +10,9 @@ export interface VehicleBadgeStats {
   expiringSoon: number
 }
 
+/** Chunk size for backend sync batches */
+const SYNC_CHUNK_SIZE = 500
+
 export const vehicleBadgeApi = {
   // Read-only service - data comes from external source
   getAll: async (): Promise<VehicleBadge[]> => {
@@ -44,6 +47,19 @@ export const vehicleBadgeApi = {
         expired: 0,
         expiringSoon: 0,
       }
+    }
+  },
+
+  /** Push AppSheet-polled badges to backend for DB persistence (chunked) */
+  syncFromAppSheet: async (badges: unknown[]): Promise<void> => {
+    if (!badges.length) return
+    try {
+      for (let i = 0; i < badges.length; i += SYNC_CHUNK_SIZE) {
+        const chunk = (badges as Record<string, unknown>[]).slice(i, i + SYNC_CHUNK_SIZE)
+        await api.post('/vehicles/badges/appsheet-sync', { badges: chunk })
+      }
+    } catch (error) {
+      console.warn('AppSheet badge sync to DB failed:', error)
     }
   },
 }
