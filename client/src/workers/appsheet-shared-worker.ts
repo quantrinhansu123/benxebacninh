@@ -10,6 +10,8 @@
 declare const self: SharedWorkerGlobalScope
 
 import { normalizeVehicleRows } from '../services/appsheet-normalize-vehicles'
+import { normalizeBadgeRows } from '../services/appsheet-normalize-badges'
+import { normalizeOperatorRows } from '../services/appsheet-normalize-operators'
 
 // ─── Types ───────────────────────────────────────────────────────
 type NormalizerFn = (rows: Record<string, unknown>[]) => unknown[]
@@ -17,7 +19,8 @@ type NormalizerFn = (rows: Record<string, unknown>[]) => unknown[]
 // Built-in normalizer + key config per table (Vite bundles these imports)
 const TABLE_CONFIG: Record<string, { normalizer: NormalizerFn; keyField: string }> = {
   vehicles: { normalizer: normalizeVehicleRows as NormalizerFn, keyField: 'plateNumber' },
-  // Phase 1+: add routes, schedules, etc.
+  badges: { normalizer: normalizeBadgeRows as NormalizerFn, keyField: 'badgeNumber' },
+  operators: { normalizer: normalizeOperatorRows as NormalizerFn, keyField: 'firebaseId' },
 }
 
 // Messages: Main thread → Worker

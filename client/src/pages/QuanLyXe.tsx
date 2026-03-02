@@ -27,9 +27,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog"
 import { vehicleService, VehicleForm, VehicleView } from "@/features/fleet/vehicles"
+import { vehicleBadgeService } from "@/features/fleet/vehicle-badges"
+import { operatorService } from "@/features/fleet/operators"
 import { quanlyDataService } from "@/services/quanly-data.service"
 import { useAppSheetPolling } from "@/hooks/use-appsheet-polling"
 import { normalizeVehicleRows, type NormalizedAppSheetVehicle } from "@/services/appsheet-normalize-vehicles"
+import { normalizeBadgeRows, type NormalizedAppSheetBadge } from "@/services/appsheet-normalize-badges"
+import { normalizeOperatorRows, type NormalizedAppSheetOperator } from "@/services/appsheet-normalize-operators"
 import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { format, isValid, parseISO } from "date-fns"
@@ -38,7 +42,8 @@ import { useDialogHistory } from "@/hooks/useDialogHistory"
 // Helper functions
 const getVehicleTypeName = (vehicle: Vehicle): string => {
   const v = vehicle as any
-  return vehicle.vehicleType?.name || v.vehicleTypeName || v.vehicleType || ""
+  // Prioritize vehicleCategory (LoaiPhuongTien from AppSheet sync)
+  return v.vehicleCategory || vehicle.vehicleType?.name || v.vehicleTypeName || v.vehicleType || ""
 }
 
 const getOperatorName = (vehicle: Vehicle): string => {
@@ -146,6 +151,44 @@ export default function QuanLyXe() {
     enabled: true,
   })
 
+  // Badge polling: sync PHUHIEUXE to DB + build plate→operatorRef lookup
+  const [plateToOperatorRef, setPlateToOperatorRef] = useState<Map<string, string>>(new Map())
+
+  useAppSheetPolling({
+    endpointKey: 'badges',
+    normalize: normalizeBadgeRows,
+    onData: (data: NormalizedAppSheetBadge[]) => {
+      // Build plate → operatorRef map for resolution chain
+      const map = new Map<string, string>()
+      for (const b of data) {
+        if (b.plateNumber && b.operatorRef) map.set(b.plateNumber, b.operatorRef)
+      }
+      setPlateToOperatorRef(map)
+    },
+    onSyncToDb: (data) => vehicleBadgeService.syncFromAppSheet(data),
+    getKey: (b) => b.badgeNumber,
+    enabled: true,
+  })
+
+  // Operator polling: sync THONGTINDONVIVANTAI to DB + build ref→name lookup
+  const [operatorRefMap, setOperatorRefMap] = useState<Map<string, { name: string; province: string }>>(new Map())
+
+  useAppSheetPolling({
+    endpointKey: 'operators',
+    normalize: normalizeOperatorRows,
+    onData: (data: NormalizedAppSheetOperator[]) => {
+      // Build firebaseId → {name, province} for resolution chain
+      const map = new Map<string, { name: string; province: string }>()
+      for (const op of data) {
+        if (op.firebaseId) map.set(op.firebaseId, { name: op.name, province: op.province || '' })
+      }
+      setOperatorRefMap(map)
+    },
+    onSyncToDb: (data) => operatorService.syncFromAppSheet(data),
+    getKey: (op) => op.firebaseId,
+    enabled: true,
+  })
+
   useEffect(() => {
     setTitle("Quản lý xe")
     loadData()
@@ -164,6 +207,7 @@ export default function QuanLyXe() {
         seatCapacity: v.seatCapacity,
         operatorName: v.operatorName || '',
         vehicleTypeName: v.vehicleType || '',
+        vehicleCategory: v.vehicleCategory || '',
         inspectionExpiryDate: v.inspectionExpiryDate,
         isActive: v.isActive,
         hasBadge: v.hasBadge,
@@ -200,6 +244,20 @@ export default function QuanLyXe() {
     }
   }
 
+  // Resolution chain: plate → badge.operatorRef → operator.name
+  // Falls back to backend-provided operatorName if AppSheet data not yet loaded
+  const resolveOperatorName = useCallback((vehicle: Vehicle): string => {
+    const plate = (vehicle.plateNumber || '').replace(/[\s.\-]/g, '').toUpperCase()
+    if (plate && plateToOperatorRef.size > 0 && operatorRefMap.size > 0) {
+      const ref = plateToOperatorRef.get(plate)
+      if (ref) {
+        const op = operatorRefMap.get(ref)
+        if (op?.name) return op.name
+      }
+    }
+    return getOperatorName(vehicle)
+  }, [plateToOperatorRef, operatorRefMap])
+
   // Filter base for dropdown options: only badge vehicles when badge filter is on
   const badgeBaseVehicles = useMemo(() =>
     showOnlyBadgeVehicles ? vehicles.filter(v => v.hasBadge) : vehicles,
@@ -211,8 +269,8 @@ export default function QuanLyXe() {
     [badgeBaseVehicles]
   )
   const operatorNames = useMemo(() =>
-    Array.from(new Set(badgeBaseVehicles.map(getOperatorName).filter(Boolean))).sort(),
-    [badgeBaseVehicles]
+    Array.from(new Set(badgeBaseVehicles.map(resolveOperatorName).filter(Boolean))).sort(),
+    [badgeBaseVehicles, resolveOperatorName]
   )
 
   // Stats calculations - reuse badge-filtered base
@@ -226,7 +284,7 @@ export default function QuanLyXe() {
   const filteredVehicles = useMemo(() => {
     return vehicles.filter((vehicle: Vehicle) => {
       const vehicleTypeName = getVehicleTypeName(vehicle)
-      const operatorName = getOperatorName(vehicle)
+      const operatorName = resolveOperatorName(vehicle)
 
       // Badge filter - default ON (only show vehicles with Buýt/TCĐ badges)
       if (showOnlyBadgeVehicles && !vehicle.hasBadge) return false
@@ -254,7 +312,7 @@ export default function QuanLyXe() {
 
       return true
     })
-  }, [vehicles, searchQuery, filterVehicleType, filterOperator, filterStatus, quickFilter, showOnlyBadgeVehicles])
+  }, [vehicles, searchQuery, filterVehicleType, filterOperator, filterStatus, quickFilter, showOnlyBadgeVehicles, resolveOperatorName])
 
   // Pagination
   const totalPages = Math.ceil(filteredVehicles.length / ITEMS_PER_PAGE)
@@ -669,7 +727,7 @@ export default function QuanLyXe() {
                           <div className="flex items-center gap-2">
                             <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
                             <span className="text-slate-600">
-                              {getOperatorName(vehicle) || "N/A"}
+                              {resolveOperatorName(vehicle) || "N/A"}
                             </span>
                           </div>
                         </td>
@@ -779,7 +837,7 @@ export default function QuanLyXe() {
                   <div className="space-y-2 mb-4">
                     <div className="flex items-center gap-2 text-sm">
                       <Building2 className="h-4 w-4 text-slate-400" />
-                      <span className="text-slate-600 truncate">{getOperatorName(vehicle) || "N/A"}</span>
+                      <span className="text-slate-600 truncate">{resolveOperatorName(vehicle) || "N/A"}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Users className="h-4 w-4 text-slate-400" />

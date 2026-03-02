@@ -16,6 +16,8 @@ import {
   getAllDocumentAuditLogs,
 } from './controllers/vehicle.controller.js'
 import { syncVehiclesFromAppSheet } from './controllers/vehicle-appsheet-sync.controller.js'
+import { syncBadgesFromAppSheet } from './controllers/badge-appsheet-sync.controller.js'
+import { syncOperatorsFromAppSheet } from './controllers/operator-appsheet-sync.controller.js'
 
 const router = Router()
 
@@ -28,6 +30,8 @@ router.get('/document-audit-logs/all', getAllDocumentAuditLogs)
 router.get('/:id/document-audit-logs', getVehicleDocumentAuditLogs)
 router.get('/:id', getVehicleById)
 router.post('/appsheet-sync', bodyParser.json({ limit: '5mb' }), syncVehiclesFromAppSheet)
+router.post('/badges/appsheet-sync', bodyParser.json({ limit: '5mb' }), syncBadgesFromAppSheet)
+router.post('/operators/appsheet-sync', bodyParser.json({ limit: '2mb' }), syncOperatorsFromAppSheet)
 router.post('/', createVehicle)
 router.put('/:id', updateVehicle)
 router.delete('/:id', deleteVehicle)
