@@ -3,7 +3,8 @@
  * API endpoints for vehicle operations
  */
 
-import express, { Router } from 'express'
+import { Router } from 'express'
+import bodyParser from 'body-parser'
 import { authenticate } from '../../middleware/auth.js'
 import {
   getAllVehicles,
@@ -26,7 +27,7 @@ router.get('/', getAllVehicles)
 router.get('/document-audit-logs/all', getAllDocumentAuditLogs)
 router.get('/:id/document-audit-logs', getVehicleDocumentAuditLogs)
 router.get('/:id', getVehicleById)
-router.post('/appsheet-sync', express.json({ limit: '5mb' }), syncVehiclesFromAppSheet)
+router.post('/appsheet-sync', bodyParser.json({ limit: '5mb' }), syncVehiclesFromAppSheet)
 router.post('/', createVehicle)
 router.put('/:id', updateVehicle)
 router.delete('/:id', deleteVehicle)
