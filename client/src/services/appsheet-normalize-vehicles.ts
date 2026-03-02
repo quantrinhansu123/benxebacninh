@@ -11,6 +11,7 @@ export interface NormalizedAppSheetVehicle {
   plateNumber: string
   registrationName?: string
   seatCapacity?: number
+  vehicleCategory?: string // LoaiPhuongTien from AppSheet Xe table
 }
 
 /** Safe string extraction */
@@ -42,12 +43,14 @@ export function normalizeVehicleRows(
       plateNumber: normalized,
       registrationName: str(row['TenDangKyXe']) || undefined,
       seatCapacity: int(row['SoChoNgoi'] ?? row['SoCho']),
+      vehicleCategory: str(row['LoaiPhuongTien']) || undefined,
     }
     const existing = byPlate.get(normalized)
     byPlate.set(normalized, existing ? {
       plateNumber: normalized,
       registrationName: newVal.registrationName ?? existing.registrationName,
       seatCapacity: newVal.seatCapacity ?? existing.seatCapacity,
+      vehicleCategory: newVal.vehicleCategory ?? existing.vehicleCategory,
     } : newVal)
   }
 

@@ -18,6 +18,7 @@ interface SyncVehiclePayload {
   plateNumber: string
   registrationName?: string
   seatCapacity?: number
+  vehicleCategory?: string
   source: 'appsheet'
   syncedAt: string
 }
@@ -65,7 +66,10 @@ export async function syncVehiclesFromAppSheet(req: Request, res: Response) {
       }
 
       const regName = sanitize(v.registrationName)
-      const metadataObj = regName ? { registration_name: regName } : {}
+      const vehicleCat = sanitize(v.vehicleCategory, 200)
+      const metadataObj: Record<string, string> = {}
+      if (regName) metadataObj.registration_name = regName
+      if (vehicleCat) metadataObj.vehicle_category = vehicleCat
 
       // Validate syncedAt to avoid Invalid Date crashing entire chunk
       const syncDate = new Date(v.syncedAt)

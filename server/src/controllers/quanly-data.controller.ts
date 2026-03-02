@@ -85,6 +85,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           isActive: vehiclesTable.isActive,
           roadWorthinessExpiry: vehiclesTable.roadWorthinessExpiry,
           source: vehiclesTable.source,
+          metadata: vehiclesTable.metadata,
         }).from(vehiclesTable),
         db.select({
           id: operatorsTable.id,
@@ -315,6 +316,9 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         // Get vehicle type name from vehicle_types table
         const vehicleTypeName = v.vehicleTypeId ? (vehicleTypeMap.get(v.vehicleTypeId) || '') : ''
 
+        // Get vehicle category from metadata (synced from AppSheet LoaiPhuongTien)
+        const vehicleCategory = (v.metadata as any)?.vehicle_category || ''
+
         // Get badge expiry date for inspection display
         const badgeExpiryDate = vehicleBadgeExpiryMap.get(normalizedPlate) || ''
 
@@ -326,6 +330,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           operatorId: v.operatorId || null,
           operatorName,
           vehicleType: vehicleTypeName,
+          vehicleCategory,
           inspectionExpiryDate: badgeExpiryDate || v.roadWorthinessExpiry || '',
           isActive: v.isActive !== false,
           hasBadge: platesWithBadge.has(normalizedPlate),

@@ -27,6 +27,7 @@ export interface QuanLyVehicle {
   operatorId?: string | null
   operatorName: string
   vehicleType: string
+  vehicleCategory?: string
   inspectionExpiryDate: string
   isActive: boolean
   hasBadge?: boolean
