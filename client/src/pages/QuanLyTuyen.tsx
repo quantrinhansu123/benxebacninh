@@ -171,7 +171,8 @@ export default function QuanLyTuyen() {
 
     const backendMap = new Map<string, LegacyRoute>()
     for (const r of routes) {
-      backendMap.set(r.routeCode.trim().toUpperCase(), r)
+      const key = r.routeCode.trim().toUpperCase()
+      backendMap.set(key, r)
     }
 
     const fixedConverted: LegacyRoute[] = appSheetFixedRoutes.map(r => {
@@ -320,6 +321,9 @@ export default function QuanLyTuyen() {
     setFilterRouteType("")
     setFilterOperationStatus("")
   }
+
+  // Strip BUS- prefix for display (data keeps prefix for merge key matching)
+  const displayRouteCode = (code: string) => code.replace(/^BUS-/i, '')
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "N/A"
@@ -607,7 +611,7 @@ export default function QuanLyTuyen() {
             ) : (
               paginatedRoutes.map((route) => (
                 <TableRow key={route.id} className="hover:bg-gray-50">
-                  <TableCell className="font-mono text-sm text-left font-semibold">{route.routeCode}</TableCell>
+                  <TableCell className="font-mono text-sm text-left font-semibold">{displayRouteCode(route.routeCode)}</TableCell>
                   <TableCell className="text-left text-sm">{route.departureStation || "N/A"}</TableCell>
                   <TableCell className="text-left text-sm text-gray-600">{route.departureProvince || "N/A"}</TableCell>
                   <TableCell className="text-left text-sm">{route.arrivalStation || "N/A"}</TableCell>
@@ -827,7 +831,7 @@ export default function QuanLyTuyen() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 bg-blue-50 p-4 rounded-lg">
                   <p className="text-base text-blue-600 font-medium">Mã tuyến</p>
-                  <p className="text-2xl font-bold text-blue-900">{selectedRoute.routeCode}</p>
+                  <p className="text-2xl font-bold text-blue-900">{displayRouteCode(selectedRoute.routeCode)}</p>
                   {selectedRoute.routeCodeOld && selectedRoute.routeCodeOld !== selectedRoute.routeCode && (
                     <p className="text-base text-blue-500">Mã cũ: {selectedRoute.routeCodeOld}</p>
                   )}

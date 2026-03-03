@@ -141,6 +141,28 @@ export async function syncBadgesFromAppSheet(req: Request, res: Response) {
       }
     }
 
+    // Build badge_number → existing firebase_id lookup
+    // ETL records have firebase_id = hex (e.g., "bcf84a2e"), NOT badgeNumber
+    // Must adopt existing firebase_id to avoid duplicate inserts
+    const allBadgeNumbers = [...new Set(
+      payload.filter(b => b.badgeNumber).map(b => b.badgeNumber)
+    )]
+    const badgeNumberToFirebaseId = new Map<string, string>()
+    if (allBadgeNumbers.length > 0) {
+      for (let i = 0; i < allBadgeNumbers.length; i += 1000) {
+        const chunk = allBadgeNumbers.slice(i, i + 1000)
+        const existing = await db
+          .select({ badgeNumber: vehicleBadges.badgeNumber, firebaseId: vehicleBadges.firebaseId })
+          .from(vehicleBadges)
+          .where(inArray(vehicleBadges.badgeNumber, chunk))
+        for (const row of existing) {
+          if (row.badgeNumber && row.firebaseId) {
+            badgeNumberToFirebaseId.set(row.badgeNumber, row.firebaseId)
+          }
+        }
+      }
+    }
+
     for (const b of payload) {
       if (!b.badgeNumber || typeof b.badgeNumber !== 'string') {
         errors.push(`Missing badgeNumber`)
@@ -170,8 +192,9 @@ export async function syncBadgesFromAppSheet(req: Request, res: Response) {
         : undefined
 
       validRecords.push({
-        // Use badgeNumber as firebaseId for upsert key
-        firebaseId: sanitize(b.badgeNumber, 100) || null,
+        // Adopt existing firebase_id if badge already exists in DB (ETL records use hex IDs)
+        // Otherwise use badgeNumber as firebaseId for new records
+        firebaseId: badgeNumberToFirebaseId.get(b.badgeNumber) || sanitize(b.badgeNumber, 100) || null,
         badgeNumber: sanitize(b.badgeNumber, 50) || null,
         plateNumber: plate || '',
         badgeType: sanitize(b.badgeType, 50) || null,

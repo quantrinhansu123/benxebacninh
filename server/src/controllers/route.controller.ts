@@ -397,15 +397,17 @@ export const getLegacyRoutes = async (req: Request, res: Response) => {
       return res.json(remappedCachedData)
     }
 
-    // Get routes from database
+    // Get routes from database — only AppSheet-synced routes (exclude legacy ETL/manual)
     const routesData = await db
       .select()
       .from(routes)
+      .where(eq(routes.source, 'appsheet'))
       .orderBy(asc(routes.routeCode))
 
     const routesFormatted = routesData.map((route) => ({
       id: route.id,
-      routeCode: getDisplayRouteCode(route.routeCode, route.routeCodeOld, route.routeType),
+      // Use actual DB routeCode (preserves BUS- prefix) — matches AppSheet normalizer keys
+      routeCode: (route.routeCode || '').trim(),
       routeName: getDisplayRouteName(route.departureStation, route.arrivalStation, route.routeCode, route.routeCodeOld, route.routeType),
       routeCodeOld: route.routeCodeOld || '',
       routeCodeFixed: route.routeCode || '',

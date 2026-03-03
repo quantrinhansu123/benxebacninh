@@ -72,33 +72,54 @@ export function useOperatorDetail(operator: OperatorWithSource | null, open: boo
       let vehiclesData: Vehicle[] = [];
       let badgesData: VehicleBadge[] = [];
 
-      // Strategy: find operator's vehicles → match their plates to badges
-      // This mirrors how useOperatorManagement filters operators (badge plate → vehicle → operator)
+      // Normalize plate for dedup/matching
+      const normalizePlate = (p: string) => p?.replace(/[\s.\-]/g, '').toUpperCase() || '';
+
+      // Strategy: filter badges by operator code (issuing_authority_ref = operator.code = firebase_id)
+      // This avoids the broken plate-matching approach that caused cross-operator collisions
       const allBadges = await vehicleBadgeService.getAll();
       const allowedBadgeTypes = ["Buýt", "Tuyến cố định"];
       const relevantBadges = allBadges.filter(b => allowedBadgeTypes.includes(b.badge_type));
 
-      // Get operator's vehicles from DB (backend has operatorName fallback for missing FK)
+      // Match badges by issuing_authority_ref = operator.code (= firebase_id hex)
+      const operatorCode = operator.code || '';
+      badgesData = relevantBadges.filter(badge => {
+        if (!operatorCode) return false;
+        // issuing_authority_ref contains the operator's firebase_id (8-char hex)
+        return badge.issuing_authority_ref?.toLowerCase() === operatorCode.toLowerCase();
+      });
+
+      // Dedup by badge_number (prevent duplicate entries)
+      const seen = new Set<string>();
+      badgesData = badgesData.filter(badge => {
+        const key = badge.badge_number;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setBadges(badgesData);
+
+      // Filter to only "Hiệu lực" badges, then dedup by plate for vehicle count
+      const validBadges = badgesData.filter(b => b.status === 'Hiệu lực');
+      const seenPlates = new Set<string>();
+      const validVehicleBadges = validBadges.filter(badge => {
+        const plate = normalizePlate(badge.license_plate_sheet);
+        if (!plate || seenPlates.has(plate)) return false;
+        seenPlates.add(plate);
+        return true;
+      });
+
+      // Load vehicles only for enrichment (seat/bed capacity from DB)
       let operatorVehicles: Vehicle[] = [];
       if (!operator.id.startsWith("legacy_")) {
         operatorVehicles = await vehicleService.getAll(operator.id, undefined, false);
       }
-
-      // Build plate-to-vehicle map for enriching badge data with seat/bed capacity
-      const normalizePlate = (p: string) => p?.replace(/[\s.\-]/g, '').toUpperCase() || '';
       const vehicleByPlate = new Map(
         operatorVehicles.map(v => [normalizePlate(v.plateNumber), v])
       );
-      const operatorPlates = new Set(vehicleByPlate.keys());
 
-      // Match badges by plate number
-      badgesData = relevantBadges.filter(badge =>
-        operatorPlates.has(normalizePlate(badge.license_plate_sheet))
-      );
-      setBadges(badgesData);
-
-      // Convert matched badges to vehicle format, enriched with DB vehicle data
-      vehiclesData = badgesData.map(badge => {
+      // Convert valid badges (Hiệu lực + unique plate) to vehicle format, enriched with DB data
+      vehiclesData = validVehicleBadges.map(badge => {
         const dbVehicle = vehicleByPlate.get(normalizePlate(badge.license_plate_sheet));
         return {
           id: badge.id,

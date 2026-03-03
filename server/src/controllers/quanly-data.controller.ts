@@ -22,21 +22,6 @@ const normalizePlate = (plate: string): string => {
   return (plate || '').replace(/[.\-\s]/g, '').toUpperCase()
 }
 
-const shouldUseRouteCodeOld = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): boolean => {
-  const oldCode = (routeCodeOld || '').trim()
-  if (!oldCode) return false
-  const type = (routeType || '').trim().toLowerCase()
-  const code = (routeCode || '').trim().toUpperCase()
-  return type === 'bus' || code.startsWith('BUS-')
-}
-
-const getDisplayRouteCode = (routeCode?: string | null, routeCodeOld?: string | null, routeType?: string | null): string => {
-  if (shouldUseRouteCodeOld(routeCode, routeCodeOld, routeType)) {
-    return (routeCodeOld || '').trim()
-  }
-  return (routeCode || '').trim()
-}
-
 // Load all data in parallel and pre-filter
 async function loadQuanLyData(): Promise<QuanLyCache> {
   const now = Date.now()
@@ -89,6 +74,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         }).from(vehiclesTable),
         db.select({
           id: operatorsTable.id,
+          code: operatorsTable.code,
           name: operatorsTable.name,
           province: operatorsTable.province,
           phone: operatorsTable.phone,
@@ -353,6 +339,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
 
         operators.push({
           id: operatorId,
+          code: o.code || '',
           name: o.name || '',
           province: o.province || '',
           phone: o.phone || '',
@@ -376,7 +363,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           : ''
         routes.push({
           id: r.id,
-          code: getDisplayRouteCode(r.routeCode, r.routeCodeOld, r.routeType),
+          code: (r.routeCode || '').trim(),
           name: routeName,
           startPoint: r.departureStation || '',
           endPoint: r.arrivalStation || '',

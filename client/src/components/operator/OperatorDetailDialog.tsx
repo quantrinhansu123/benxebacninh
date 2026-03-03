@@ -108,7 +108,10 @@ export function OperatorDetailDialog({
   return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"
-      onClick={handleClose}
+      onClick={(e) => {
+        // Only close when clicking the backdrop itself, not nested dialog overlays
+        if (e.target === e.currentTarget) handleClose();
+      }}
     >
       <div
         className="bg-white w-full h-full overflow-y-auto overflow-x-hidden"
