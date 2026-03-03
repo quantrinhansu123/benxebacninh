@@ -29,11 +29,14 @@ import {
 import { vehicleService, VehicleForm, VehicleView } from "@/features/fleet/vehicles"
 import { vehicleBadgeService } from "@/features/fleet/vehicle-badges"
 import { operatorService } from "@/features/fleet/operators"
+import { routeService } from "@/features/fleet/routes"
 import { quanlyDataService } from "@/services/quanly-data.service"
 import { useAppSheetPolling } from "@/hooks/use-appsheet-polling"
 import { normalizeVehicleRows, type NormalizedAppSheetVehicle } from "@/services/appsheet-normalize-vehicles"
 import { normalizeBadgeRows, type NormalizedAppSheetBadge } from "@/services/appsheet-normalize-badges"
 import { normalizeOperatorRows, type NormalizedAppSheetOperator } from "@/services/appsheet-normalize-operators"
+import { normalizeFixedRouteRows } from "@/services/appsheet-normalize-fixed-routes"
+import { normalizeBusRouteRows } from "@/services/appsheet-normalize-bus-routes"
 import type { Vehicle } from "@/types"
 import { useUIStore } from "@/store/ui.store"
 import { format, isValid, parseISO } from "date-fns"
@@ -42,8 +45,9 @@ import { useDialogHistory } from "@/hooks/useDialogHistory"
 // Helper functions
 const getVehicleTypeName = (vehicle: Vehicle): string => {
   const v = vehicle as any
-  // Prioritize vehicleCategory (LoaiPhuongTien from AppSheet sync)
-  return v.vehicleCategory || vehicle.vehicleType?.name || v.vehicleTypeName || v.vehicleType || ""
+  // Only use vehicleCategory (LoaiPhuongTien from AppSheet/metadata)
+  // No fallback to vehicle_types.name (misleading "Loại khác" for unmatched vehicles)
+  return v.vehicleCategory || ''
 }
 
 const getOperatorName = (vehicle: Vehicle): string => {
@@ -186,6 +190,25 @@ export default function QuanLyXe() {
     },
     onSyncToDb: (data) => operatorService.syncFromAppSheet(data),
     getKey: (op) => op.firebaseId,
+    enabled: true,
+  })
+
+  // Route polling: sync DANHMUCTUYENCODINH + DANHMUCTUYENBUYT to DB (no UI state needed)
+  useAppSheetPolling({
+    endpointKey: 'fixedRoutes',
+    normalize: normalizeFixedRouteRows,
+    onData: () => {},
+    onSyncToDb: (data) => routeService.syncFromAppSheet(data),
+    getKey: (r) => (r as any).routeCode,
+    enabled: true,
+  })
+
+  useAppSheetPolling({
+    endpointKey: 'busRoutes',
+    normalize: normalizeBusRouteRows,
+    onData: () => {},
+    onSyncToDb: (data) => routeService.syncFromAppSheet(data),
+    getKey: (r) => (r as any).firebaseId,
     enabled: true,
   })
 

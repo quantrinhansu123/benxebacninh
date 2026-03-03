@@ -163,11 +163,32 @@ useAppSheetPolling hook → workerBridge (singleton) → SharedWorker
 
 **Files:** `client/src/workers/appsheet-shared-worker.ts`, `client/src/services/appsheet-worker-bridge.ts`, `client/src/services/appsheet-leader-election.ts`, `client/src/hooks/use-appsheet-polling.ts`, `client/src/config/appsheet.config.ts`
 
+**Normalizers:** `client/src/services/appsheet-normalize-{vehicles,badges,operators,fixed-routes,bus-routes}.ts` — each exports interface + normalize function. Registered in SharedWorker `TABLE_CONFIG`.
+
+**Backend sync controllers:** `server/src/modules/fleet/controllers/{vehicle,badge,operator,route}-appsheet-sync.controller.ts` — POST endpoints for frontend leader tab to push changed data. All use JSONB shallow merge: `COALESCE(col, '{}') || excluded.metadata`.
+
+**Operator sync upsert key:** Uses `operators.firebaseId` (UNIQUE constraint), NOT `code`. This ensures AppSheet data updates existing google_sheets operators instead of creating duplicates. Badge sync controller also resolves `operator_id` FK via `metadata.issuing_authority_ref → operators.firebase_id` JOIN.
+
+**Verified AppSheet column names (THONGTINDONVIVANTAI, 2026-03-03):**
+`IDDoanhNghiep` (unique ID, 8-char hex), `TenDoanhNghiep`, `TinhThanh`, `TinhDangKyHoatDong`, `DiaChiSauSapNhap`, `SoDienThoai`, `MaSoThue`, `NguoiDaiDienTheoPhapLuat`, `SoDKKD`, `LoaiHinh`, `LoaiHinhVanTai`
+
+**Resolution chain (QuanLyXe):** plate → badge.operatorRef → operator.name+province. Built from AppSheet polling data with fallback to backend-provided data.
+
+**Badge FK resolution (during sync):**
+- `operator_id`: badge.operatorRef → operators.firebase_id (97.3% resolution — 18,521/19,028)
+- `route_id`: badge.routeRef → routes.route_code (fixed), badge.busRouteRef → routes.firebase_id (bus) — 485/485 resolved
+
+**Route sync:** DANHMUCTUYENCODINH (884 fixed routes) + DANHMUCTUYENBUYT (8 bus routes). Bus routes resolve mã tỉnh → tên tỉnh via MATINH table (63 rows, cached in SharedWorker memory — NOT synced to DB). Bus route `departureStation`/`arrivalStation` = resolved province name (per user design).
+
+**Verified badge column names (PHUHIEUXE):** `BienSo` = plate text (NOT `BienSoXe` which is ref ID), `Ref_DonVi` = operatorRef, `Ref_Tuyen` = fixed route code, `Ref_TuyenBuyt` = bus route firebase_id.
+
+**CRITICAL:** Always verify AppSheet column names via API before mapping — guessed names are often wrong.
+
 ### Environment Variables
 
 **Server (`server/.env.example`):** `APP_PORT` (NOT `PORT` — reserved by Firebase), `DATABASE_URL` (Supabase pgbouncer port 6543), `JWT_SECRET`, `CORS_ORIGIN` (comma-separated), `CLOUDINARY_*`, `GEMINI_API_KEY`, `GTVT_APPSHEET_*`
 
-**Client (`client/.env.example`):** `VITE_API_URL`, `VITE_GTVT_APPSHEET_API_KEY`, `VITE_GTVT_APPSHEET_VEHICLES_ENDPOINT`
+**Client (`client/.env.example`):** `VITE_API_URL`, `VITE_GTVT_APPSHEET_API_KEY`, `VITE_GTVT_APPSHEET_VEHICLES_ENDPOINT`, `VITE_GTVT_APPSHEET_BADGES_ENDPOINT`, `VITE_GTVT_APPSHEET_OPERATORS_ENDPOINT`
 
 **Deployment:** Backend → Render.com, Frontend → Vercel. `client/.env.production` is committed (not gitignored).
 
@@ -220,8 +241,10 @@ routes ←--→ dispatch_records (routeId FK)
 ### Key Schema Notes
 
 **vehicle_badges:**
-- Fields: `routeId`, `routeCode`, `routeName`, `metadata` (JSONB)
-- `metadata` contains: `badge_color`, `issue_type`, `file_number`, `route_ref`
+- Fields: `routeId`, `routeCode`, `routeName`, `operatorId` (FK to operators), `metadata` (JSONB)
+- `metadata` contains: `badge_color`, `issue_type`, `file_number`, `route_ref`, `issuing_authority_ref`
+- **`issuing_authority_ref` MISNOMER:** Despite the name, this is the **operator** (đơn vị vận tải) reference, NOT the issuing authority (Sở GTVT). Contains 8-char hex matching `operators.firebase_id`. 2,230 distinct values = companies, not government agencies.
+- `operatorId` FK: Backfilled via `metadata.issuing_authority_ref → operators.firebase_id` JOIN. Badge sync controller also resolves this on future syncs.
 - Route matching: Primary by `routeId` FK, fallback to `routeName` string match
 - **IMPORTANT:** Backend constructs route display as `departureStation - arrivalStation`
 
@@ -242,6 +265,17 @@ routes ←--→ dispatch_records (routeId FK)
 - Use normalized lookups (`.trim().toUpperCase()`) for string matching (route names, etc.)
 - **3-Layer Normalization Rule:** When changing DB enum/category values, MUST update all 3 layers: (1) DB migration for existing data, (2) sync service for future data, (3) controller/helpers that hardcode old values. Always grep codebase for old string values before changing.
 
+**QuanLyXe Page Resolution Chains:**
+
+*Vehicle Type (`getVehicleTypeName` in `QuanLyXe.tsx`):*
+- **Only use `vehicleCategory`** (from AppSheet `LoaiPhuongTien` → `vehicles.metadata.vehicle_category`). No fallback.
+- `vehicle_types` table (8 manual records) is NOT aligned with actual LoaiPhuongTien data (~180 distinct values). Do NOT use it as fallback — it shows misleading labels like "Loại khác".
+
+*Operator Name (`resolveOperatorName` in `QuanLyXe.tsx`):*
+- **Frontend AppSheet chain** (priority): plate → `plateToOperatorRef` (from badge `Ref_DonViCapPhuHieu`) → `operatorRefMap` (from operators `firebaseId → name`)
+- **Backend chain** (fallback via `quanly-data.controller.ts`): `badge.operatorId` FK → `operatorNameMap` → `vehicleOperatorMap(plate→name)`, then `vehicle.operatorId` FK → `operatorNameMap`
+- **IMPORTANT:** Backend chain requires `vehicle_badges.operator_id` FK to be populated. Badge sync controller must resolve `issuing_authority_ref → operators.firebase_id → operators.id` during upsert.
+
 ### Data Origin Notes (Google Sheet → Firebase → Supabase)
 
 **Google Sheet source:** `1hh1GKMiEXKb2KBYpyvzpqYuyc1Khzfjdxv2YMfIZ7cI` (updated 2026-02-26, was `16R5NPyZ-jMPq4Jnqgjl8pbK3ScrD_8GeG0Fv4-gJQhY`)
@@ -260,7 +294,7 @@ routes ←--→ dispatch_records (routeId FK)
 
 **`issuing_authority` field origin:**
 - **`routes` table**: Extracted from `original_info` text in sheet "Danh mục tuyến cố định". The decision number column (e.g. `1752/SGTVT-QLVT PT&NL`) was resolved client-side (Firebase app) to full authority name (e.g. `Sở Giao thông Vận tải Bắc Giang`). Data already imported via `datasheet_routes.json`.
-- **`vehicle_badges` table**: Sheet PHUHIEUXE has `Ref_DonViCapPhuHieu` (reference ID only, not name). Stored in `metadata.issuing_authority_ref` JSONB, not a dedicated column.
+- **`vehicle_badges` table**: Sheet PHUHIEUXE has `Ref_DonViCapPhuHieu` (reference ID only, not name). Stored in `metadata.issuing_authority_ref` JSONB, not a dedicated column. **MISNOMER:** This is the **operator** (đơn vị vận tải) firebase_id, NOT the issuing authority. Matches `operators.firebase_id` with 97.3% rate.
 - **`vehicle_documents` table**: Manually entered in app (e.g. "Cục Đăng kiểm Việt Nam").
 
 **`TenDangKyXe` column (Sheet tab "Xe", gid=40001005):**
@@ -319,6 +353,59 @@ Body: {"Action": "Find", "Properties": {}, "Rows": []}
 - Frontend chunks into 500-record batches before POST
 - Backend uses `COALESCE(metadata, '{}') || excluded.metadata` for JSONB merge in upsert
 - Batch INSERT: `db.insert(table).values(batch).onConflictDoUpdate()` with `excluded.*` uses **snake_case SQL column names**, NOT camelCase Drizzle props
+
+### AppSheet Sync Lessons Learned (2026-03-03)
+
+**Upsert Key Strategy:**
+| Table | Upsert Key | Rationale |
+|-------|-----------|-----------|
+| vehicles | plateNumber | Natural unique key |
+| badges | firebaseId (=badgeNumber) | Natural key |
+| operators | firebaseId | Stable 8-char hex, NOT code |
+| routes (fixed) | routeCode | MaSoTuyen, stable |
+| routes (bus) | firebaseId | ID_Tuyen, stable |
+
+**Rule:** Upsert key = primary natural key. NEVER derived/formatted code (e.g., "GTVT-{id}" caused duplicates).
+
+**Sync Source Priority:** AppSheet wins (`excluded.X` in SQL); COALESCE only for app-specific fields (isActive, isTicketDelegated). `COALESCE(excluded.X, existing.X)` ≠ "AppSheet wins" — it preserves existing garbage when AppSheet sends null.
+
+**vehicles.operator_id FK:** Mostly NULL (~99%). Badge→plate chain is the reliable operator resolution path. Backfill via: `UPDATE vehicles SET operator_id = vb.operator_id FROM vehicle_badges vb WHERE normalize_plate(v.plate_number) = normalize_plate(vb.plate_number) AND vb.operator_id IS NOT NULL AND v.operator_id IS NULL`. OperatorDetailDialog (`useOperatorDetail.ts`) must use badge→plate chain, not vehicles.operator_id FK.
+
+**Pre-Sync Checklist (mandatory per table):**
+1. Verify AppSheet column names via `curl` API before coding normalizer
+2. Upsert key = stable natural key
+3. FK resolution path documented
+4. SharedWorker TABLE_CONFIG registered + verified
+5. COALESCE vs `excluded.X` reviewed per field
+6. List affected pages → test ALL after sync
+
+**Post-Sync Smoke Test:**
+1. DB count matches AppSheet count
+2. FK resolution rate >95%
+3. No garbage records (name ≠ id)
+4. Each affected page loads correctly
+
+**Downstream Impact Matrix:**
+| Sync Table | Affected Pages |
+|-----------|---------------|
+| vehicles | QuanLyXe |
+| badges | QuanLyXe, QuanLyPhuHieuXe |
+| operators | QuanLyXe, QuanLyDonViVanTai |
+| fixedRoutes | QuanLyTuyen, QuanLyPhuHieuXe |
+| busRoutes | QuanLyTuyen |
+
+**QuanLyDonViVanTai Architecture (REVISED):**
+- Subscribe to operators table ONLY (NOT 3 tables)
+- Backend pre-filters to ~22 operators with Buýt/TCD badges (`quanly-data.controller.ts`)
+- DO NOT re-implement badge→plate→vehicle→operator filter client-side (caused showing 2963 operators instead of 22)
+- Merge: AppSheet realtime (name, phone, province) ∩ backend pre-filtered set (isActive, isTicketDelegated)
+
+**SharedWorker Phase 3 (polling hook) DELETED:** Redundant with SharedWorker architecture. `useAppSheetPolling` hook + worker bridge already handles: adaptive intervals, per-record hash diff, tab visibility, cached data, surgical updates. No need for separate `useGtvtPolling` + Zustand store.
+
+**Leader Election:** 1 instance per `useAppSheetPolling` call — accepted tech debt. BroadcastChannel lightweight (~20KB each). 5 instances = ~100KB total, no perf impact.
+
+**Verified AppSheet Column Names:**
+- Badge color: `MauPhuHieu` (PHUHIEUXE table)
 
 ## Documentation
 

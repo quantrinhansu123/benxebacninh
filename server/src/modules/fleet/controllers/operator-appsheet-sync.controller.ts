@@ -55,6 +55,13 @@ export async function syncOperatorsFromAppSheet(req: Request, res: Response) {
         continue
       }
 
+      // firebaseId is required for upsert — skip records without it
+      const fid = sanitize(op.firebaseId, 100)
+      if (!fid) {
+        errors.push(`Missing firebaseId for operator: ${name}`)
+        continue
+      }
+
       const code = sanitize(op.code, 50)
       if (!code) {
         errors.push(`Missing code for operator: ${name}`)
@@ -62,7 +69,7 @@ export async function syncOperatorsFromAppSheet(req: Request, res: Response) {
       }
 
       validRecords.push({
-        firebaseId: sanitize(op.firebaseId, 100) || null,
+        firebaseId: fid,
         code,
         name,
         province: sanitize(op.province, 100) || null,
@@ -76,7 +83,7 @@ export async function syncOperatorsFromAppSheet(req: Request, res: Response) {
       })
     }
 
-    // Batch upsert on code (unique constraint)
+    // Batch upsert on firebaseId (unique constraint — stable across sources)
     let upserted = 0
     for (let i = 0; i < validRecords.length; i += BATCH_CHUNK_SIZE) {
       const chunk = validRecords.slice(i, i + BATCH_CHUNK_SIZE)
@@ -85,13 +92,14 @@ export async function syncOperatorsFromAppSheet(req: Request, res: Response) {
           .insert(operators)
           .values(chunk)
           .onConflictDoUpdate({
-            target: operators.code,
+            target: operators.firebaseId,
             set: {
               name: sql`excluded.name`,
-              firebaseId: sql`COALESCE(excluded.firebase_id, ${operators.firebaseId})`,
+              // Preserve existing code if AppSheet sends a generic one
+              code: sql`COALESCE(NULLIF(excluded.code, ''), ${operators.code})`,
               province: sql`COALESCE(excluded.province, ${operators.province})`,
               address: sql`COALESCE(excluded.address, ${operators.address})`,
-              phone: sql`COALESCE(excluded.phone, ${operators.phone})`,
+              phone: sql`excluded.phone`,
               taxCode: sql`COALESCE(excluded.tax_code, ${operators.taxCode})`,
               representative: sql`COALESCE(excluded.representative, ${operators.representative})`,
               syncedAt: sql`excluded.synced_at`,

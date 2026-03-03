@@ -1,8 +1,12 @@
 /**
  * Normalize raw AppSheet THONGTINDONVIVANTAI (operator) rows
- * Column names based on ETL + AppSheet table structure
  *
- * Dedup by firebaseId — each operator is unique
+ * Verified column names (2026-03-03) from AppSheet API response:
+ *   IDDoanhNghiep, TenDoanhNghiep, TinhThanh, TinhDangKyHoatDong,
+ *   DiaChiSauSapNhap, SoDienThoai, MaSoThue, NguoiDaiDienTheoPhapLuat,
+ *   SoDKKD, LoaiHinh, LoaiHinhVanTai
+ *
+ * Dedup by firebaseId (IDDoanhNghiep) — each operator is unique
  */
 
 export interface NormalizedAppSheetOperator {
@@ -26,24 +30,26 @@ export function normalizeOperatorRows(
   const byId = new Map<string, NormalizedAppSheetOperator>()
 
   for (const row of rows) {
-    // Try multiple possible ID field names
-    const id = str(row['_RowNumber'] ?? row['ID'] ?? row['IDDonVi'] ?? row['ID_DonVi'])
-    const name = str(row['TenDonVi'] ?? row['TENDV'] ?? row['TenDV'])
-    if (!name) continue
+    // Verified: IDDoanhNghiep is the stable unique ID (8-char hex)
+    const id = str(row['IDDoanhNghiep'])
+    const name = str(row['TenDoanhNghiep'])
+    if (!id || !name) continue
 
-    const code = str(row['MaDonVi'] ?? row['MaDV']) || id
+    // Code = UPPER(firebaseId) — consistent with 96% existing operators (ETL import)
+    const code = id.toUpperCase()
 
     const normalized: NormalizedAppSheetOperator = {
       firebaseId: id,
-      code: code || `OP_${id}`,
+      code,
       name,
-      province: str(row['TinhTP'] ?? row['Tinh']) || undefined,
-      address: str(row['DiaChi']) || undefined,
-      phone: str(row['DienThoai'] ?? row['SDT']) || undefined,
-      taxCode: str(row['MaSoThue'] ?? row['MST']) || undefined,
-      representative: str(row['NguoiDaiDien']) || undefined,
+      // TinhDangKyHoatDong = province of registered operation (more relevant)
+      province: str(row['TinhDangKyHoatDong']) || str(row['TinhThanh']) || undefined,
+      address: str(row['DiaChiSauSapNhap']) || undefined,
+      phone: str(row['SoDienThoai']) || undefined,
+      taxCode: str(row['MaSoThue']) || undefined,
+      representative: str(row['NguoiDaiDienTheoPhapLuat']) || undefined,
     }
-    byId.set(id || code, normalized)
+    byId.set(id, normalized)
   }
 
   return Array.from(byId.values())

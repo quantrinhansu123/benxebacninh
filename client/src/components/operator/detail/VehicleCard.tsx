@@ -55,7 +55,7 @@ export const VehicleCard = memo(function VehicleCard({ vehicle, index, onClick }
               {vehicle.plateNumber}
             </h3>
             <p className="text-xs text-gray-500 font-medium">
-              {vehicle.vehicleType?.name || "Loại khác"}
+              {(vehicle as any).vehicleCategory || vehicle.vehicleType?.name || "N/A"}
             </p>
           </div>
         </div>

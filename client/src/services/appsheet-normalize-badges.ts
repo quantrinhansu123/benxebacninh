@@ -42,7 +42,9 @@ export function normalizeBadgeRows(
     const badgeNum = str(row['SoPhuHieu'] ?? row['ID_PhuHieu'])
     if (!badgeNum) continue
 
-    const plate = str(row['BienSoXe'])
+    // BienSo = actual plate text (e.g. "99H01844")
+    // BienSoXe = ref ID (e.g. "35841712"), NOT the plate number
+    const plate = str(row['BienSo']) || str(row['BienSoXe'])
     const normalized: NormalizedAppSheetBadge = {
       badgeNumber: badgeNum,
       plateNumber: plate ? normPlate(plate) : '',

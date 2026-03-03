@@ -3,6 +3,7 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 import express, { Request, Response } from 'express'
+import bodyParser from 'body-parser'
 import cors from 'cors'
 import { errorHandler } from './middleware/errorHandler.js'
 
@@ -89,7 +90,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }))
-app.use(express.json())
+app.use(bodyParser.json({ limit: '5mb' }))
 app.use(express.urlencoded({ extended: true }))
 
 // Health check

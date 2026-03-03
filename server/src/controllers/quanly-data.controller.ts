@@ -170,6 +170,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
       const allowedPlates = new Set<string>()
       const platesWithValidBadge = new Set<string>() // plates with ≥1 non-expired badge
       const operatorIdsWithBadges = new Set<string>()
+      const operatorNamesWithBadges = new Set<string>() // fallback for badges without operator FK
       const vehicleOperatorMap = new Map<string, string>() // plate -> operator name
       const vehicleBadgeExpiryMap = new Map<string, string>() // plate -> badge expiry date
       const badges: any[] = []
@@ -203,6 +204,7 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
           const operatorId = b.operatorId || ''
           if (operatorId && operatorNameMap.has(operatorId)) {
             vehicleOperatorMap.set(normalizedPlate, operatorNameMap.get(operatorId)!)
+            operatorNamesWithBadges.add(operatorNameMap.get(operatorId)!.trim().toUpperCase())
           }
 
           // Map vehicle plate to badge expiry date (keep latest expiry)
@@ -339,12 +341,15 @@ async function loadQuanLyData(): Promise<QuanLyCache> {
         })
       }
 
-      // Include ALL operators (removed badge-based filtering for Quản lý ĐVVT page)
-      // Previous logic was too strict - excluded operators without badges
+      // Filter operators to only those with ≥1 Buýt or Tuyến cố định badge
       const operators: any[] = []
       for (const op of operatorData) {
         const o = op as any
         const operatorId = o.id
+
+        // Only include operators that have ≥1 Buýt or Tuyến cố định badge
+        if (!operatorIdsWithBadges.has(operatorId) &&
+            !operatorNamesWithBadges.has((o.name || '').trim().toUpperCase())) continue
 
         operators.push({
           id: operatorId,

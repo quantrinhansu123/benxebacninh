@@ -55,6 +55,12 @@ export type {
   OperatorFormMode,
 } from './operators'
 
+// ============ Routes ============
+export {
+  routeApi,
+  routeService,
+} from './routes'
+
 // ============ Vehicle Badges ============
 export {
   vehicleBadgeApi,

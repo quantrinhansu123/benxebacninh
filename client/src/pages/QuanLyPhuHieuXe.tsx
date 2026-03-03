@@ -29,6 +29,9 @@ import { useUIStore } from "@/store/ui.store"
 import { useDialogHistory } from "@/hooks/useDialogHistory"
 import { DatePicker } from "@/components/DatePicker"
 import BadgeDetailDialog from "./badge-detail-dialog"
+import { useAppSheetPolling } from "@/hooks/use-appsheet-polling"
+import { normalizeBadgeRows, type NormalizedAppSheetBadge } from "@/services/appsheet-normalize-badges"
+import { vehicleBadgeService as vehicleBadgeFeatService } from "@/features/fleet/vehicle-badges"
 
 // Helper function to convert Date to ISO string (YYYY-MM-DD)
 const formatDateToISO = (date: Date | null): string => {
@@ -113,6 +116,39 @@ export default function QuanLyPhuHieuXe() {
   const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
 
+  // AppSheet realtime polling for badges
+  const [appSheetBadges, setAppSheetBadges] = useState<NormalizedAppSheetBadge[]>([])
+
+  useAppSheetPolling({
+    endpointKey: 'badges',
+    normalize: normalizeBadgeRows,
+    onData: (data: NormalizedAppSheetBadge[]) => setAppSheetBadges(data),
+    onSyncToDb: (data) => vehicleBadgeFeatService.syncFromAppSheet(data),
+    getKey: (b) => b.badgeNumber,
+    enabled: true,
+  })
+
+  // Backend enrichment data (itinerary from routes JOIN - not available in AppSheet)
+  const [enrichmentMap, setEnrichmentMap] = useState<Map<string, { itinerary: string }>>(new Map())
+
+  useEffect(() => {
+    async function fetchEnrichment() {
+      try {
+        const data = await quanlyDataService.getBadges()
+        const map = new Map<string, { itinerary: string }>()
+        for (const b of data) {
+          if (b.itinerary) {
+            map.set(b.badge_number, { itinerary: b.itinerary })
+          }
+        }
+        setEnrichmentMap(map)
+      } catch (error) {
+        console.error("Failed to load badge enrichment:", error)
+      }
+    }
+    fetchEnrichment()
+  }, [])
+
   // Handle browser back button for dialogs
   const { handleDialogOpenChange: handleViewDialogChange } = useDialogHistory(
     viewDialogOpen,
@@ -181,7 +217,56 @@ export default function QuanLyPhuHieuXe() {
 
   // Get unique values for filters - only from allowed badge types
   const allowedTypesForFilters = ["Buýt", "Tuyến cố định"]
-  const filteredByTypeOnly = badges.filter(b => allowedTypesForFilters.includes(b.badge_type || ""))
+
+  // Merge AppSheet data (primary) with backend enrichment (itinerary)
+  const mergedBadges = useMemo((): VehicleBadge[] => {
+    if (appSheetBadges.length === 0) return badges // fallback to backend-only
+
+    return appSheetBadges.map(b => ({
+      id: b.badgeNumber,
+      badge_number: b.badgeNumber,
+      license_plate_sheet: b.plateNumber || '',
+      badge_type: b.badgeType || '',
+      badge_color: b.badgeColor || '',
+      issue_date: b.issueDate || '',
+      expiry_date: b.expiryDate || '',
+      status: b.status || 'active',
+      file_code: b.fileNumber || '',
+      issue_type: b.issueType || '',
+      vehicle_id: b.plateNumber || '',
+      operational_status: 'trong_ben' as const,
+      bus_route_ref: b.busRouteRef || '',
+      business_license_ref: '',
+      created_at: '',
+      created_by: '',
+      email_notification_sent: false,
+      notes: b.notes || '',
+      notification_ref: '',
+      previous_badge_number: b.oldBadgeNumber || '',
+      renewal_due_date: '',
+      renewal_reason: b.renewalReason || '',
+      renewal_reminder_shown: false,
+      replacement_vehicle_id: '',
+      revocation_date: b.revokeDate || '',
+      revocation_decision: b.revokeDecision || '',
+      revocation_reason: b.revokeReason || '',
+      warn_duplicate_plate: false,
+      issuing_authority_ref: b.operatorRef || '',
+      // Backend enrichment
+      itinerary: enrichmentMap.get(b.badgeNumber)?.itinerary || '',
+      // Route fields from AppSheet
+      route_id: '',
+      route_code: b.routeCode || '',
+      route_name: b.routeName || '',
+      vehicle_type: '',
+      metadata: {},
+    } as VehicleBadge))
+  }, [appSheetBadges, badges, enrichmentMap])
+
+  // Show loading until EITHER AppSheet data OR backend data loads
+  const effectiveLoading = isLoading && appSheetBadges.length === 0
+
+  const filteredByTypeOnly = mergedBadges.filter(b => allowedTypesForFilters.includes(b.badge_type || ""))
   const badgeStatuses = Array.from(new Set(filteredByTypeOnly.map((b) => b.status).filter(Boolean))).sort()
   const badgeTypes = allowedTypesForFilters // Only show allowed types in dropdown
   const badgeColors = Array.from(new Set(filteredByTypeOnly.map((b) => b.badge_color).filter(Boolean))).sort()
@@ -189,7 +274,7 @@ export default function QuanLyPhuHieuXe() {
   // Only show "Buýt" and "Tuyến cố định" badge types
   const allowedBadgeTypes = ["Buýt", "Tuyến cố định"]
   
-  const filteredBadges = badges.filter((badge) => {
+  const filteredBadges = mergedBadges.filter((badge) => {
     // Filter by allowed badge types (Buýt and Tuyến cố định only)
     if (!allowedBadgeTypes.includes(badge.badge_type || "")) {
       return false
@@ -771,7 +856,7 @@ export default function QuanLyPhuHieuXe() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {effectiveLoading ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-8">
                   Đang tải...

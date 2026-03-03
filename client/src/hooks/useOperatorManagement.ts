@@ -4,6 +4,9 @@ import { operatorService } from "@/services/operator.service";
 import { quanlyDataService } from "@/services/quanly-data.service";
 import { useUIStore } from "@/store/ui.store";
 import type { Operator } from "@/types";
+import { useAppSheetPolling } from "@/hooks/use-appsheet-polling";
+import { normalizeOperatorRows, type NormalizedAppSheetOperator } from "@/services/appsheet-normalize-operators";
+import { operatorApi } from "@/features/fleet/operators/api/operatorApi";
 
 export interface OperatorWithSource extends Operator {
   source?: "database" | "legacy" | "google_sheets";
@@ -31,6 +34,18 @@ export function useOperatorManagement() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [operatorToDelete, setOperatorToDelete] = useState<OperatorWithSource | null>(null);
   const setTitle = useUIStore((state) => state.setTitle);
+
+  // AppSheet realtime polling for operators (subscribe to 1 table ONLY)
+  const [appSheetOperators, setAppSheetOperators] = useState<NormalizedAppSheetOperator[]>([]);
+
+  useAppSheetPolling({
+    endpointKey: 'operators',
+    normalize: normalizeOperatorRows,
+    onData: (data: NormalizedAppSheetOperator[]) => setAppSheetOperators(data),
+    onSyncToDb: (data) => operatorApi.syncFromAppSheet(data),
+    getKey: (op) => op.firebaseId,
+    enabled: true,
+  });
 
   // Refs for history management
   const historyPushedRef = useRef(false);
@@ -76,55 +91,12 @@ export function useOperatorManagement() {
   const loadOperators = async (forceRefresh = false) => {
     setIsLoading(true);
     try {
-      // Single API call to avoid cache race conditions
+      // Backend pre-filters operators to only those with Buýt/Tuyến cố định badges
       const data = await quanlyDataService.getAll(
-        ["operators", "badges", "vehicles"],
+        ["operators"],
         forceRefresh
       );
-      const allOperators = data.operators || [];
-      const badges = data.badges || [];
-      const vehicles = data.vehicles || [];
-
-      // Filter badges to only "Buýt" and "Tuyến cố định"
-      const allowedBadgeTypes = ["Buýt", "Tuyến cố định"];
-      const relevantBadges = badges.filter((b) =>
-        allowedBadgeTypes.includes(b.badge_type)
-      );
-
-      // Normalize plate number: remove dots, dashes, spaces for reliable matching
-      const normalizePlate = (plate: string) =>
-        plate?.replace(/[\s.\-]/g, "").toUpperCase() || "";
-
-      // Get normalized plate numbers from relevant badges
-      const badgePlates = new Set(
-        relevantBadges
-          .map((b) => normalizePlate(b.license_plate_sheet))
-          .filter(Boolean)
-      );
-
-      // Collect operator identifiers from vehicles matching badge plates
-      // Use both operatorId AND operatorName as fallback (some vehicles lack operatorId)
-      const operatorIds = new Set<string>();
-      const operatorNames = new Set<string>();
-
-      for (const v of vehicles) {
-        if (
-          v.plateNumber &&
-          badgePlates.has(normalizePlate(v.plateNumber))
-        ) {
-          if (v.operatorId) operatorIds.add(v.operatorId);
-          if (v.operatorName)
-            operatorNames.add(v.operatorName.trim().toUpperCase());
-        }
-      }
-
-      // Filter operators by ID or name match
-      const filteredOperators = allOperators.filter(
-        (op) =>
-          operatorIds.has(op.id) ||
-          operatorNames.has(op.name?.trim().toUpperCase())
-      );
-
+      const filteredOperators = data.operators || [];
       setOperators(filteredOperators as OperatorWithSource[]);
     } catch (error) {
       console.error("Failed to load operators:", error);
@@ -136,25 +108,58 @@ export function useOperatorManagement() {
     }
   };
 
+  // Merge AppSheet realtime data with backend pre-filtered operators.
+  // Backend pre-filters to ~22 operators with Buýt/TCD badges (source of truth for WHICH to show).
+  // AppSheet enriches realtime fields (name, phone, province, address, taxCode, representative).
+  const mergedOperators = useMemo((): OperatorWithSource[] => {
+    if (appSheetOperators.length === 0 || operators.length === 0) return operators;
+
+    // Build lookup: firebaseId (lowercase hex) → AppSheet data
+    const appSheetMap = new Map<string, NormalizedAppSheetOperator>();
+    for (const op of appSheetOperators) {
+      appSheetMap.set(op.firebaseId, op);
+    }
+
+    return operators.map((op) => {
+      // Backend code = UPPER(firebaseId), so match via code.toLowerCase()
+      const appOp = appSheetMap.get(op.code?.toLowerCase() || '');
+      if (!appOp) return op;
+
+      return {
+        ...op,
+        // AppSheet wins for realtime fields
+        name: appOp.name || op.name,
+        phone: appOp.phone ?? op.phone,
+        province: appOp.province ?? op.province,
+        address: appOp.address ?? op.address,
+        taxCode: appOp.taxCode ?? op.taxCode,
+        representativeName: appOp.representative ?? op.representativeName,
+        // Backend wins for app-specific flags
+        isActive: op.isActive,
+        isTicketDelegated: op.isTicketDelegated,
+      };
+    });
+  }, [operators, appSheetOperators]);
+
   const stats = useMemo(() => {
-    const active = operators.filter((o) => o.isActive).length;
-    const inactive = operators.length - active;
-    const delegated = operators.filter((o) => o.isTicketDelegated).length;
+    const active = mergedOperators.filter((o) => o.isActive).length;
+    const inactive = mergedOperators.length - active;
+    const delegated = mergedOperators.filter((o) => o.isTicketDelegated).length;
 
     // Check if province contains "Bắc Ninh" (handles variations like "Tỉnh Bắc Ninh", "Bắc Ninh", etc.)
     const isBacNinh = (province: string | undefined) =>
       province && province.toLowerCase().includes("bắc ninh");
 
     // Count operators with valid province data
-    const bacNinh = operators.filter((o) => isBacNinh(o.province)).length;
-    const ngoaiBacNinh = operators.filter((o) => o.province && o.province.trim() !== '' && !isBacNinh(o.province)).length;
-    const chuaPhanLoai = operators.filter((o) => !o.province || o.province.trim() === '').length;
+    const bacNinh = mergedOperators.filter((o) => isBacNinh(o.province)).length;
+    const ngoaiBacNinh = mergedOperators.filter((o) => o.province && o.province.trim() !== '' && !isBacNinh(o.province)).length;
+    const chuaPhanLoai = mergedOperators.filter((o) => !o.province || o.province.trim() === '').length;
 
-    return { total: operators.length, active, inactive, delegated, bacNinh, ngoaiBacNinh, chuaPhanLoai };
-  }, [operators]);
+    return { total: mergedOperators.length, active, inactive, delegated, bacNinh, ngoaiBacNinh, chuaPhanLoai };
+  }, [mergedOperators]);
 
   const filteredOperators = useMemo(() => {
-    return operators.filter((operator) => {
+    return mergedOperators.filter((operator) => {
       if (quickFilter === "active" && !operator.isActive) return false;
       if (quickFilter === "inactive" && operator.isActive) return false;
 
@@ -187,7 +192,7 @@ export function useOperatorManagement() {
       }
       return true;
     });
-  }, [operators, searchQuery, filterStatus, filterTicketDelegated, filterProvince, quickFilter]);
+  }, [mergedOperators, searchQuery, filterStatus, filterTicketDelegated, filterProvince, quickFilter]);
 
   const totalPages = Math.ceil(filteredOperators.length / ITEMS_PER_PAGE);
 
@@ -275,7 +280,7 @@ export function useOperatorManagement() {
 
   return {
     // Data
-    operators,
+    operators: mergedOperators,
     paginatedOperators,
     filteredOperators,
     stats,

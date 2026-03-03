@@ -27,5 +27,6 @@ export const appsheetConfig = {
     busSchedules: import.meta.env.VITE_GTVT_APPSHEET_BUS_SCHEDULES_ENDPOINT || '',
     notifications: import.meta.env.VITE_GTVT_APPSHEET_NOTIFICATIONS_ENDPOINT || '',
     busLookup: import.meta.env.VITE_GTVT_APPSHEET_BUS_LOOKUP_ENDPOINT || '',
+    matinh: import.meta.env.VITE_GTVT_APPSHEET_MATINH_ENDPOINT || '',
   } as Record<string, string>,
 }

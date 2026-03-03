@@ -12,15 +12,61 @@ declare const self: SharedWorkerGlobalScope
 import { normalizeVehicleRows } from '../services/appsheet-normalize-vehicles'
 import { normalizeBadgeRows } from '../services/appsheet-normalize-badges'
 import { normalizeOperatorRows } from '../services/appsheet-normalize-operators'
+import { normalizeFixedRouteRows } from '../services/appsheet-normalize-fixed-routes'
+import { normalizeBusRouteRows } from '../services/appsheet-normalize-bus-routes'
+import { normalizeScheduleRows, type NormalizedAppSheetSchedule } from '../services/appsheet-normalize-schedules'
+import { normalizeBusScheduleRows } from '../services/appsheet-normalize-bus-schedules'
+import { enrichRows } from '../services/appsheet-sync-utils'
 
 // ─── Types ───────────────────────────────────────────────────────
 type NormalizerFn = (rows: Record<string, unknown>[]) => unknown[]
+
+// MATINH lookup cache (mã tỉnh → tên tỉnh, fetched once from AppSheet)
+let matinhMap: Map<string, string> | null = null
+
+// Enrichment lookup caches — fetched once, rarely change
+let notificationsCache: Record<string, unknown>[] | null = null
+let busLookupCache: Record<string, unknown>[] | null = null
+
+/** Bus route normalizer wrapper — injects cached matinhMap */
+const normalizeBusRouteRowsWrapped: NormalizerFn = (rows) =>
+  normalizeBusRouteRows(rows, matinhMap ?? undefined) as unknown[]
+
+/** Fixed schedule normalizer wrapper — enriches with notificationsCache then normalizes */
+const normalizeFixedScheduleRowsWrapped: NormalizerFn = (rows): NormalizedAppSheetSchedule[] => {
+  const enriched = enrichRows(rows, notificationsCache || [], {
+    refKey: 'Ref_ThongBaoKhaiThac',
+    lookupIdKey: 'ID_TB',
+    mappings: [
+      { from: 'Ref_Tuyen', to: 'Ref_Tuyen' },
+      { from: 'Ref_DonVi', to: 'Ref_DonVi' },
+    ],
+  })
+  return normalizeScheduleRows(enriched)
+}
+
+/** Bus schedule normalizer wrapper — enriches with busLookupCache then normalizes */
+const normalizeBusScheduleRowsWrapped: NormalizerFn = (rows): NormalizedAppSheetSchedule[] => {
+  const enriched = enrichRows(rows, busLookupCache || [], {
+    refKey: 'BieuDo',
+    lookupIdKey: 'ID_BieuDo',
+    mappings: [
+      { from: 'TuyenBuyt', to: 'Ref_Tuyen' },
+      { from: 'DonViKhaiThac', to: 'Ref_DonVi' },
+    ],
+  })
+  return normalizeBusScheduleRows(enriched)
+}
 
 // Built-in normalizer + key config per table (Vite bundles these imports)
 const TABLE_CONFIG: Record<string, { normalizer: NormalizerFn; keyField: string }> = {
   vehicles: { normalizer: normalizeVehicleRows as NormalizerFn, keyField: 'plateNumber' },
   badges: { normalizer: normalizeBadgeRows as NormalizerFn, keyField: 'badgeNumber' },
   operators: { normalizer: normalizeOperatorRows as NormalizerFn, keyField: 'firebaseId' },
+  fixedRoutes: { normalizer: normalizeFixedRouteRows as NormalizerFn, keyField: 'routeCode' },
+  busRoutes: { normalizer: normalizeBusRouteRowsWrapped, keyField: 'firebaseId' },
+  fixedSchedules: { normalizer: normalizeFixedScheduleRowsWrapped, keyField: 'firebaseId' },
+  busSchedules: { normalizer: normalizeBusScheduleRowsWrapped, keyField: 'firebaseId' },
 }
 
 // Messages: Main thread → Worker
@@ -93,6 +139,52 @@ function allTabsHidden(): boolean {
     if (!hidden) return false
   }
   return true
+}
+
+// ─── MATINH Lookup Fetch ──────────────────────────────────────────
+async function ensureMatinhLoaded(): Promise<void> {
+  if (matinhMap || !config) return
+  const endpoint = config.endpoints['matinh']
+  if (!endpoint) return
+  try {
+    const rows = await fetchTable(endpoint)
+    matinhMap = new Map<string, string>()
+    for (const row of rows) {
+      const code = typeof row['MaTinh'] === 'string' ? row['MaTinh'].trim() : ''
+      const name = typeof row['TenTinh'] === 'string' ? row['TenTinh'].trim() : ''
+      if (code && name) matinhMap.set(code, name)
+    }
+    console.log(`[SharedWorker] MATINH loaded: ${matinhMap.size} provinces`)
+  } catch (err) {
+    console.warn('[SharedWorker] MATINH fetch failed:', err)
+  }
+}
+
+// ─── Enrichment Lookup Fetches ───────────────────────────────────
+async function ensureNotificationsLoaded(): Promise<void> {
+  if (notificationsCache || !config) return
+  const endpoint = config.endpoints['notifications']
+  if (!endpoint) return
+  try {
+    notificationsCache = await fetchTable(endpoint)
+    console.log(`[SharedWorker] Notifications loaded: ${notificationsCache.length} rows`)
+  } catch (err) {
+    console.warn('[SharedWorker] Notifications fetch failed:', err)
+    notificationsCache = []
+  }
+}
+
+async function ensureBusLookupLoaded(): Promise<void> {
+  if (busLookupCache || !config) return
+  const endpoint = config.endpoints['busLookup']
+  if (!endpoint) return
+  try {
+    busLookupCache = await fetchTable(endpoint)
+    console.log(`[SharedWorker] BusLookup loaded: ${busLookupCache.length} rows`)
+  } catch (err) {
+    console.warn('[SharedWorker] BusLookup fetch failed:', err)
+    busLookupCache = []
+  }
 }
 
 // ─── AppSheet Fetch ─────────────────────────────────────────────
@@ -188,6 +280,12 @@ async function doPoll(table: string) {
   broadcastStatus(table)
 
   try {
+    // Ensure MATINH lookup is loaded before bus route normalization
+    if (table === 'busRoutes') await ensureMatinhLoaded()
+    // Ensure enrichment lookups are loaded before schedule normalization
+    if (table === 'fixedSchedules') await ensureNotificationsLoaded()
+    if (table === 'busSchedules') await ensureBusLookupLoaded()
+
     const rawRows = await fetchTable(endpoint)
 
     // Normalize via TABLE_CONFIG registry (off main thread)

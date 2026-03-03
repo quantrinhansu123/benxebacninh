@@ -95,4 +95,30 @@ async function fetchTable(
   }
 }
 
-export const appsheetClient = { fetchTable }
+/** Fetch a table by its logical name from appsheetConfig.endpoints */
+async function fetchByName(
+  tableName: string,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>[]> {
+  const endpoint = appsheetConfig.endpoints[tableName]
+  if (!endpoint) throw new Error(`AppSheet endpoint not configured for table: ${tableName}`)
+  return fetchTable(endpoint, signal)
+}
+
+/** Fetch multiple tables in parallel, returns { [tableName]: rows[] } */
+async function fetchMultiple(
+  tableNames: string[],
+  signal?: AbortSignal,
+): Promise<Record<string, Record<string, unknown>[]>> {
+  const results = await Promise.allSettled(
+    tableNames.map(name => fetchByName(name, signal))
+  )
+  const output: Record<string, Record<string, unknown>[]> = {}
+  for (let i = 0; i < tableNames.length; i++) {
+    const r = results[i]
+    output[tableNames[i]] = r.status === 'fulfilled' ? r.value : []
+  }
+  return output
+}
+
+export const appsheetClient = { fetchTable, fetchByName, fetchMultiple }
