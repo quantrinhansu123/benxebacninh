@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { toast } from "react-toastify"
 import { Search, Eye, RefreshCw, ChevronLeft, ChevronRight, MapPin, FileText, Route, TrendingUp, CheckCircle, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -21,12 +21,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { routeService, LegacyRoute } from "@/services/route.service"
-import { gtvtSyncService } from "@/services/gtvt-sync.service"
-import { isAxiosError } from "axios"
-import type { GtvtContractStatus, GtvtLastSyncResponse, GtvtSyncSummaryResponse } from "@/types/gtvt-sync.types"
+// Manual sync imports disabled — auto sync via SharedWorker
+// import { gtvtSyncService } from "@/services/gtvt-sync.service"
+// import { isAxiosError } from "axios"
+// import type { GtvtContractStatus, GtvtLastSyncResponse, GtvtSyncSummaryResponse } from "@/types/gtvt-sync.types"
 import { useUIStore } from "@/store/ui.store"
 import { useDialogHistory } from "@/hooks/useDialogHistory"
-import { useAuthStore } from "@/features/auth/store/authStore"
+// import { useAuthStore } from "@/features/auth/store/authStore"
 import { useAppSheetPolling } from "@/hooks/use-appsheet-polling"
 import { normalizeFixedRouteRows, type NormalizedAppSheetFixedRoute } from "@/services/appsheet-normalize-fixed-routes"
 import { normalizeBusRouteRows, type NormalizedAppSheetBusRoute } from "@/services/appsheet-normalize-bus-routes"
@@ -42,17 +43,18 @@ export default function QuanLyTuyen() {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedRoute, setSelectedRoute] = useState<LegacyRoute | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [syncDialogOpen, setSyncDialogOpen] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [syncDryRun, setSyncDryRun] = useState(false)
-  const [syncResult, setSyncResult] = useState<GtvtSyncSummaryResponse | null>(null)
-  const [lastSync, setLastSync] = useState<GtvtLastSyncResponse | null>(null)
-  const [contractStatus, setContractStatus] = useState<GtvtContractStatus | null>(null)
+  // Manual sync disabled — auto sync via SharedWorker
+  // const [syncDialogOpen, setSyncDialogOpen] = useState(false)
+  // const [isSyncing, setIsSyncing] = useState(false)
+  // const [syncDryRun, setSyncDryRun] = useState(false)
+  // const [syncResult, setSyncResult] = useState<GtvtSyncSummaryResponse | null>(null)
+  // const [lastSync, setLastSync] = useState<GtvtLastSyncResponse | null>(null)
+  // const [contractStatus, setContractStatus] = useState<GtvtContractStatus | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
   const setTitle = useUIStore((state) => state.setTitle)
-  const currentUser = useAuthStore((state) => state.user)
-  const isAdmin = currentUser?.role === "admin"
+  // const currentUser = useAuthStore((state) => state.user)
+  // const isAdmin = currentUser?.role === "admin"
 
   // AppSheet realtime polling state
   const [appSheetFixedRoutes, setAppSheetFixedRoutes] = useState<NormalizedAppSheetFixedRoute[]>([])
@@ -76,7 +78,7 @@ export default function QuanLyTuyen() {
 
   // Handle browser back button for dialog
   const { handleDialogOpenChange } = useDialogHistory(dialogOpen, setDialogOpen, "routeDialogOpen")
-  const { handleDialogOpenChange: handleSyncDialogOpenChange } = useDialogHistory(syncDialogOpen, setSyncDialogOpen, "gtvtSyncDialogOpen")
+  // const { handleDialogOpenChange: handleSyncDialogOpenChange } = useDialogHistory(syncDialogOpen, setSyncDialogOpen, "gtvtSyncDialogOpen")
 
   useEffect(() => {
     setTitle("Quản lý tuyến xe")
@@ -96,6 +98,8 @@ export default function QuanLyTuyen() {
     }
   }
 
+  // Manual sync functions disabled — auto sync via SharedWorker
+  /*
   const loadLastSync = useCallback(async () => {
     if (!isAdmin) return
     try {
@@ -112,7 +116,6 @@ export default function QuanLyTuyen() {
     setContractStatus(null)
     handleSyncDialogOpenChange(true)
     await loadLastSync()
-    // Fetch contract status to show config readiness
     try {
       const status = await gtvtSyncService.getContractStatus()
       setContractStatus(status)
@@ -122,7 +125,6 @@ export default function QuanLyTuyen() {
   }
 
   const handleRunSync = async () => {
-    // Confirm before live sync to prevent accidental data overwrites
     if (!syncDryRun && !window.confirm("Bạn có chắc muốn đồng bộ thật? Dữ liệu sẽ được ghi đè.")) {
       return
     }
@@ -158,12 +160,15 @@ export default function QuanLyTuyen() {
       setIsSyncing(false)
     }
   }
+  */
 
+  /*
   useEffect(() => {
     if (isAdmin) {
       void loadLastSync()
     }
   }, [isAdmin, loadLastSync])
+  */
 
   // Merge AppSheet realtime data into route list (AppSheet primary, backend fallback)
   const mergedRoutes = useMemo((): LegacyRoute[] => {
@@ -337,12 +342,7 @@ export default function QuanLyTuyen() {
     return dateStr
   }
 
-  const formatDateTime = (dateStr: string | null) => {
-    if (!dateStr) return "Chưa có"
-    const value = new Date(dateStr)
-    if (Number.isNaN(value.getTime())) return "Chưa có"
-    return value.toLocaleString("vi-VN")
-  }
+  // formatDateTime removed — was only used by sync dialog
 
   const getStatusColor = (status: string) => {
     const s = status.toLowerCase()
@@ -385,12 +385,7 @@ export default function QuanLyTuyen() {
           </div>
 
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <Button onClick={handleOpenSyncDialog} disabled={isSyncing} className="px-4 py-2.5 rounded-xl">
-                <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-                Đồng bộ Sở GTVT
-              </Button>
-            )}
+            {/* Sync button hidden — auto sync via SharedWorker replaces manual sync */}
             <Button onClick={() => loadRoutes(true)} disabled={isLoading} variant="outline" className="px-4 py-2.5 rounded-xl">
               <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               Làm mới
@@ -695,129 +690,7 @@ export default function QuanLyTuyen() {
         )}
       </Card>
 
-      {/* Sync Dialog */}
-      <Dialog open={syncDialogOpen} onOpenChange={handleSyncDialogOpenChange}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Đồng bộ dữ liệu từ Sở GTVT</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Contract status card */}
-            {contractStatus && (
-              <div className={`rounded-lg p-3 ${contractStatus.ready ? "bg-emerald-50 border border-emerald-200" : "bg-amber-50 border border-amber-200"}`}>
-                <p className={`text-sm font-medium mb-2 ${contractStatus.ready ? "text-emerald-700" : "text-amber-700"}`}>
-                  {contractStatus.ready ? "Cấu hình đầy đủ" : "Thiếu cấu hình bắt buộc"}
-                </p>
-                <div className="grid grid-cols-2 gap-1 text-sm">
-                  {contractStatus.fields.filter((f) => f.required).map((field) => (
-                    <div key={field.name} className="flex items-center gap-1">
-                      {field.present ? <CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> : <XCircle className="h-3.5 w-3.5 text-red-500" />}
-                      <span className={field.present ? "text-gray-700" : "text-red-600"}>{field.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-sm text-gray-500">Lần đồng bộ tuyến gần nhất</p>
-                <p className="font-medium">{formatDateTime(lastSync?.lastRouteSyncAt || null)}</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-sm text-gray-500">Lần đồng bộ lịch gần nhất</p>
-                <p className="font-medium">{formatDateTime(lastSync?.lastScheduleSyncAt || null)}</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="syncMode">Chế độ chạy</Label>
-              <Select
-                id="syncMode"
-                value={syncDryRun ? "dry-run" : "live"}
-                onChange={(e) => setSyncDryRun(e.target.value === "dry-run")}
-              >
-                <option value="live">Đồng bộ thật (ghi dữ liệu)</option>
-                <option value="dry-run">Dry-run (chỉ thống kê, không ghi dữ liệu)</option>
-              </Select>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => handleSyncDialogOpenChange(false)} disabled={isSyncing}>
-                Đóng
-              </Button>
-              <Button onClick={handleRunSync} disabled={isSyncing || (!syncDryRun && contractStatus !== null && !contractStatus.ready)}>
-                {isSyncing ? "Đang đồng bộ..." : (syncDryRun ? "Chạy dry-run" : "Đồng bộ ngay")}
-              </Button>
-            </div>
-
-            {syncResult && (
-              <div className="border rounded-lg p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Kết quả lần chạy</h3>
-                  <p className="text-sm text-gray-500">
-                    {formatDateTime(syncResult.finishedAt)}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div className="bg-emerald-50 p-3 rounded">
-                    <p className="text-gray-500">Route thêm mới</p>
-                    <p className="font-semibold">{syncResult.summary.insertedRoutes}</p>
-                  </div>
-                  <div className="bg-indigo-50 p-3 rounded">
-                    <p className="text-gray-500">Route cập nhật</p>
-                    <p className="font-semibold">{syncResult.summary.updatedRoutes}</p>
-                  </div>
-                  <div className="bg-amber-50 p-3 rounded">
-                    <p className="text-gray-500">Route disable</p>
-                    <p className="font-semibold">{syncResult.summary.disabledRoutes}</p>
-                  </div>
-                  <div className="bg-emerald-50 p-3 rounded">
-                    <p className="text-gray-500">Schedule thêm mới</p>
-                    <p className="font-semibold">{syncResult.summary.insertedSchedules}</p>
-                  </div>
-                  <div className="bg-indigo-50 p-3 rounded">
-                    <p className="text-gray-500">Schedule cập nhật</p>
-                    <p className="font-semibold">{syncResult.summary.updatedSchedules}</p>
-                  </div>
-                  <div className="bg-amber-50 p-3 rounded">
-                    <p className="text-gray-500">Schedule disable</p>
-                    <p className="font-semibold">{syncResult.summary.disabledSchedules}</p>
-                  </div>
-                </div>
-
-                {syncResult.errors.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-rose-600">
-                      Lỗi xử lý: {syncResult.errors.length}
-                    </p>
-                    <div className="border rounded max-h-64 overflow-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-center w-[120px]">Entity</TableHead>
-                            <TableHead className="text-center w-[220px]">Key</TableHead>
-                            <TableHead>Message</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {syncResult.errors.map((item, index) => (
-                            <TableRow key={`${item.entity}-${item.key}-${index}`}>
-                              <TableCell className="text-center">{item.entity}</TableCell>
-                              <TableCell className="text-center font-mono text-xs">{item.key}</TableCell>
-                              <TableCell>{item.message}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Sync Dialog removed — auto sync via SharedWorker. Restore from git if needed. */}
 
       {/* Detail Dialog */}
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
