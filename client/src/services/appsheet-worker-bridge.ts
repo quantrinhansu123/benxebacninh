@@ -6,15 +6,17 @@
 import { appsheetConfig } from '@/config/appsheet.config'
 import { appsheetClient } from '@/services/appsheet-client.service'
 import { normalizeVehicleRows } from '@/services/appsheet-normalize-vehicles'
+import { normalizeBadgeRows } from '@/services/appsheet-normalize-badges'
+import { normalizeOperatorRows } from '@/services/appsheet-normalize-operators'
+import { normalizeFixedRouteRows } from '@/services/appsheet-normalize-fixed-routes'
+import { normalizeBusRouteRows } from '@/services/appsheet-normalize-bus-routes'
+import { normalizeScheduleRows } from '@/services/appsheet-normalize-schedules'
+import { normalizeBusScheduleRows } from '@/services/appsheet-normalize-bus-schedules'
+import { enrichRows } from '@/services/appsheet-sync-utils'
 import type { WorkerEvent } from '@/workers/appsheet-shared-worker'
 
 type WorkerEventCallback = (event: WorkerEvent) => void
-type NormalizerFn = (rows: Record<string, unknown>[]) => unknown[]
-
-// Fallback normalizer registry (mirrors worker TABLE_CONFIG)
-const FALLBACK_NORMALIZERS: Record<string, { normalizer: NormalizerFn; keyField: string }> = {
-  vehicles: { normalizer: normalizeVehicleRows as NormalizerFn, keyField: 'plateNumber' },
-}
+type FallbackNormalizeResult = { normalized: unknown[]; keyField: string }
 
 /** cyrb53 hash (same as worker) */
 function hashRecord(data: unknown): string {
@@ -39,6 +41,9 @@ class AppSheetWorkerBridge {
   private fallbackTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private fallbackHashMaps = new Map<string, Map<string, string>>()
   private fallbackNoChangeCount = new Map<string, number>()
+  private fallbackMatinhMap: Map<string, string> | null = null
+  private fallbackNotificationsCache: Record<string, unknown>[] | null = null
+  private fallbackBusLookupCache: Record<string, unknown>[] | null = null
 
   constructor() {
     if (typeof SharedWorker !== 'undefined') {
@@ -103,11 +108,97 @@ class AppSheetWorkerBridge {
   }
 
   // ─── Fallback: main-thread polling (iOS Safari) ───────────────
-  private fallbackPoll(table: string) {
+  private async ensureFallbackMatinhMap() {
+    if (this.fallbackMatinhMap) return
+    try {
+      const rows = await appsheetClient.fetchByName('matinh')
+      const lookup = new Map<string, string>()
+      for (const row of rows) {
+        const code = typeof row['MaTinh'] === 'string' ? row['MaTinh'].trim() : ''
+        const name = typeof row['TenTinh'] === 'string' ? row['TenTinh'].trim() : ''
+        if (code && name) lookup.set(code, name)
+      }
+      this.fallbackMatinhMap = lookup
+    } catch {
+      this.fallbackMatinhMap = new Map()
+    }
+  }
+
+  private async ensureFallbackNotifications() {
+    if (this.fallbackNotificationsCache) return
+    try {
+      this.fallbackNotificationsCache = await appsheetClient.fetchByName('notifications')
+    } catch {
+      this.fallbackNotificationsCache = []
+    }
+  }
+
+  private async ensureFallbackBusLookup() {
+    if (this.fallbackBusLookupCache) return
+    try {
+      this.fallbackBusLookupCache = await appsheetClient.fetchByName('busLookup')
+    } catch {
+      this.fallbackBusLookupCache = []
+    }
+  }
+
+  private async normalizeFallbackRows(
+    table: string,
+    rawRows: Record<string, unknown>[],
+  ): Promise<FallbackNormalizeResult> {
+    switch (table) {
+      case 'vehicles':
+        return { normalized: normalizeVehicleRows(rawRows), keyField: 'plateNumber' }
+      case 'badges':
+        return { normalized: normalizeBadgeRows(rawRows), keyField: 'badgeNumber' }
+      case 'operators':
+        return { normalized: normalizeOperatorRows(rawRows), keyField: 'firebaseId' }
+      case 'fixedRoutes':
+        return { normalized: normalizeFixedRouteRows(rawRows), keyField: 'routeCode' }
+      case 'busRoutes':
+        await this.ensureFallbackMatinhMap()
+        return {
+          normalized: normalizeBusRouteRows(rawRows, this.fallbackMatinhMap ?? undefined),
+          keyField: 'firebaseId',
+        }
+      case 'fixedSchedules':
+        await this.ensureFallbackNotifications()
+        return {
+          normalized: normalizeScheduleRows(
+            enrichRows(rawRows, this.fallbackNotificationsCache || [], {
+              refKey: 'Ref_ThongBaoKhaiThac',
+              lookupIdKey: 'ID_TB',
+              mappings: [
+                { from: 'Ref_Tuyen', to: 'Ref_Tuyen' },
+                { from: 'Ref_DonVi', to: 'Ref_DonVi' },
+              ],
+            }),
+          ),
+          keyField: 'firebaseId',
+        }
+      case 'busSchedules':
+        await this.ensureFallbackBusLookup()
+        return {
+          normalized: normalizeBusScheduleRows(
+            enrichRows(rawRows, this.fallbackBusLookupCache || [], {
+              refKey: 'BieuDo',
+              lookupIdKey: 'ID_BieuDo',
+              mappings: [
+                { from: 'TuyenBuyt', to: 'Ref_Tuyen' },
+                { from: 'DonViKhaiThac', to: 'Ref_DonVi' },
+              ],
+            }),
+          ),
+          keyField: 'firebaseId',
+        }
+      default:
+        return { normalized: rawRows, keyField: '' }
+    }
+  }
+
+  private async fallbackPoll(table: string) {
     const endpoint = appsheetConfig.endpoints[table]
     if (!endpoint || !appsheetConfig.apiKey) return
-
-    const tableConfig = FALLBACK_NORMALIZERS[table]
 
     this.emitEvent(table, {
       type: 'status', table, polling: true,
@@ -115,46 +206,43 @@ class AppSheetWorkerBridge {
       lastPollAt: null,
     })
 
-    appsheetClient.fetchTable(endpoint)
-      .then((rawRows) => {
-        const normalized = tableConfig ? tableConfig.normalizer(rawRows) : rawRows
-        const keyField = tableConfig?.keyField || ''
-        const prevMap = this.fallbackHashMaps.get(table) || new Map()
-        const newMap = new Map<string, string>()
-        const changed: unknown[] = []
+    try {
+      const rawRows = await appsheetClient.fetchTable(endpoint)
+      const { normalized, keyField } = await this.normalizeFallbackRows(table, rawRows)
+      const prevMap = this.fallbackHashMaps.get(table) || new Map()
+      const newMap = new Map<string, string>()
+      const changed: unknown[] = []
 
-        for (let i = 0; i < normalized.length; i++) {
-          const item = normalized[i] as Record<string, unknown>
-          const key = keyField && item[keyField] ? String(item[keyField]) : String(i)
-          const hash = hashRecord(item)
-          newMap.set(key, hash)
-          if (prevMap.get(key) !== hash) changed.push(item)
-        }
+      for (let i = 0; i < normalized.length; i++) {
+        const item = normalized[i] as Record<string, unknown>
+        const key = keyField && item[keyField] ? String(item[keyField]) : String(i)
+        const hash = hashRecord(item)
+        newMap.set(key, hash)
+        if (prevMap.get(key) !== hash) changed.push(item)
+      }
 
-        const hasChanges = changed.length > 0 || prevMap.size !== newMap.size
-        const isInitial = prevMap.size === 0
-        this.fallbackHashMaps.set(table, newMap)
+      const hasChanges = changed.length > 0 || prevMap.size !== newMap.size
+      const isInitial = prevMap.size === 0
+      this.fallbackHashMaps.set(table, newMap)
 
-        if (hasChanges) {
-          this.fallbackNoChangeCount.set(table, 0)
-          this.emitEvent(table, { type: 'data', table, data: normalized, changed, isInitial })
-        } else {
-          this.fallbackNoChangeCount.set(table, (this.fallbackNoChangeCount.get(table) || 0) + 1)
-        }
+      if (hasChanges) {
+        this.fallbackNoChangeCount.set(table, 0)
+        this.emitEvent(table, { type: 'data', table, data: normalized, changed, isInitial })
+      } else {
+        this.fallbackNoChangeCount.set(table, (this.fallbackNoChangeCount.get(table) || 0) + 1)
+      }
 
-        this.emitEvent(table, {
-          type: 'status', table, polling: false,
-          interval: this.getFallbackInterval(table),
-          lastPollAt: new Date().toISOString(),
-        })
+      this.emitEvent(table, {
+        type: 'status', table, polling: false,
+        interval: this.getFallbackInterval(table),
+        lastPollAt: new Date().toISOString(),
       })
-      .catch((err) => {
-        const msg = err instanceof Error ? err.message : 'Unknown error'
-        this.emitEvent(table, { type: 'error', table, message: msg })
-      })
-      .finally(() => {
-        this.scheduleFallbackPoll(table)
-      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      this.emitEvent(table, { type: 'error', table, message: msg })
+    } finally {
+      this.scheduleFallbackPoll(table)
+    }
   }
 
   private getFallbackInterval(table: string): number {
@@ -169,7 +257,9 @@ class AppSheetWorkerBridge {
 
     if (!this.listeners.has(table) || this.listeners.get(table)!.size === 0) return
 
-    const timer = setTimeout(() => this.fallbackPoll(table), this.getFallbackInterval(table))
+    const timer = setTimeout(() => {
+      void this.fallbackPoll(table)
+    }, this.getFallbackInterval(table))
     this.fallbackTimers.set(table, timer)
   }
 
@@ -191,7 +281,7 @@ class AppSheetWorkerBridge {
     if (this.fallbackMode) {
       // Start main-thread polling for this table
       if (this.listeners.get(table)!.size === 1) {
-        this.fallbackPoll(table)
+        void this.fallbackPoll(table)
       }
     } else {
       this.port?.postMessage({ type: 'subscribe', table })
@@ -220,7 +310,7 @@ class AppSheetWorkerBridge {
       this.fallbackNoChangeCount.set(table, 0)
       const timer = this.fallbackTimers.get(table)
       if (timer) clearTimeout(timer)
-      this.fallbackPoll(table)
+      void this.fallbackPoll(table)
     } else {
       this.port?.postMessage({ type: 'poll-now', table })
     }
