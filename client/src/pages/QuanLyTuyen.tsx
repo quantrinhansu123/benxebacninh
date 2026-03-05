@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { toast } from "react-toastify"
-import { Search, Eye, RefreshCw, ChevronLeft, ChevronRight, MapPin, FileText, Route, TrendingUp, CheckCircle, XCircle } from "lucide-react"
+import { Search, RefreshCw, ChevronLeft, ChevronRight, MapPin, FileText, Route, TrendingUp, CheckCircle, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"

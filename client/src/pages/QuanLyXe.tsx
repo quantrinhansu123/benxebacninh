@@ -3,8 +3,6 @@ import { toast } from "react-toastify"
 import {
   Plus,
   Search,
-  Edit,
-  Eye,
   Car,
   ChevronLeft,
   ChevronRight,

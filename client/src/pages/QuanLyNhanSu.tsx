@@ -3,8 +3,6 @@ import { toast } from "react-toastify"
 import {
   Plus,
   Search,
-  Edit,
-  Trash2,
   Users,
   UserCheck,
   UserX,
@@ -22,7 +20,6 @@ import { ActionMenu } from "@/components/ui/ActionMenu"
 import { userService, type User, type CreateUserData, type UpdateUserData } from "@/services/user.service"
 import { locationService } from "@/services/location.service"
 import type { Location } from "@/types"
-import { formatDateOnly } from "@/lib/date-utils"
 
 const ITEMS_PER_PAGE = 50
 

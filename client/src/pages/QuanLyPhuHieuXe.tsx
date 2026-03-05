@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { toast } from "react-toastify"
-import { Search, Eye, Download, Plus, Upload, FileSpreadsheet, Award, TrendingUp, CheckCircle, XCircle, Clock } from "lucide-react"
+import { Search, Download, Plus, Upload, FileSpreadsheet, Award, TrendingUp, CheckCircle, XCircle, Clock } from "lucide-react"
 import * as XLSX from "xlsx"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
