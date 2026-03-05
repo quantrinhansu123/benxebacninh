@@ -32,7 +32,7 @@ interface PermitData {
 }
 
 export default function BaoCaoCapPhepRaBen() {
-  const setTitle = useUIStore((state) => state.setTitle);
+  const setTitle = useUIStore((state: any) => state.setTitle);
   const [data, setData] = useState<PermitData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -117,7 +117,7 @@ export default function BaoCaoCapPhepRaBen() {
   };
 
   const filteredData = useMemo(() => {
-    let filtered = data.filter((item) => {
+    let filtered = data.filter((item: any) => {
       // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -198,7 +198,7 @@ export default function BaoCaoCapPhepRaBen() {
 
     try {
       // Prepare data for Excel
-      const excelData = filteredData.map((item, index) => ({
+      const excelData = filteredData.map((item: any, index: number) => ({
         "STT": index + 1,
         "Biển số": item.plateNumber,
         "Tên đơn vị": item.operatorName,
@@ -290,7 +290,7 @@ export default function BaoCaoCapPhepRaBen() {
               <Input
                 placeholder="Tìm kiếm biển số, đơn vị, tuyến..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
               />
             </div>
             <DatePickerRange
@@ -386,7 +386,7 @@ export default function BaoCaoCapPhepRaBen() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredData.map((item, index) => (
+                  filteredData.map((item: any, index: number) => (
                     <TableRow key={`${item.plateNumber}-${item.permitTime}-${index}`}>
                       <TableCell className="text-center">
                         {index + 1}

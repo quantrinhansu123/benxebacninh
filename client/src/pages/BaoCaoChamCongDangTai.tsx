@@ -37,7 +37,7 @@ interface AttendanceData {
 }
 
 export default function BaoCaoChamCongDangTai() {
-  const setTitle = useUIStore((state) => state.setTitle);
+  const setTitle = useUIStore((state: any) => state.setTitle);
   const [data, setData] = useState<AttendanceData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -157,7 +157,7 @@ export default function BaoCaoChamCongDangTai() {
   };
 
   const filteredData = useMemo(() => {
-    return data.filter((item) => {
+    return data.filter((item: AttendanceData) => {
       // Search filter
       let matchesSearch = true;
       if (searchQuery.trim()) {
@@ -177,14 +177,14 @@ export default function BaoCaoChamCongDangTai() {
       // Operator filter
       let matchesOperator = true;
       if (selectedOperatorId) {
-        const operator = operators.find((op) => op.id === selectedOperatorId);
+        const operator = operators.find((op: any) => op.id === selectedOperatorId);
         matchesOperator = item.operatorName === (operator?.name || "");
       }
       
       // Route filter
       let matchesRoute = true;
       if (selectedRouteId) {
-        const route = routes.find((r) => r.id === selectedRouteId);
+        const route = routes.find((r: any) => r.id === selectedRouteId);
         matchesRoute = item.routeName === (route?.routeName || "");
       }
       
@@ -211,7 +211,7 @@ export default function BaoCaoChamCongDangTai() {
       // Prepare data for Excel
       const excelData: any[] = [];
       
-      filteredData.forEach((item, index) => {
+      filteredData.forEach((item: AttendanceData, index: number) => {
         const row: any = {
           "STT": index + 1,
           "Biển số": item.plateNumber,
