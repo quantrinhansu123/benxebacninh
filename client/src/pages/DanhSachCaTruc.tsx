@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react"
 import { toast } from "react-toastify"
-import { Plus, Search, Edit, Trash2, Clock, FileSpreadsheet, TrendingUp, RefreshCw } from "lucide-react"
+import { Plus, Search, Clock, FileSpreadsheet, TrendingUp, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
