@@ -26,11 +26,26 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Handle unauthorized - clear token
-      localStorage.removeItem('auth_token')
-      // Only redirect if not already on login page
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+      const isLoginPage = window.location.pathname === '/login'
+      const isLoginRequest = error.config?.url?.includes('/auth/login')
+      
+      // Don't clear token or redirect if this is a login request (let login page handle the error)
+      if (!isLoginRequest) {
+        // Handle unauthorized - clear token
+        localStorage.removeItem('auth_token')
+        
+        // Show user-friendly message
+        const responseData = error.response?.data as { error?: string; code?: string } | undefined
+        if (responseData?.code === 'TOKEN_EXPIRED') {
+          console.warn('Token đã hết hạn. Vui lòng đăng nhập lại.')
+        } else {
+          console.warn('Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.')
+        }
+        
+        // Only redirect if not already on login page
+        if (!isLoginPage) {
+          window.location.href = '/login'
+        }
       }
     }
     return Promise.reject(error)

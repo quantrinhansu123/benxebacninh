@@ -21,6 +21,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { StatusBadge } from "@/components/layout/StatusBadge"
+import { ActionMenu } from "@/components/ui/ActionMenu"
 import { locationService } from "@/services/location.service"
 import type { Location, LocationInput } from "@/types"
 import { useUIStore } from "@/store/ui.store"
@@ -671,31 +672,26 @@ export default function QuanLyBenDen() {
                       />
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleView(location)}
-                          aria-label="Xem"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEdit(location)}
-                          aria-label="Sửa"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(location.id)}
-                          aria-label="Xóa"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </Button>
+                      <div className="flex items-center justify-center">
+                        <ActionMenu
+                          items={[
+                            {
+                              label: "Xem",
+                              onClick: () => handleView(location),
+                              variant: "info",
+                            },
+                            {
+                              label: "Sửa",
+                              onClick: () => handleEdit(location),
+                              variant: "warning",
+                            },
+                            {
+                              label: "Xóa",
+                              onClick: () => handleDelete(location.id),
+                              variant: "danger",
+                            },
+                          ]}
+                        />
                       </div>
                     </TableCell>
                   </TableRow>

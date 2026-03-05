@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { ActionMenu } from "@/components/ui/ActionMenu"
 import { driverService } from "@/services/driver.service"
 import type { Driver } from "@/types"
 import { useUIStore } from "@/store/ui.store"
@@ -581,28 +582,26 @@ export default function QuanLyLaiXe() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleView(driver)}
-                              className="p-2 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all"
-                              title="Xem chi tiết"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEdit(driver)}
-                              className="p-2 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-all"
-                              title="Chỉnh sửa"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(driver)}
-                              className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                              title="Xóa"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                          <div className="flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity">
+                            <ActionMenu
+                              items={[
+                                {
+                                  label: "Xem chi tiết",
+                                  onClick: () => handleView(driver),
+                                  variant: "info",
+                                },
+                                {
+                                  label: "Chỉnh sửa",
+                                  onClick: () => handleEdit(driver),
+                                  variant: "warning",
+                                },
+                                {
+                                  label: "Xóa",
+                                  onClick: () => handleDelete(driver),
+                                  variant: "danger",
+                                },
+                              ]}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -695,25 +694,26 @@ export default function QuanLyLaiXe() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-1 pt-4 border-t border-slate-100">
-                    <button
-                      onClick={() => handleView(driver)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(driver)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(driver)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <div className="flex items-center justify-end pt-4 border-t border-slate-100">
+                    <ActionMenu
+                      items={[
+                        {
+                          label: "Xem chi tiết",
+                          onClick: () => handleView(driver),
+                          variant: "info",
+                        },
+                        {
+                          label: "Chỉnh sửa",
+                          onClick: () => handleEdit(driver),
+                          variant: "warning",
+                        },
+                        {
+                          label: "Xóa",
+                          onClick: () => handleDelete(driver),
+                          variant: "danger",
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               ))

@@ -22,6 +22,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { ActionMenu } from "@/components/ui/ActionMenu"
 import { shiftService, type Shift } from "@/services/shift.service"
 import { useUIStore } from "@/store/ui.store"
 import { useForm } from "react-hook-form"
@@ -341,23 +342,21 @@ export default function DanhSachCaTruc() {
                   <TableCell className="text-center">{shift.startTime}</TableCell>
                   <TableCell className="text-center">{shift.endTime}</TableCell>
                   <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleEdit(shift)}
-                        aria-label="Sửa"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDelete(shift.id)}
-                        aria-label="Xóa"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
+                    <div className="flex items-center justify-center">
+                      <ActionMenu
+                        items={[
+                          {
+                            label: "Sửa",
+                            onClick: () => handleEdit(shift),
+                            variant: "warning",
+                          },
+                          {
+                            label: "Xóa",
+                            onClick: () => handleDelete(shift.id),
+                            variant: "danger",
+                          },
+                        ]}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { ActionMenu } from "@/components/ui/ActionMenu"
 import {
   Dialog,
   DialogContent,
@@ -577,16 +578,16 @@ export default function QuanLyTuyen() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-left w-[120px] text-sm">Mã tuyến</TableHead>
-              <TableHead className="text-left text-sm">Bến đi</TableHead>
-              <TableHead className="text-left text-sm">Tỉnh đi</TableHead>
-              <TableHead className="text-left text-sm">Bến đến</TableHead>
-              <TableHead className="text-left text-sm">Tỉnh đến</TableHead>
-              <TableHead className="text-left w-[100px] text-sm">Loại tuyến</TableHead>
-              <TableHead className="text-center w-[80px] text-sm">Cự ly (km)</TableHead>
-              <TableHead className="text-center w-[100px] text-sm">Chuyến/tháng</TableHead>
-              <TableHead className="text-left w-[120px] text-sm">Tình trạng</TableHead>
-              <TableHead className="text-center w-[80px] text-sm">Thao tác</TableHead>
+              <TableHead className="text-left w-[120px] text-xs whitespace-nowrap">Mã tuyến</TableHead>
+              <TableHead className="text-left text-xs whitespace-nowrap">Bến đi</TableHead>
+              <TableHead className="text-left text-xs whitespace-nowrap">Tỉnh đi</TableHead>
+              <TableHead className="text-left text-xs whitespace-nowrap">Bến đến</TableHead>
+              <TableHead className="text-left text-xs whitespace-nowrap">Tỉnh đến</TableHead>
+              <TableHead className="text-left w-[100px] text-xs whitespace-nowrap">Loại tuyến</TableHead>
+              <TableHead className="text-center w-[80px] text-xs whitespace-nowrap">Cự ly (km)</TableHead>
+              <TableHead className="text-center w-[100px] text-xs whitespace-nowrap">Chuyến/tháng</TableHead>
+              <TableHead className="text-left w-[120px] text-xs whitespace-nowrap">Tình trạng</TableHead>
+              <TableHead className="text-center w-[80px] text-xs whitespace-nowrap">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -606,28 +607,31 @@ export default function QuanLyTuyen() {
             ) : (
               paginatedRoutes.map((route) => (
                 <TableRow key={route.id} className="hover:bg-gray-50">
-                  <TableCell className="font-mono text-sm text-left font-semibold">{displayRouteCode(route.routeCode)}</TableCell>
-                  <TableCell className="text-left text-sm">{route.departureStation || "N/A"}</TableCell>
-                  <TableCell className="text-left text-sm text-gray-600">{route.departureProvince || "N/A"}</TableCell>
-                  <TableCell className="text-left text-sm">{route.arrivalStation || "N/A"}</TableCell>
-                  <TableCell className="text-left text-sm text-gray-600">{route.arrivalProvince || "N/A"}</TableCell>
-                  <TableCell className="text-left text-sm">{route.routeType || "N/A"}</TableCell>
-                  <TableCell className="text-center text-sm">{route.distanceKm || "N/A"}</TableCell>
-                  <TableCell className="text-center text-sm">{route.totalTripsMonth || "N/A"}</TableCell>
+                  <TableCell className="font-mono text-xs text-left font-semibold whitespace-nowrap">{displayRouteCode(route.routeCode)}</TableCell>
+                  <TableCell className="text-left text-xs whitespace-nowrap">{route.departureStation || "N/A"}</TableCell>
+                  <TableCell className="text-left text-xs text-gray-600 whitespace-nowrap">{route.departureProvince || "N/A"}</TableCell>
+                  <TableCell className="text-left text-xs whitespace-nowrap">{route.arrivalStation || "N/A"}</TableCell>
+                  <TableCell className="text-left text-xs text-gray-600 whitespace-nowrap">{route.arrivalProvince || "N/A"}</TableCell>
+                  <TableCell className="text-left text-xs whitespace-nowrap">{route.routeType || "N/A"}</TableCell>
+                  <TableCell className="text-center text-xs whitespace-nowrap">{route.distanceKm || "N/A"}</TableCell>
+                  <TableCell className="text-center text-xs whitespace-nowrap">{route.totalTripsMonth || "N/A"}</TableCell>
                   <TableCell className="text-left">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(route.operationStatus)}`}>
+                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getStatusColor(route.operationStatus)}`}>
                       {route.operationStatus || "N/A"}
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleView(route)}
-                      aria-label="Xem chi tiết"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-center">
+                      <ActionMenu
+                        items={[
+                          {
+                            label: "Xem chi tiết",
+                            onClick: () => handleView(route),
+                            variant: "info",
+                          },
+                        ]}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

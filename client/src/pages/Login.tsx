@@ -43,10 +43,11 @@ export default function Login() {
     try {
       setIsLoading(true)
       setError("")
-      await login(data.usernameOrEmail, data.password, data.rememberMe)
+      await login(data.usernameOrEmail.trim(), data.password, data.rememberMe)
       navigate("/dashboard")
-    } catch {
-      setError("Thông tin đăng nhập không chính xác")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Thông tin đăng nhập không chính xác"
+      setError(message)
     } finally {
       setIsLoading(false)
     }

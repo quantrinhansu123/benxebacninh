@@ -1,8 +1,11 @@
 import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
 import { routes } from '../db/schema/index.js'
-import { eq, asc, and } from 'drizzle-orm'
+import { users } from '../db/schema/users.js'
+import { locations } from '../db/schema/locations.js'
+import { eq, asc, and, or } from 'drizzle-orm'
 import { z } from 'zod'
+import type { AuthRequest } from '../middleware/auth.js'
 
 // Cache for legacy routes
 let legacyRoutesCache: { data: any[]; timestamp: number } | null = null
@@ -381,11 +384,38 @@ export const getLegacyRoutes = async (req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
     const provinceNameMap = await getProvinceNameMap()
+    const authReq = req as AuthRequest
 
     const forceRefresh = req.query.refresh === 'true'
 
-    // Check cache
-    if (!forceRefresh && legacyRoutesCache && Date.now() - legacyRoutesCache.timestamp < LEGACY_CACHE_TTL) {
+    // Get user's benPhuTrach (assigned station)
+    let stationName: string | null = null
+    let shouldFilterByStation = false
+
+    if (authReq.user) {
+      const [user] = await db
+        .select({ benPhuTrach: users.benPhuTrach, role: users.role })
+        .from(users)
+        .where(eq(users.id, authReq.user.id))
+        .limit(1)
+
+      // Only filter if user is not admin and has benPhuTrach assigned
+      if (user && user.role !== 'admin' && user.benPhuTrach) {
+        const [location] = await db
+          .select({ name: locations.name })
+          .from(locations)
+          .where(eq(locations.id, user.benPhuTrach))
+          .limit(1)
+
+        if (location) {
+          stationName = location.name
+          shouldFilterByStation = true
+        }
+      }
+    }
+
+    // Check cache (but invalidate if filtering by station)
+    if (!forceRefresh && !shouldFilterByStation && legacyRoutesCache && Date.now() - legacyRoutesCache.timestamp < LEGACY_CACHE_TTL) {
       const remappedCachedData = legacyRoutesCache.data.map((route) => ({
         ...route,
         departureProvince: getDisplayProvince(route.departureProvince, provinceNameMap) || '',
@@ -397,12 +427,32 @@ export const getLegacyRoutes = async (req: Request, res: Response) => {
       return res.json(remappedCachedData)
     }
 
+    // Build query conditions
+    const baseCondition = eq(routes.source, 'appsheet')
+    let whereCondition = baseCondition
+
+    // Filter by station if user has benPhuTrach assigned
+    if (shouldFilterByStation && stationName) {
+      const stationCondition = or(
+        eq(routes.departureStation, stationName),
+        eq(routes.arrivalStation, stationName)
+      )
+      
+      if (stationCondition) {
+        whereCondition = and(baseCondition, stationCondition) || baseCondition
+      }
+      
+      console.log(`[Routes] Filtering by station: ${stationName}`)
+    }
+
     // Get routes from database — only AppSheet-synced routes (exclude legacy ETL/manual)
     const routesData = await db
       .select()
       .from(routes)
-      .where(eq(routes.source, 'appsheet'))
+      .where(whereCondition)
       .orderBy(asc(routes.routeCode))
+    
+    console.log(`[Routes] Found ${routesData.length} routes`)
 
     const routesFormatted = routesData.map((route) => ({
       id: route.id,

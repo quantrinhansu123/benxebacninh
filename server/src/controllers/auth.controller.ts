@@ -3,64 +3,105 @@ import bcrypt from 'bcryptjs'
 import jwt, { SignOptions } from 'jsonwebtoken'
 import { db } from '../db/drizzle.js'
 import { users } from '../db/schema/users.js'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { loginSchema, registerSchema } from '../utils/validation.js'
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     if (!db) {
+      console.error('❌ Database not initialized')
       res.status(500).json({ error: 'Database not initialized' })
       return
     }
 
-    const validated = loginSchema.parse(req.body)
+    // Log incoming request for debugging
+    console.log(`📥 Login request received`)
+    console.log(`   Body:`, JSON.stringify(req.body))
+    console.log(`   Headers:`, JSON.stringify(req.headers))
+
+    // ========================================
+    // 1. Validate input
+    // ========================================
+    let validated
+    try {
+      validated = loginSchema.parse(req.body)
+    } catch (error: any) {
+      console.error('❌ Validation error:', error.errors || error.message)
+      res.status(400).json({ 
+        error: 'Validation failed',
+        details: error.errors || error.message 
+      })
+      return
+    }
+
     const { usernameOrEmail, password } = validated
+    const normalizedLogin = usernameOrEmail.trim().toLowerCase()
+    console.log(`📝 Login attempt: ${normalizedLogin}`)
 
-    console.log('Starting Drizzle ORM query for users...')
-    const startTime = Date.now()
-
-    // Query user by email (since schema uses email field)
-    const [user] = await db.select().from(users).where(eq(users.email, usernameOrEmail))
-
-    const queryTime = Date.now() - startTime
-    console.log(`Drizzle ORM query completed in ${queryTime}ms`)
+    // ========================================
+    // 2. Query user directly from users table (case-insensitive)
+    // ========================================
+    console.log(`🔍 Querying users table WHERE lower(email) = '${normalizedLogin}'`)
+    const userResult = await db
+      .select()
+      .from(users)
+      .where(sql`lower(${users.email}) = ${normalizedLogin}`)
+      .limit(1)
+    
+    const user = userResult[0]
 
     if (!user) {
-      console.log('User not found')
+      console.error(`❌ User not found: ${normalizedLogin}`)
       res.status(401).json({ error: 'Invalid credentials' })
       return
     }
 
-    console.log(`User found: ${user.email}`)
+    console.log(`✅ User found: ${user.email} (ID: ${user.id})`)
+    console.log(`   Name: ${user.name}, Role: ${user.role}, Active: ${user.isActive}`)
 
-    // Check if user is active
-    if (user.isActive === false) {
+    // ========================================
+    // 3. Check if account is active
+    // ========================================
+    if (!user.isActive) {
+      console.error(`❌ Account disabled: ${user.email}`)
       res.status(403).json({ error: 'Account is disabled' })
       return
     }
 
-    // Verify password
+    // ========================================
+    // 4. Verify password against password_hash
+    // ========================================
     if (!user.passwordHash) {
+      console.error(`❌ No password hash found for: ${user.email}`)
       res.status(401).json({ error: 'Invalid credentials' })
       return
     }
 
-    const isValid = await bcrypt.compare(password, user.passwordHash)
-    if (!isValid) {
+    console.log(`🔐 Comparing password with password_hash (bcrypt)...`)
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash)
+    
+    if (!isPasswordValid) {
+      console.error(`❌ Invalid password: ${user.email}`)
       res.status(401).json({ error: 'Invalid credentials' })
       return
     }
 
-    // Generate JWT token
-    const jwtSecret = process.env.JWT_SECRET!
+    console.log(`✅ Password verified successfully`)
+
+    // ========================================
+    // 5. Generate JWT token
+    // ========================================
+    const jwtSecret = process.env.JWT_SECRET
     if (!jwtSecret) {
+      console.error('❌ JWT_SECRET not configured')
       res.status(500).json({ error: 'JWT secret not configured' })
       return
     }
+
     const token = jwt.sign(
       {
         id: user.id,
-        username: user.email, // Use email as username
+        username: user.email, // Use email as username for compatibility
         role: user.role,
       },
       jwtSecret,
@@ -69,19 +110,33 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       } as SignOptions
     )
 
+    console.log(`🎫 JWT token generated, expires in: ${process.env.JWT_EXPIRES_IN || '7d'}`)
+
+    // ========================================
+    // 6. Return success response
+    // ========================================
+    console.log(`✅ Login successful: ${user.email}`)
     res.json({
       token,
       user: {
         id: user.id,
-        username: user.email,
-        fullName: user.name,
         email: user.email,
+        fullName: user.name,
         role: user.role,
+        isActive: user.isActive,
       },
     })
   } catch (error) {
-    console.error('Login error:', error)
+    console.error('❌ Login error:', error)
     if (error instanceof Error) {
+      // Check if it's a Zod validation error
+      if (error.name === 'ZodError' || (error as any).issues) {
+        res.status(400).json({ 
+          error: 'Validation failed',
+          details: (error as any).issues || error.message 
+        })
+        return
+      }
       res.status(400).json({ error: error.message })
       return
     }
@@ -203,3 +258,77 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
   }
 }
 
+
+export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!db) {
+      res.status(500).json({ error: 'Database not initialized' })
+      return
+    }
+
+    const authReq = req as any
+    const userId = authReq.user?.id
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' })
+      return
+    }
+
+    // Get user
+    const [user] = await db.select().from(users).where(eq(users.id, userId))
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' })
+      return
+    }
+
+    // Validate and prepare update data
+    const { fullName, email, phone } = req.body
+    const updateData: any = {
+      updatedAt: new Date(),
+    }
+
+    if (fullName !== undefined) {
+      updateData.name = fullName
+    }
+
+    if (email !== undefined && email !== user.email) {
+      // Check if new email already exists
+      const [emailExists] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email.toLowerCase()))
+        .limit(1)
+
+      if (emailExists && emailExists.id !== userId) {
+        res.status(409).json({ error: 'Email da ton tai' })
+        return
+      }
+
+      updateData.email = email.toLowerCase()
+    }
+
+    if (phone !== undefined) {
+      updateData.phone = phone || null
+    }
+
+    // Update user
+    const [updatedUser] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, userId))
+      .returning()
+
+    res.json({
+      id: updatedUser.id,
+      username: updatedUser.email,
+      fullName: updatedUser.name,
+      email: updatedUser.email,
+      phone: updatedUser.phone,
+      role: updatedUser.role,
+    })
+  } catch (error) {
+    console.error('Update profile error:', error)
+    res.status(500).json({ error: 'Failed to update profile' })
+  }
+}

@@ -32,6 +32,8 @@ import chatRoutes from './modules/chat/chat.routes.js'
 import quanlyDataRoutes from './routes/quanly-data.routes.js'
 import operationNoticeRoutes from './routes/operation-notice.routes.js'
 import gtvtSyncRoutes from './routes/gtvt-sync.routes.js'
+import userRoutes from './routes/user.routes.js'
+import webhookRoutes from './routes/webhook.routes.js'
 
 const app = express()
 // Use APP_PORT instead of PORT (reserved in Firebase Functions)
@@ -123,6 +125,8 @@ app.use('/api/chat', chatRoutes)
 app.use('/api/quanly-data', quanlyDataRoutes)
 app.use('/api/operation-notices', operationNoticeRoutes)
 app.use('/api/integrations/gtvt', gtvtSyncRoutes)
+app.use('/api/users', userRoutes)
+app.use('/api/webhooks', webhookRoutes)
 
 // Error handling
 app.use(errorHandler)

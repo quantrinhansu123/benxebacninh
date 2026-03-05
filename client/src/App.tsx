@@ -39,6 +39,9 @@ const QuanLyLaiXe = lazy(() => import("@/pages/QuanLyLaiXe"))
 const QuanLyDonViVanTai = lazy(() => import("@/pages/QuanLyDonViVanTai"))
 const QuanLyPhuHieuXe = lazy(() => import("@/pages/QuanLyPhuHieuXe"))
 
+// Human Resources (Nhân sự)
+const QuanLyNhanSu = lazy(() => import("@/pages/QuanLyNhanSu"))
+
 // Route & Location Management
 const QuanLyTuyen = lazy(() => import("@/pages/QuanLyTuyen"))
 const QuanLyBenDen = lazy(() => import("@/pages/QuanLyBenDen"))
@@ -247,6 +250,18 @@ function App() {
               <MainLayout>
                 <Suspense fallback={<PageLoader />}>
                   <QuanLyLaiXe />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/quan-ly-nhan-su"
+          element={
+            <ProtectedRoute>
+              <MainLayout>
+                <Suspense fallback={<PageLoader />}>
+                  <QuanLyNhanSu />
                 </Suspense>
               </MainLayout>
             </ProtectedRoute>

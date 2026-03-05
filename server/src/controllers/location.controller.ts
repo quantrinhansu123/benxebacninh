@@ -1,8 +1,10 @@
 import { Request, Response } from 'express'
 import { db } from '../db/drizzle.js'
 import { locations } from '../db/schema/index.js'
-import { eq, asc } from 'drizzle-orm'
+import { users } from '../db/schema/users.js'
+import { eq, asc, and } from 'drizzle-orm'
 import { z } from 'zod'
+import type { AuthRequest } from '../middleware/auth.js'
 
 const locationSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -18,15 +20,52 @@ const locationSchema = z.object({
 export const getAllLocations = async (req: Request, res: Response) => {
   try {
     if (!db) throw new Error('Database not initialized')
+    const authReq = req as AuthRequest
 
     const { isActive } = req.query
 
-    let data
+    // Get user's benPhuTrach (assigned station)
+    let benPhuTrachId: string | null = null
+    let shouldFilterByStation = false
+
+    if (authReq.user) {
+      const [user] = await db
+        .select({ benPhuTrach: users.benPhuTrach, role: users.role })
+        .from(users)
+        .where(eq(users.id, authReq.user.id))
+        .limit(1)
+
+      // Only filter if user is not admin and has benPhuTrach assigned
+      if (user && user.role !== 'admin' && user.benPhuTrach) {
+        benPhuTrachId = user.benPhuTrach
+        shouldFilterByStation = true
+        console.log(`[Locations] Filtering by benPhuTrach: ${benPhuTrachId}`)
+      }
+    }
+
+    // Build query conditions
+    const conditions = []
+    
+    // Filter by benPhuTrach if user has it assigned
+    if (shouldFilterByStation && benPhuTrachId) {
+      conditions.push(eq(locations.id, benPhuTrachId))
+    }
+    
+    // Filter by isActive if provided
     if (isActive !== undefined) {
+      conditions.push(eq(locations.isActive, isActive === 'true'))
+    }
+
+    // Build where clause
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
+    // Execute query
+    let data
+    if (whereClause) {
       data = await db
         .select()
         .from(locations)
-        .where(eq(locations.isActive, isActive === 'true'))
+        .where(whereClause)
         .orderBy(asc(locations.name))
     } else {
       data = await db
@@ -34,6 +73,8 @@ export const getAllLocations = async (req: Request, res: Response) => {
         .from(locations)
         .orderBy(asc(locations.name))
     }
+    
+    console.log(`[Locations] Found ${data.length} locations`)
 
     const result = data.map((loc) => ({
       id: loc.id,

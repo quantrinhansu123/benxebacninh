@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import { ActionMenu } from "@/components/ui/ActionMenu"
 import {
   Dialog,
   DialogContent,
@@ -65,13 +66,13 @@ const formatDate = (dateString: string | undefined | null): string => {
 // Skeleton Row Component
 const SkeletonRow = () => (
   <tr className="animate-pulse">
-    <td className="px-6 py-4"><div className="h-10 w-32 bg-slate-200 rounded-xl" /></td>
-    <td className="px-6 py-4"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
-    <td className="px-6 py-4 text-center"><div className="h-8 w-8 bg-slate-200 rounded-lg mx-auto" /></td>
-    <td className="px-6 py-4"><div className="h-4 w-40 bg-slate-200 rounded" /></td>
-    <td className="px-6 py-4 text-center"><div className="h-4 w-24 bg-slate-200 rounded mx-auto" /></td>
-    <td className="px-6 py-4 text-center"><div className="h-6 w-20 bg-slate-200 rounded-full mx-auto" /></td>
-    <td className="px-6 py-4"><div className="h-8 w-24 bg-slate-200 rounded mx-auto" /></td>
+    <td className="px-4 py-4"><div className="h-10 w-32 bg-slate-200 rounded-xl" /></td>
+    <td className="px-4 py-4"><div className="h-4 w-24 bg-slate-200 rounded" /></td>
+    <td className="px-4 py-4 text-center"><div className="h-8 w-8 bg-slate-200 rounded-lg mx-auto" /></td>
+    <td className="px-4 py-4"><div className="h-4 w-40 bg-slate-200 rounded" /></td>
+    <td className="px-4 py-4 text-center"><div className="h-4 w-24 bg-slate-200 rounded mx-auto" /></td>
+    <td className="px-4 py-4 text-center"><div className="h-6 w-20 bg-slate-200 rounded-full mx-auto" /></td>
+    <td className="px-4 py-4"><div className="h-8 w-16 bg-slate-200 rounded mx-auto" /></td>
   </tr>
 )
 
@@ -666,28 +667,28 @@ export default function QuanLyXe() {
         {displayMode === "table" && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full table-fixed">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-800 to-slate-900">
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-[150px]">
                       Biển kiểm soát
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-[120px]">
+                    <th className="px-3 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-[150px]">
                       Loại xe
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider w-[80px]">
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider w-[100px]">
                       Số chỗ
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider min-w-[300px]">
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider w-[280px]">
                       Đơn vị vận tải
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider">
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider w-[140px]">
                       Hạn đăng kiểm
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider">
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider w-[130px]">
                       Trạng thái
                     </th>
-                    <th className="px-6 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider">
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-white uppercase tracking-wider w-[100px]">
                       Thao tác
                     </th>
                   </tr>
@@ -697,7 +698,7 @@ export default function QuanLyXe() {
                     Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
                   ) : paginatedVehicles.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-16 text-center">
+                      <td colSpan={7} className="px-4 py-16 text-center">
                         <div className="flex flex-col items-center">
                           <div className="relative mb-4">
                             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-sky-100 to-cyan-100 flex items-center justify-center">
@@ -733,35 +734,35 @@ export default function QuanLyXe() {
                           opacity: 0
                         }}
                       >
-                        <td className="px-6 py-4">
-                          <span className="font-mono text-sm font-bold bg-slate-100 text-slate-800 px-3 py-1.5 rounded-lg">
+                        <td className="px-4 py-4">
+                          <span className="font-mono text-sm font-bold bg-slate-100 text-slate-800 px-3 py-1.5 rounded-lg whitespace-nowrap">
                             {vehicle.plateNumber}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="text-slate-600">{getVehicleTypeName(vehicle) || "N/A"}</span>
+                        <td className="px-3 py-4">
+                          <span className="text-slate-600 block">{getVehicleTypeName(vehicle) || "N/A"}</span>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-4 py-4 text-center">
                           <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm">
                             {vehicle.seatCapacity || "-"}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="text-slate-600">
+                        <td className="px-4 py-4">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <Building2 className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                            <span className="text-slate-600 text-sm leading-tight line-clamp-2">
                               {resolveOperatorName(vehicle) || "N/A"}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-4 py-4 text-center">
                           <div className="flex items-center justify-center gap-2 text-slate-600">
-                            <Calendar className="h-4 w-4 text-slate-400" />
-                            <span className="text-sm">{formatDate(vehicle.inspectionExpiryDate)}</span>
+                            <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
+                            <span className="text-sm whitespace-nowrap">{formatDate(vehicle.inspectionExpiryDate)}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold ${
+                        <td className="px-4 py-4 text-center">
+                          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap ${
                             vehicle.isActive 
                               ? "bg-emerald-100 text-emerald-700" 
                               : "bg-slate-100 text-slate-600"
@@ -772,23 +773,22 @@ export default function QuanLyXe() {
                             {vehicle.isActive ? "Hoạt động" : "Ngừng"}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleView(vehicle)}
-                              className="p-2 rounded-lg text-slate-500 hover:text-sky-600 hover:bg-sky-50 transition-all"
-                              title="Xem chi tiết"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleEdit(vehicle)}
-                              className="p-2 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-all"
-                              title="Chỉnh sửa"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            {/* Nút xóa đã được ẩn theo yêu cầu */}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity">
+                            <ActionMenu
+                              items={[
+                                {
+                                  label: "Xem chi tiết",
+                                  onClick: () => handleView(vehicle),
+                                  variant: "info",
+                                },
+                                {
+                                  label: "Chỉnh sửa",
+                                  onClick: () => handleEdit(vehicle),
+                                  variant: "warning",
+                                },
+                              ]}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -872,20 +872,21 @@ export default function QuanLyXe() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-1 pt-4 border-t border-slate-100">
-                    <button
-                      onClick={() => handleView(vehicle)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-sky-600 hover:bg-sky-50 transition-all"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(vehicle)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    {/* Nút xóa đã được ẩn theo yêu cầu */}
+                  <div className="flex items-center justify-end pt-4 border-t border-slate-100">
+                    <ActionMenu
+                      items={[
+                        {
+                          label: "Xem chi tiết",
+                          onClick: () => handleView(vehicle),
+                          variant: "info",
+                        },
+                        {
+                          label: "Chỉnh sửa",
+                          onClick: () => handleEdit(vehicle),
+                          variant: "warning",
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               ))

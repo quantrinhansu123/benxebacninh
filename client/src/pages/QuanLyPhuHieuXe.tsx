@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { StatusBadge } from "@/components/layout/StatusBadge"
+import { ActionMenu } from "@/components/ui/ActionMenu"
 import {
   Dialog,
   DialogContent,
@@ -896,15 +897,16 @@ export default function QuanLyPhuHieuXe() {
                     />
                   </TableCell>
                   <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleView(badge)}
-                        aria-label="Xem chi tiết"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                    <div className="flex items-center justify-center">
+                      <ActionMenu
+                        items={[
+                          {
+                            label: "Xem chi tiết",
+                            onClick: () => handleView(badge),
+                            variant: "info",
+                          },
+                        ]}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>

@@ -11,6 +11,9 @@ interface UIState {
   loadShifts: () => Promise<void>
   getShiftByCurrentTime: () => string
   initializeShiftIfNeeded: () => Promise<void>
+  sidebarCollapsed: boolean
+  setSidebarCollapsed: (collapsed: boolean) => void
+  toggleSidebar: () => void
 }
 
 // Helper function để parse time (HH:mm) thành số phút
@@ -56,6 +59,13 @@ const getShiftByCurrentTime = (shifts: Shift[]): string => {
   return '<Trống>'
 }
 
+// Load sidebar collapsed state from localStorage
+const getInitialSidebarState = (): boolean => {
+  if (typeof window === 'undefined') return false
+  const saved = localStorage.getItem('sidebarCollapsed')
+  return saved === 'true'
+}
+
 export const useUIStore = create<UIState>((set, get) => ({
   title: '',
   setTitle: (title) => set({ title }),
@@ -94,5 +104,14 @@ export const useUIStore = create<UIState>((set, get) => ({
         set({ currentShift: shift })
       }
     }
+  },
+  sidebarCollapsed: getInitialSidebarState(),
+  setSidebarCollapsed: (collapsed) => {
+    set({ sidebarCollapsed: collapsed })
+    localStorage.setItem('sidebarCollapsed', String(collapsed))
+  },
+  toggleSidebar: () => {
+    const { sidebarCollapsed, setSidebarCollapsed } = get()
+    setSidebarCollapsed(!sidebarCollapsed)
   },
 }))

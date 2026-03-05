@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import { StatusBadge } from "@/components/layout/StatusBadge"
+import { ActionMenu } from "@/components/ui/ActionMenu"
 import { serviceFormulaService } from "@/services/service-formula.service"
 import type { ServiceFormula } from "@/types"
 import { useUIStore } from "@/store/ui.store"
@@ -379,31 +380,26 @@ export default function QuanLyBieuThuc() {
                               />
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center justify-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleView(formula)}
-                                  aria-label="Xem"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleEdit(formula)}
-                                  aria-label="Sửa"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleDelete(formula.id)}
-                                  aria-label="Xóa"
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </Button>
+                              <div className="flex items-center justify-center">
+                                <ActionMenu
+                                  items={[
+                                    {
+                                      label: "Xem",
+                                      onClick: () => handleView(formula),
+                                      variant: "info",
+                                    },
+                                    {
+                                      label: "Sửa",
+                                      onClick: () => handleEdit(formula),
+                                      variant: "warning",
+                                    },
+                                    {
+                                      label: "Xóa",
+                                      onClick: () => handleDelete(formula.id),
+                                      variant: "danger",
+                                    },
+                                  ]}
+                                />
                               </div>
                             </TableCell>
                           </TableRow>
@@ -465,31 +461,26 @@ export default function QuanLyBieuThuc() {
                               />
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center justify-center gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleView(formula)}
-                                  aria-label="Xem"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleEdit(formula)}
-                                  aria-label="Sửa"
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleDelete(formula.id)}
-                                  aria-label="Xóa"
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600" />
-                                </Button>
+                              <div className="flex items-center justify-center">
+                                <ActionMenu
+                                  items={[
+                                    {
+                                      label: "Xem",
+                                      onClick: () => handleView(formula),
+                                      variant: "info",
+                                    },
+                                    {
+                                      label: "Sửa",
+                                      onClick: () => handleEdit(formula),
+                                      variant: "warning",
+                                    },
+                                    {
+                                      label: "Xóa",
+                                      onClick: () => handleDelete(formula.id),
+                                      variant: "danger",
+                                    },
+                                  ]}
+                                />
                               </div>
                             </TableCell>
                           </TableRow>

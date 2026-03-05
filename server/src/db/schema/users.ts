@@ -3,6 +3,7 @@
  * Migrated from Firebase RTDB: users
  */
 import { pgTable, uuid, varchar, boolean, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { locations } from './locations.js'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -17,6 +18,8 @@ export const users = pgTable('users', {
   // Status
   isActive: boolean('is_active').default(true).notNull(),
   emailVerified: boolean('email_verified').default(false),
+  // Bến phụ trách (Assigned station)
+  benPhuTrach: uuid('ben_phu_trach').references(() => locations.id),
   // Session tracking
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   // Metadata
@@ -27,6 +30,7 @@ export const users = pgTable('users', {
 }, (table) => ({
   emailIdx: index('users_email_idx').on(table.email),
   roleIdx: index('users_role_idx').on(table.role),
+  benPhuTrachIdx: index('users_ben_phu_trach_idx').on(table.benPhuTrach),
 }))
 
 export type User = typeof users.$inferSelect

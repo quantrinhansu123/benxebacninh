@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { StatusBadge } from "@/components/layout/StatusBadge"
 import { ServiceDialog } from "@/components/service/ServiceDialog"
+import { ActionMenu } from "@/components/ui/ActionMenu"
 import { serviceService } from "@/services/service.service"
 import type { Service } from "@/types"
 import { useUIStore } from "@/store/ui.store"
@@ -336,44 +337,31 @@ export default function QuanLyDichVu() {
                       />
                     </TableCell>
                     <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleView(service)}
-                          aria-label="Xem"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEdit(service)}
-                          aria-label="Sửa"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleToggleStatus(service)}
-                          aria-label={service.isActive ? "Vô hiệu hóa" : "Kích hoạt"}
-                          title={service.isActive ? "Vô hiệu hóa" : "Kích hoạt"}
-                        >
-                          {service.isActive ? (
-                            <X className="h-4 w-4 text-orange-600" />
-                          ) : (
-                            <Plus className="h-4 w-4 text-green-600" />
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDelete(service.id)}
-                          aria-label="Xóa"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </Button>
+                      <div className="flex items-center justify-center">
+                        <ActionMenu
+                          items={[
+                            {
+                              label: "Xem",
+                              onClick: () => handleView(service),
+                              variant: "info",
+                            },
+                            {
+                              label: "Sửa",
+                              onClick: () => handleEdit(service),
+                              variant: "warning",
+                            },
+                            {
+                              label: service.isActive ? "Vô hiệu hóa" : "Kích hoạt",
+                              onClick: () => handleToggleStatus(service),
+                              variant: service.isActive ? "warning" : "info",
+                            },
+                            {
+                              label: "Xóa",
+                              onClick: () => handleDelete(service.id),
+                              variant: "danger",
+                            },
+                          ]}
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
