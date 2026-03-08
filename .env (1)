@@ -1,0 +1,47 @@
+# Server Configuration
+
+# NODE_ENV=development
+
+# CORS - comma separated origins for local development
+# CORS_ORIGIN=http://localhost:5173,http://localhost:3006
+
+# JWT Authentication
+# JWT_SECRET=postgresql://postgres.xweufelzukfucqqtknzs:0BbM7s9UWePMVn4x@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
+# JWT_EXPIRES_IN=90d
+# DATABASE_URL=postgresql://postgres.xweufelzukfucqqtknzs:0BbM7s9UWePMVn4x@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
+# Firebase Realtime Database
+# RTDB_URL=https://benxe-management-20251218-default-rtdb.asia-southeast1.firebasedatabase.app/
+
+# Firebase Admin SDK - Download from Firebase Console and place in server folder
+# SERVICE_ACCOUNT_PATH=./firebase-service-account.json
+# App
+APP_PORT=3006
+NODE_ENV=development
+
+# Supabase Database
+DATABASE_URL=postgresql://postgres.xweufelzukfucqqtknzs:0BbM7s9UWePMVn4x@aws-1-ap-south-1.pooler.supabase.com:6543/postgres
+
+# Supabase API
+SUPABASE_URL=https://xweufelzukfucqqtknzs.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3ZXVmZWx6dWtmdWNxcXRrbnpzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODAyMTU0MiwiZXhwIjoyMDgzNTk3NTQyfQ.FvqiNjtFzIPaMR9CKz7LoOZRz_u7IW25dpkgVXD6NdE
+
+# JWT Secret (tạo random string 32+ ký tự)
+JWT_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30
+
+# CORS
+CORS_ORIGIN=http://localhost:5173
+
+# ENCRYPTION_KEY=60a49d24980320c2750f1309d13b318fc8bcc31369947b28dd7e379feab565e8
+
+GTVT_APPSHEET_BASE_URL=https://www.appsheet.com/api/v2/apps/7ee20176-7cb1-4ad4-9d13-e541c8b1b3dc
+# Fixed routes
+GTVT_APPSHEET_ROUTES_ENDPOINT=tables/DANHMUCTUYENCODINH/Action
+GTVT_APPSHEET_SCHEDULES_ENDPOINT=tables/BieuDoChayXeChiTiet/Action
+GTVT_APPSHEET_NOTIFICATIONS_ENDPOINT=tables/THONGBAO_KHAITHAC/Action
+# Bus routes
+GTVT_APPSHEET_BUS_ROUTES_ENDPOINT=tables/DANHMUCTUYENBUYT/Action
+GTVT_APPSHEET_BUS_SCHEDULES_ENDPOINT=tables/GIOCHAY_BUYT/Action
+GTVT_APPSHEET_BUS_LOOKUP_ENDPOINT=tables/BIEUDOCHAY_BUYT/Action
+# Auth
+GTVT_APPSHEET_API_KEY={V2-EYFgE-X83x3-xFTsK-y3eTp-L9F22-MKoI1-TGU28-sWcWd}
+GTVT_APPSHEET_AUTH_HEADER=ApplicationAccessKey

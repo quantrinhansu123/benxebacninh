@@ -15,21 +15,28 @@
 ### 3. **Url**
 📝 **Điền URL webhook của bạn:**
 
-```
-https://your-domain.com/api/webhooks/appsheet/badges
-```
+**⚠️ QUAN TRỌNG:** URL phải là **backend API URL**, không phải frontend URL!
 
 **Ví dụ cho localhost (test):**
 ```
 http://localhost:3000/api/webhooks/appsheet/badges
 ```
 
-**Ví dụ cho production:**
+**Ví dụ cho production (Render.com):**
 ```
-https://quanlybenxe.example.com/api/webhooks/appsheet/badges
+https://ben-xe-backend.onrender.com/api/webhooks/appsheet/badges
 ```
 
-> 💡 **Lưu ý:** Thay `your-domain.com` bằng domain thực tế của bạn
+**Hoặc nếu backend deploy ở nơi khác:**
+```
+https://your-backend-domain.com/api/webhooks/appsheet/badges
+```
+
+> 💡 **Lưu ý:** 
+> - Frontend URL: `https://benxebacninh-client.vercel.app` (KHÔNG dùng cho webhook)
+> - Backend URL: Cần URL của backend API (ví dụ: Render.com, Railway, Heroku, etc.)
+> - Webhook phải trỏ đến **backend API**, không phải frontend
+> - Kiểm tra backend URL trong Render.com dashboard hoặc nơi bạn deploy backend
 
 ---
 
