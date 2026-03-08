@@ -53,7 +53,7 @@ export function OperatorForm({ operator, mode, onClose }: OperatorFormProps) {
 
   // State for tax code duplicate warning
   const [taxCodeWarning, setTaxCodeWarning] = useState<string | null>(null)
-  const taxCodeCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const taxCodeCheckTimeoutRef = useRef<number | null>(null)
 
   const {
     register,
