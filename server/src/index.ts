@@ -47,6 +47,8 @@ const ALLOWED_ORIGINS = [
   // Firebase Hosting (legacy)
   'https://benxe-management-20251218.web.app',
   'https://benxe-management-20251218.firebaseapp.com',
+  // Vercel Frontend
+  'https://benxebacninh-client.vercel.app',
 ]
 
 // Middleware
@@ -70,7 +72,7 @@ app.use(cors({
       return callback(null, true)
     }
 
-    // Allow Vercel domains
+    // Allow Vercel domains (including all subdomains)
     if (normalizedOrigin.includes('.vercel.app')) {
       return callback(null, true)
     }
@@ -81,16 +83,22 @@ app.use(cors({
     }
 
     // Allow any origin from env CORS_ORIGIN
-    const envOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim())
-    if (envOrigins.includes(normalizedOrigin)) {
+    const envOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(o => o)
+    if (envOrigins.length > 0 && envOrigins.includes(normalizedOrigin)) {
       return callback(null, true)
     }
 
+    // Log rejected origin for debugging
+    console.warn(`[CORS] Rejected origin: ${normalizedOrigin}`)
     callback(new Error('Not allowed by CORS'))
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 }))
 app.use(bodyParser.json({ limit: '5mb' }))
 app.use(express.urlencoded({ extended: true }))
