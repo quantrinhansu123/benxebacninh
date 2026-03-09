@@ -1,24 +1,43 @@
 import { supabase } from '@/lib/supabase'
 import { toCamelCase, toSnakeCase } from '@/lib/supabase-utils'
+import { supabaseCache, getCacheKey } from '@/lib/supabase-cache'
 import type { Operator, OperatorInput } from '@/types'
 
+// Essential fields only to reduce bandwidth
+const OPERATOR_ESSENTIAL_FIELDS = 'id,code,name,tax_code,address,phone,email,is_active,created_at,updated_at'
+
 export const operatorService = {
-  getAll: async (isActive?: boolean): Promise<Operator[]> => {
+  getAll: async (isActive?: boolean, forceRefresh = false): Promise<Operator[]> => {
     try {
-      let query = supabase.from('operators').select('*')
+      const cacheKey = getCacheKey('operators', { isActive })
+      
+      // Check cache first (10 min TTL - operators don't change often)
+      if (!forceRefresh) {
+        const cached = supabaseCache.get<Operator[]>(cacheKey)
+        if (cached) {
+          return cached
+        }
+      }
+      
+      let query = supabase.from('operators').select(OPERATOR_ESSENTIAL_FIELDS)
       
       if (isActive !== undefined) {
         query = query.eq('is_active', isActive)
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false })
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(500)
 
       if (error) {
         console.error('Error fetching operators:', error)
         return []
       }
 
-      return (data || []).map(toCamelCase) as Operator[]
+      const result = (data || []).map(toCamelCase) as Operator[]
+      
+      // Cache result (10 minutes - operators are relatively static)
+      supabaseCache.set(cacheKey, result, 10 * 60 * 1000)
+      
+      return result
     } catch (error) {
       console.error('Error fetching operators:', error)
       return []

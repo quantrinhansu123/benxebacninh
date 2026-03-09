@@ -1,11 +1,25 @@
 import { supabase } from '@/lib/supabase'
 import { toCamelCase, toSnakeCase } from '@/lib/supabase-utils'
+import { supabaseCache, getCacheKey } from '@/lib/supabase-cache'
 import type { Vehicle, VehicleInput } from '@/types'
 
+// Essential fields only to reduce bandwidth
+const VEHICLE_ESSENTIAL_FIELDS = 'id,plate_number,operator_id,operator_name,seat_count,vehicle_type_id,is_active,created_at,updated_at'
+
 export const vehicleService = {
-  getAll: async (operatorId?: string, isActive?: boolean, includeLegacy?: boolean): Promise<Vehicle[]> => {
+  getAll: async (operatorId?: string, isActive?: boolean, includeLegacy?: boolean, forceRefresh = false): Promise<Vehicle[]> => {
     try {
-      let query = supabase.from('vehicles').select('*')
+      const cacheKey = getCacheKey('vehicles', { operatorId, isActive, includeLegacy })
+      
+      // Check cache first (5 min TTL)
+      if (!forceRefresh) {
+        const cached = supabaseCache.get<Vehicle[]>(cacheKey)
+        if (cached) {
+          return cached
+        }
+      }
+      
+      let query = supabase.from('vehicles').select(VEHICLE_ESSENTIAL_FIELDS)
       
       if (operatorId) {
         query = query.eq('operator_id', operatorId)
@@ -15,14 +29,19 @@ export const vehicleService = {
         query = query.eq('is_active', isActive)
       }
       
-      const { data, error } = await query.order('created_at', { ascending: false })
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(1000) // Limit to prevent huge queries
       
       if (error) {
         console.error('Error fetching vehicles:', error)
         return []
       }
       
-      return (data || []).map(toCamelCase) as Vehicle[]
+      const result = (data || []).map(toCamelCase) as Vehicle[]
+      
+      // Cache result
+      supabaseCache.set(cacheKey, result, 5 * 60 * 1000) // 5 minutes
+      
+      return result
     } catch (error) {
       console.error('Error fetching vehicles:', error)
       return []
