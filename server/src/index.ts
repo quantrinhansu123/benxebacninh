@@ -51,9 +51,9 @@ const ALLOWED_ORIGINS = [
   'https://benxebacninh-client.vercel.app',
 ]
 
-// Middleware
-app.use(cors({
-  origin: (origin, callback) => {
+// CORS helper function
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // Allow requests with no origin (like mobile apps, curl, or server-to-server)
     if (!origin) {
       return callback(null, true)
@@ -74,17 +74,20 @@ app.use(cors({
 
     // Allow Vercel domains (including all subdomains)
     if (normalizedOrigin.includes('.vercel.app')) {
+      console.log(`[CORS] Allowing Vercel origin: ${normalizedOrigin}`)
       return callback(null, true)
     }
 
     // Check explicit allowed origins
     if (ALLOWED_ORIGINS.includes(normalizedOrigin)) {
+      console.log(`[CORS] Allowing explicit origin: ${normalizedOrigin}`)
       return callback(null, true)
     }
 
     // Allow any origin from env CORS_ORIGIN
     const envOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(o => o)
     if (envOrigins.length > 0 && envOrigins.includes(normalizedOrigin)) {
+      console.log(`[CORS] Allowing env origin: ${normalizedOrigin}`)
       return callback(null, true)
     }
 
@@ -99,7 +102,13 @@ app.use(cors({
   maxAge: 86400, // 24 hours
   preflightContinue: false,
   optionsSuccessStatus: 204,
-}))
+}
+
+// Apply CORS middleware
+app.use(cors(corsOptions))
+
+// Explicit OPTIONS handler for all routes (fallback)
+app.options('*', cors(corsOptions))
 app.use(bodyParser.json({ limit: '5mb' }))
 app.use(express.urlencoded({ extended: true }))
 
