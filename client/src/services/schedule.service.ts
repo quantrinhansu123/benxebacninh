@@ -2,6 +2,8 @@ import { supabase } from '@/lib/supabase'
 import { toCamelCase, toSnakeCase } from '@/lib/supabase-utils'
 import type { Schedule, ScheduleInput, ValidateDayResponse, TripLimitResponse } from '@/types'
 
+// Type-safe schedule service using Supabase directly
+
 export const scheduleService = {
   getAll: async (routeId?: string, operatorId?: string, isActive?: boolean, direction?: string): Promise<Schedule[]> => {
     try {
