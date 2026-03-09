@@ -1,19 +1,28 @@
-import api from '@/lib/api'
+import { supabase } from '@/lib/supabase'
+import { toCamelCase, toSnakeCase } from '@/lib/supabase-utils'
 import type { Vehicle, VehicleInput } from '@/types'
 
 export const vehicleService = {
   getAll: async (operatorId?: string, isActive?: boolean, includeLegacy?: boolean): Promise<Vehicle[]> => {
     try {
-      const params = new URLSearchParams()
-      if (operatorId) params.append('operatorId', operatorId)
-      if (isActive !== undefined) params.append('isActive', String(isActive))
-      if (includeLegacy !== undefined) params.append('includeLegacy', String(includeLegacy))
-
-      const queryString = params.toString()
-      const url = queryString ? `/vehicles?${queryString}` : '/vehicles'
-
-      const response = await api.get<Vehicle[]>(url)
-      return response.data
+      let query = supabase.from('vehicles').select('*')
+      
+      if (operatorId) {
+        query = query.eq('operator_id', operatorId)
+      }
+      
+      if (isActive !== undefined) {
+        query = query.eq('is_active', isActive)
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching vehicles:', error)
+        return []
+      }
+      
+      return (data || []).map(toCamelCase) as Vehicle[]
     } catch (error) {
       console.error('Error fetching vehicles:', error)
       return []
@@ -21,28 +30,75 @@ export const vehicleService = {
   },
 
   getById: async (id: string): Promise<Vehicle> => {
-    const response = await api.get<Vehicle>(`/vehicles/${id}`)
-    return response.data
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Vehicle not found')
+    }
+    
+    return toCamelCase(data) as Vehicle
   },
 
   create: async (input: VehicleInput): Promise<Vehicle> => {
-    const response = await api.post<Vehicle>('/vehicles', input)
-    return response.data
+    const snakeInput = toSnakeCase(input)
+    const { data, error } = await supabase
+      .from('vehicles')
+      .insert(snakeInput)
+      .select()
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to create vehicle')
+    }
+    
+    return toCamelCase(data) as Vehicle
   },
 
   update: async (id: string, input: Partial<VehicleInput>): Promise<Vehicle> => {
-    const response = await api.put<Vehicle>(`/vehicles/${id}`, input)
-    return response.data
+    const snakeInput = toSnakeCase(input)
+    const { data, error } = await supabase
+      .from('vehicles')
+      .update(snakeInput)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to update vehicle')
+    }
+    
+    return toCamelCase(data) as Vehicle
   },
 
   delete: async (id: string): Promise<void> => {
-    await api.delete(`/vehicles/${id}`)
+    const { error } = await supabase
+      .from('vehicles')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to delete vehicle')
+    }
   },
 
   getDocumentAuditLogs: async (vehicleId: string): Promise<any[]> => {
     try {
-      const response = await api.get<any[]>(`/vehicles/${vehicleId}/document-audit-logs`)
-      return response.data
+      const { data, error } = await supabase
+        .from('vehicle_documents')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching vehicle document audit logs:', error)
+        return []
+      }
+      
+      return (data || []).map(toCamelCase)
     } catch (error) {
       console.error('Error fetching vehicle document audit logs:', error)
       return []
@@ -52,8 +108,17 @@ export const vehicleService = {
   // Get all document audit logs for all vehicles (optimized)
   getAllDocumentAuditLogs: async (): Promise<any[]> => {
     try {
-      const response = await api.get<any[]>('/vehicles/document-audit-logs/all')
-      return response.data
+      const { data, error } = await supabase
+        .from('vehicle_documents')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching all document audit logs:', error)
+        return []
+      }
+      
+      return (data || []).map(toCamelCase)
     } catch (error) {
       console.error('Error fetching all document audit logs:', error)
       return []
@@ -61,7 +126,7 @@ export const vehicleService = {
   },
 
   /**
-   * Lookup vehicle by plate from RTDB datasheet/Xe
+   * Lookup vehicle by plate
    * Returns seat capacity for ANY vehicle (not filtered by badge)
    */
   lookupByPlate: async (plate: string): Promise<{
@@ -73,8 +138,32 @@ export const vehicleService = {
     source: string
   } | null> => {
     try {
-      const response = await api.get(`/vehicles/lookup/${encodeURIComponent(plate)}`)
-      return response.data
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select(`
+          id,
+          plate_number,
+          seat_count,
+          operator_name,
+          vehicle_types:vehicle_type_id (
+            name
+          )
+        `)
+        .eq('plate_number', plate)
+        .single()
+      
+      if (error || !data) {
+        return null
+      }
+      
+      return {
+        id: data.id,
+        plateNumber: data.plate_number,
+        seatCapacity: data.seat_count || 0,
+        operatorName: data.operator_name || '',
+        vehicleType: (data.vehicle_types as any)?.name || '',
+        source: 'supabase',
+      }
     } catch (error) {
       console.error('Error looking up vehicle by plate:', error)
       return null

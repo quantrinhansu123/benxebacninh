@@ -1,4 +1,5 @@
-import api from '@/lib/api'
+import { supabase } from '@/lib/supabase'
+import { toCamelCase, toSnakeCase } from '@/lib/supabase-utils'
 import { toast } from 'react-toastify'
 import type { Driver, DriverInput } from '@/types'
 
@@ -14,24 +15,35 @@ export const driverService = {
         return driversCache.data
       }
 
-      const params = new URLSearchParams()
-      if (operatorId) params.append('operatorId', operatorId)
-      if (isActive !== undefined) params.append('isActive', String(isActive))
+      let query = supabase.from('drivers').select('*')
+      
+      if (operatorId) {
+        query = query.eq('operator_id', operatorId)
+      }
+      
+      if (isActive !== undefined) {
+        query = query.eq('is_active', isActive)
+      }
 
-      const queryString = params.toString()
-      const url = queryString ? `/drivers?${queryString}` : '/drivers'
+      const { data, error } = await query.order('created_at', { ascending: false })
 
-      const response = await api.get<Driver[]>(url)
+      if (error) {
+        console.error('Error fetching drivers:', error)
+        if (driversCache) return driversCache.data
+        toast.error('Không thể tải danh sách lái xe. Vui lòng thử lại.')
+        return []
+      }
+
+      const drivers = (data || []).map(toCamelCase) as Driver[]
 
       // Cache unfiltered results
       if (!operatorId && isActive === undefined) {
-        driversCache = { data: response.data, timestamp: Date.now() }
+        driversCache = { data: drivers, timestamp: Date.now() }
       }
 
-      return response.data
+      return drivers
     } catch (error) {
       console.error('Error fetching drivers:', error)
-      // Return stale cache on error
       if (driversCache) return driversCache.data
       toast.error('Không thể tải danh sách lái xe. Vui lòng thử lại.')
       return []
@@ -43,21 +55,62 @@ export const driverService = {
   },
 
   getById: async (id: string): Promise<Driver> => {
-    const response = await api.get<Driver>(`/drivers/${id}`)
-    return response.data
+    const { data, error } = await supabase
+      .from('drivers')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Driver not found')
+    }
+    
+    return toCamelCase(data) as Driver
   },
 
   create: async (input: DriverInput): Promise<Driver> => {
-    const response = await api.post<Driver>('/drivers', input)
-    return response.data
+    const snakeInput = toSnakeCase(input)
+    const { data, error } = await supabase
+      .from('drivers')
+      .insert(snakeInput)
+      .select()
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to create driver')
+    }
+    
+    driverService.clearCache()
+    return toCamelCase(data) as Driver
   },
 
   update: async (id: string, input: Partial<DriverInput>): Promise<Driver> => {
-    const response = await api.put<Driver>(`/drivers/${id}`, input)
-    return response.data
+    const snakeInput = toSnakeCase(input)
+    const { data, error } = await supabase
+      .from('drivers')
+      .update(snakeInput)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to update driver')
+    }
+    
+    driverService.clearCache()
+    return toCamelCase(data) as Driver
   },
 
   delete: async (id: string): Promise<void> => {
-    await api.delete(`/drivers/${id}`)
+    const { error } = await supabase
+      .from('drivers')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to delete driver')
+    }
+    
+    driverService.clearCache()
   },
 }

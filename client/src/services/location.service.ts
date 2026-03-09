@@ -1,17 +1,24 @@
-import api from '@/lib/api'
+import { supabase } from '@/lib/supabase'
+import { toCamelCase, toSnakeCase } from '@/lib/supabase-utils'
 import type { Location, LocationInput } from '@/types'
 
 export const locationService = {
   getAll: async (isActive?: boolean): Promise<Location[]> => {
     try {
-      const params = new URLSearchParams()
-      if (isActive !== undefined) params.append('isActive', String(isActive))
+      let query = supabase.from('locations').select('*')
+      
+      if (isActive !== undefined) {
+        query = query.eq('is_active', isActive)
+      }
 
-      const queryString = params.toString()
-      const url = queryString ? `/locations?${queryString}` : '/locations'
+      const { data, error } = await query.order('created_at', { ascending: false })
 
-      const response = await api.get<Location[]>(url)
-      return response.data
+      if (error) {
+        console.error('Error fetching locations:', error)
+        return []
+      }
+
+      return (data || []).map(toCamelCase) as Location[]
     } catch (error) {
       console.error('Error fetching locations:', error)
       return []
@@ -19,21 +26,58 @@ export const locationService = {
   },
 
   getById: async (id: string): Promise<Location> => {
-    const response = await api.get<Location>(`/locations/${id}`)
-    return response.data
+    const { data, error } = await supabase
+      .from('locations')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Location not found')
+    }
+    
+    return toCamelCase(data) as Location
   },
 
   create: async (input: LocationInput): Promise<Location> => {
-    const response = await api.post<Location>('/locations', input)
-    return response.data
+    const snakeInput = toSnakeCase(input)
+    const { data, error } = await supabase
+      .from('locations')
+      .insert(snakeInput)
+      .select()
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to create location')
+    }
+    
+    return toCamelCase(data) as Location
   },
 
   update: async (id: string, input: Partial<LocationInput>): Promise<Location> => {
-    const response = await api.put<Location>(`/locations/${id}`, input)
-    return response.data
+    const snakeInput = toSnakeCase(input)
+    const { data, error } = await supabase
+      .from('locations')
+      .update(snakeInput)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to update location')
+    }
+    
+    return toCamelCase(data) as Location
   },
 
   delete: async (id: string): Promise<void> => {
-    await api.delete(`/locations/${id}`)
+    const { error } = await supabase
+      .from('locations')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to delete location')
+    }
   },
 }

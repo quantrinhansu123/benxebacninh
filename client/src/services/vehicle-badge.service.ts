@@ -1,4 +1,4 @@
-import api from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 
 export type OperationalStatus = 'trong_ben' | 'dang_chay'
 
@@ -77,13 +77,22 @@ export const vehicleBadgeService = {
         return badgesCache
       }
       
-      const response = await api.get<VehicleBadge[]>('/vehicle-badges')
-      badgesCache = response.data
+      const { data, error } = await supabase
+        .from('vehicle_badges')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        console.error('Error fetching vehicle badges:', error)
+        return badgesCache || []
+      }
+      
+      badgesCache = (data || []) as VehicleBadge[]
       badgesCacheTime = now
-      return response.data
+      return badgesCache
     } catch (error) {
       console.error('Error fetching vehicle badges:', error)
-      return badgesCache || [] // Return stale cache on error
+      return badgesCache || []
     }
   },
   
@@ -94,8 +103,17 @@ export const vehicleBadgeService = {
 
   getById: async (id: string): Promise<VehicleBadge | null> => {
     try {
-      const response = await api.get<VehicleBadge>(`/vehicle-badges/${id}`)
-      return response.data
+      const { data, error } = await supabase
+        .from('vehicle_badges')
+        .select('*')
+        .eq('id', id)
+        .single()
+      
+      if (error || !data) {
+        return null
+      }
+      
+      return data as VehicleBadge
     } catch (error) {
       console.error('Error fetching vehicle badge by id:', error)
       return null
@@ -104,8 +122,17 @@ export const vehicleBadgeService = {
 
   getByPlateNumber: async (plateNumber: string): Promise<VehicleBadge | null> => {
     try {
-      const response = await api.get<VehicleBadge>(`/vehicle-badges/by-plate/${encodeURIComponent(plateNumber)}`)
-      return response.data
+      const { data, error } = await supabase
+        .from('vehicle_badges')
+        .select('*')
+        .eq('license_plate_sheet', plateNumber)
+        .single()
+      
+      if (error || !data) {
+        return null
+      }
+      
+      return data as VehicleBadge
     } catch (error) {
       console.error('Error fetching vehicle badge by plate number:', error)
       return null
@@ -114,10 +141,35 @@ export const vehicleBadgeService = {
 
   getAllByPlateNumber: async (plateNumber: string): Promise<AllBadgesResponse> => {
     try {
-      const response = await api.get<AllBadgesResponse>(
-        `/vehicle-badges/by-plate/${encodeURIComponent(plateNumber)}/all`
-      )
-      return response.data
+      const { data, error } = await supabase
+        .from('vehicle_badges')
+        .select('*')
+        .eq('license_plate_sheet', plateNumber)
+        .order('created_at', { ascending: false })
+      
+      if (error) {
+        return { badges: [], validCount: 0, expiredCount: 0 }
+      }
+      
+      const badges = (data || []) as VehicleBadge[]
+      const now = new Date()
+      const validBadges = badges.filter(b => {
+        if (!b.expiry_date) return true
+        return new Date(b.expiry_date) >= now
+      })
+      const expiredBadges = badges.filter(b => {
+        if (!b.expiry_date) return false
+        return new Date(b.expiry_date) < now
+      })
+      
+      return {
+        badges: badges.map(b => ({
+          ...b,
+          is_expired: b.expiry_date ? new Date(b.expiry_date) < now : false,
+        })),
+        validCount: validBadges.length,
+        expiredCount: expiredBadges.length,
+      }
     } catch (error) {
       console.error('Error fetching all badges by plate number:', error)
       return { badges: [], validCount: 0, expiredCount: 0 }
@@ -131,38 +183,88 @@ export const vehicleBadgeService = {
     expiringSoon: number
   }> => {
     try {
-      const response = await api.get<{
-        total: number
-        active: number
-        expired: number
-        expiringSoon: number
-      }>('/vehicle-badges/stats')
-      return response.data
+      const { data, error } = await supabase
+        .from('vehicle_badges')
+        .select('expiry_date, status')
+      
+      if (error) {
+        return { total: 0, active: 0, expired: 0, expiringSoon: 0 }
+      }
+      
+      const now = new Date()
+      const soonDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days
+      
+      let active = 0
+      let expired = 0
+      let expiringSoon = 0
+      
+      data?.forEach(badge => {
+        if (badge.status === 'active' || badge.status === 'valid') {
+          active++
+        }
+        if (badge.expiry_date) {
+          const expiry = new Date(badge.expiry_date)
+          if (expiry < now) {
+            expired++
+          } else if (expiry <= soonDate) {
+            expiringSoon++
+          }
+        }
+      })
+      
+      return {
+        total: data?.length || 0,
+        active,
+        expired,
+        expiringSoon,
+      }
     } catch (error) {
       console.error('Error fetching vehicle badge stats:', error)
-      return {
-        total: 0,
-        active: 0,
-        expired: 0,
-        expiringSoon: 0,
-      }
+      return { total: 0, active: 0, expired: 0, expiringSoon: 0 }
     }
   },
 
   create: async (data: CreateVehicleBadgeInput): Promise<VehicleBadge> => {
-    const response = await api.post<VehicleBadge>('/vehicle-badges', data)
+    const { data: newBadge, error } = await supabase
+      .from('vehicle_badges')
+      .insert(data)
+      .select()
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to create vehicle badge')
+    }
+    
     vehicleBadgeService.clearCache()
-    return response.data
+    return newBadge as VehicleBadge
   },
 
   update: async (id: string, data: UpdateVehicleBadgeInput): Promise<VehicleBadge> => {
-    const response = await api.put<VehicleBadge>(`/vehicle-badges/${id}`, data)
+    const { data: updatedBadge, error } = await supabase
+      .from('vehicle_badges')
+      .update(data)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to update vehicle badge')
+    }
+    
     vehicleBadgeService.clearCache()
-    return response.data
+    return updatedBadge as VehicleBadge
   },
 
   delete: async (id: string): Promise<void> => {
-    await api.delete(`/vehicle-badges/${id}`)
+    const { error } = await supabase
+      .from('vehicle_badges')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      throw new Error(error.message || 'Failed to delete vehicle badge')
+    }
+    
     vehicleBadgeService.clearCache()
   },
 }
