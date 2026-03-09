@@ -1,8 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "skipLibCheck": true,
-    "types": []
+    "skipLibCheck": true
   },
   "exclude": ["node_modules", "dist", "src/**/__tests__/**", "src/**/*.test.ts", "src/db/migrations/etl/**", "src/scripts/**"]
 }

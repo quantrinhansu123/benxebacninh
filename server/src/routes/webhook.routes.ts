@@ -24,7 +24,7 @@ router.post('/appsheet/routes', appsheetRoutesWebhook)
 router.post('/appsheet/operators', appsheetOperatorsWebhook)
 
 // Health check cho webhook
-router.get('/health', (_req, res) => {
+router.get('/health', (_req: any, res: any) => {
   res.json({ status: 'ok', service: 'webhook' })
 })
 

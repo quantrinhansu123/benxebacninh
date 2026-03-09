@@ -61,11 +61,9 @@ export const appsheetBadgesWebhook = async (req: Request, res: Response) => {
       body: { badges },
     } as Request
 
-    let syncResponse: any = null
     const syncRes = {
       status: (code: number) => ({
         json: (data: any) => {
-          syncResponse = { code, data }
           if (code >= 400) {
             console.error('[Webhook] Sync failed:', data)
           } else {
@@ -79,9 +77,10 @@ export const appsheetBadgesWebhook = async (req: Request, res: Response) => {
     await syncBadgesFromAppSheet(syncReq, syncRes)
 
     // Response đã được gửi trong syncRes
+    return
   } catch (error) {
     console.error('[Webhook] Error processing badges webhook:', error)
-    res.status(500).json({ error: 'Webhook processing failed', details: error instanceof Error ? error.message : 'Unknown error' })
+    return res.status(500).json({ error: 'Webhook processing failed', details: error instanceof Error ? error.message : 'Unknown error' })
   }
 }
 
@@ -125,9 +124,10 @@ export const appsheetVehiclesWebhook = async (req: Request, res: Response) => {
     } as Response
 
     await syncVehiclesFromAppSheet(syncReq, syncRes)
+    return
   } catch (error) {
     console.error('[Webhook] Error processing vehicles webhook:', error)
-    res.status(500).json({ error: 'Webhook processing failed' })
+    return res.status(500).json({ error: 'Webhook processing failed' })
   }
 }
 
@@ -171,9 +171,10 @@ export const appsheetRoutesWebhook = async (req: Request, res: Response) => {
     } as Response
 
     await syncRoutesFromAppSheet(syncReq, syncRes)
+    return
   } catch (error) {
     console.error('[Webhook] Error processing routes webhook:', error)
-    res.status(500).json({ error: 'Webhook processing failed' })
+    return res.status(500).json({ error: 'Webhook processing failed' })
   }
 }
 
@@ -217,8 +218,9 @@ export const appsheetOperatorsWebhook = async (req: Request, res: Response) => {
     } as Response
 
     await syncOperatorsFromAppSheet(syncReq, syncRes)
+    return
   } catch (error) {
     console.error('[Webhook] Error processing operators webhook:', error)
-    res.status(500).json({ error: 'Webhook processing failed' })
+    return res.status(500).json({ error: 'Webhook processing failed' })
   }
 }
