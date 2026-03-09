@@ -1,3 +1,9 @@
+/**
+ * @deprecated Backend API client - DEPRECATED
+ * Đã chuyển sang Supabase trực tiếp
+ * File này chỉ giữ lại để backward compatibility
+ * Không nên sử dụng mới, hãy dùng Supabase client thay thế
+ */
 import axios, { AxiosError, AxiosInstance } from 'axios'
 
 const api: AxiosInstance = axios.create({
