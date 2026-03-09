@@ -82,7 +82,7 @@ CREATE INDEX IF NOT EXISTS operators_active_idx ON operators(is_active);
 -- 6. USERS (Người dùng)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   firebase_id VARCHAR(100) UNIQUE,
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255),
@@ -292,7 +292,7 @@ CREATE TABLE IF NOT EXISTS dispatch_records (
   driver_id UUID REFERENCES drivers(id),
   route_id UUID REFERENCES routes(id),
   operator_id UUID REFERENCES operators(id),
-  user_id UUID REFERENCES users(id),
+  user_id TEXT REFERENCES users(id),
   shift_id UUID REFERENCES shifts(id),
   dispatch_date DATE NOT NULL,
   entry_time TIMESTAMPTZ,
@@ -373,7 +373,7 @@ CREATE TABLE IF NOT EXISTS operation_notices (
 -- =====================================================
 CREATE TABLE IF NOT EXISTS audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id),
+  user_id TEXT REFERENCES users(id),
   action VARCHAR(100),
   table_name VARCHAR(100),
   record_id UUID,
