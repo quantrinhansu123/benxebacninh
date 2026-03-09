@@ -237,23 +237,34 @@ CREATE INDEX IF NOT EXISTS schedules_operator_id_idx ON schedules(operator_id);
 -- =====================================================
 CREATE TABLE IF NOT EXISTS vehicle_badges (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  firebase_id VARCHAR(100) UNIQUE,
+  badge_number VARCHAR(50),
+  plate_number VARCHAR(20) NOT NULL,
   vehicle_id UUID REFERENCES vehicles(id),
+  operator_id UUID REFERENCES operators(id),
   route_id UUID REFERENCES routes(id),
+  badge_type VARCHAR(50),
   route_code VARCHAR(50),
   route_name VARCHAR(255),
-  operator_id UUID REFERENCES operators(id),
-  license_plate_sheet VARCHAR(20),
-  badge_color VARCHAR(50),
-  issue_type VARCHAR(50),
-  file_number VARCHAR(100),
-  expiry_date DATE,
+  issue_date VARCHAR(10),
+  expiry_date VARCHAR(10),
+  status VARCHAR(50) DEFAULT 'active',
+  is_active BOOLEAN DEFAULT TRUE NOT NULL,
+  operator_name VARCHAR(255),
+  operator_code VARCHAR(50),
   metadata JSONB,
+  synced_at TIMESTAMPTZ,
+  source VARCHAR(50) DEFAULT 'manual',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS vehicle_badges_vehicle_id_idx ON vehicle_badges(vehicle_id);
 CREATE INDEX IF NOT EXISTS vehicle_badges_route_id_idx ON vehicle_badges(route_id);
+CREATE INDEX IF NOT EXISTS badges_plate_idx ON vehicle_badges(plate_number);
+CREATE INDEX IF NOT EXISTS badges_operator_idx ON vehicle_badges(operator_id);
+CREATE INDEX IF NOT EXISTS badges_route_code_idx ON vehicle_badges(route_code);
+CREATE INDEX IF NOT EXISTS badges_expiry_idx ON vehicle_badges(expiry_date);
 
 -- =====================================================
 -- 13. VEHICLE_DOCUMENTS (Tài liệu xe)
@@ -375,16 +386,30 @@ CREATE INDEX IF NOT EXISTS audit_logs_table_name_idx ON audit_logs(table_name);
 CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs(created_at);
 
 -- =====================================================
+-- ADD FOREIGN KEY CONSTRAINTS (After all tables created)
+-- =====================================================
+-- Note: Some foreign keys are already defined inline above
+-- This section is for any additional constraints needed
+
+-- =====================================================
 -- DISABLE RLS TEMPORARILY FOR MIGRATION
 -- =====================================================
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE operators DISABLE ROW LEVEL SECURITY;
-ALTER TABLE vehicles DISABLE ROW LEVEL SECURITY;
-ALTER TABLE drivers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE routes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE schedules DISABLE ROW LEVEL SECURITY;
-ALTER TABLE vehicle_badges DISABLE ROW LEVEL SECURITY;
-ALTER TABLE dispatch_records DISABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  -- Disable RLS on all tables (if they exist)
+  ALTER TABLE IF EXISTS users DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS operators DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS vehicles DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS drivers DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS routes DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS schedules DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS vehicle_badges DISABLE ROW LEVEL SECURITY;
+  ALTER TABLE IF EXISTS dispatch_records DISABLE ROW LEVEL SECURITY;
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Ignore errors if tables don't exist yet
+    NULL;
+END $$;
 
 -- =====================================================
 -- GRANT PERMISSIONS
