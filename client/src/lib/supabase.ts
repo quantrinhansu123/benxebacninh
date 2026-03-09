@@ -25,10 +25,40 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in client/.env')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-})
+// Validate key format (basic check)
+if (supabaseAnonKey && supabaseAnonKey.length < 20) {
+  console.error('❌ Invalid Supabase API key format. Key seems too short.')
+  console.error('📖 Please check your Supabase Dashboard: Settings → API → Project API keys → anon/public key')
+}
+
+// Create Supabase client with error handling
+let supabase: ReturnType<typeof createClient>
+
+try {
+  supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  })
+  
+  // Test connection (optional - can be removed in production)
+  if (import.meta.env.DEV) {
+    supabase.from('users').select('id').limit(1).then(({ error }) => {
+      if (error && error.message?.includes('Invalid API key')) {
+        console.error('❌ Invalid Supabase API key!')
+        console.error('📖 Please update VITE_SUPABASE_ANON_KEY in client/.env')
+        console.error('📖 Get the correct key from Supabase Dashboard: Settings → API')
+        console.error('🔗 Dashboard: https://supabase.com/dashboard/project/_/settings/api')
+      }
+    }).catch(() => {
+      // Ignore connection test errors
+    })
+  }
+} catch (error) {
+  console.error('❌ Failed to create Supabase client:', error)
+  throw new Error('Failed to initialize Supabase. Please check your API credentials.')
+}
+
+export { supabase }
