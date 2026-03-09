@@ -6,8 +6,9 @@ let supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.
 
 // Fallback values for development (replace with your actual Supabase project credentials)
 // TODO: Remove fallback and use .env file in production
-const fallbackUrl = 'https://gsjhsmxyxjyiqovauyrp.supabase.co'
-const fallbackKey = 'sb_publishable_vXBSa3eP8cvjIK2qLWI6Ug_FoYm4CNy'
+// NEW Supabase project (after migration)
+const fallbackUrl = 'https://ofdpkojsuuydkhyoeywj.supabase.co'
+const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mZHBrb2pzdXV5ZGtoeW9leXdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMzk2NjcsImV4cCI6MjA4NTYxNTY2N30.g37sDeK0IsiP6db8Lffh7jIUA76TqN6cvLLMs9YFvAQ'
 
 // Use fallback if env vars are not set (development only)
 if (!supabaseUrl || !supabaseAnonKey) {
