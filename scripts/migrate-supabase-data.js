@@ -81,39 +81,19 @@ class SupabaseMigrator {
 
     console.log(`📥 Importing ${data.length} records into ${table}...`)
 
-    // Get table schema to filter out non-existent columns
-    const { data: tableInfo, error: schemaError } = await this.newClient
-      .from(table)
-      .select('*')
-      .limit(0)
-    
-    // If we can't get schema, try to get column names from first record
-    let allowedColumns = null
-    if (data.length > 0) {
-      // Try to insert empty object to see what columns are accepted
-      // For now, we'll filter columns manually based on common patterns
-      allowedColumns = Object.keys(data[0] || {})
-    }
-
     let imported = 0
-    const batchSize = 100
+    const batchSize = 50 // Reduced batch size for better error handling
 
     for (let i = 0; i < data.length; i += batchSize) {
       let batch = data.slice(i, i + batchSize)
       
-      // Filter out columns that might not exist in new schema
-      // This is a simple approach - in production you'd query information_schema
-      batch = batch.map(record => {
-        const filtered = {}
-        for (const [key, value] of Object.entries(record)) {
-          // Only include common columns or columns that likely exist
-          // Skip columns that are likely to cause errors
-          if (key !== 'address' || table === 'users') {
-            filtered[key] = value
-          }
-        }
-        return filtered
-      })
+      // Try to insert one record first to see what columns are accepted
+      // This will help us understand the schema
+      if (i === 0 && batch.length > 0) {
+        const testRecord = batch[0]
+        const testKeys = Object.keys(testRecord)
+        console.log(`  🔍 Testing schema with ${testKeys.length} columns...`)
+      }
       
       const { error } = await this.newClient
         .from(table)
