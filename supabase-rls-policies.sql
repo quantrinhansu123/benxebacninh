@@ -7,9 +7,20 @@
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
 -- 2. Drop existing policies nếu có (để tránh conflict)
-DROP POLICY IF EXISTS "Allow anon users to read users for login" ON users;
-DROP POLICY IF EXISTS "Users can read own profile" ON users;
-DROP POLICY IF EXISTS "Backend service role access" ON users;
+-- Note: Có thể có nhiều policies với cùng tên, nên cần drop tất cả
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    -- Drop all existing policies on users table
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'users'
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON users';
+    END LOOP;
+END $$;
 
 -- 3. Policy: Allow anon users to SELECT users table (cần cho login)
 CREATE POLICY "Allow anon users to read users for login"
@@ -38,8 +49,19 @@ WITH CHECK (true);
 
 -- Vehicles
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon users to read vehicles" ON vehicles;
-DROP POLICY IF EXISTS "Allow anon users to modify vehicles" ON vehicles;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'vehicles'
+        AND (policyname LIKE '%anon%' OR policyname LIKE '%service_role%')
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON vehicles';
+    END LOOP;
+END $$;
 
 CREATE POLICY "Allow anon users to read vehicles"
 ON vehicles
@@ -56,8 +78,19 @@ WITH CHECK (true);
 
 -- Drivers
 ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon users to read drivers" ON drivers;
-DROP POLICY IF EXISTS "Allow anon users to modify drivers" ON drivers;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'drivers'
+        AND (policyname LIKE '%anon%' OR policyname LIKE '%service_role%')
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON drivers';
+    END LOOP;
+END $$;
 
 CREATE POLICY "Allow anon users to read drivers"
 ON drivers
@@ -74,8 +107,19 @@ WITH CHECK (true);
 
 -- Operators
 ALTER TABLE operators ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon users to read operators" ON operators;
-DROP POLICY IF EXISTS "Allow anon users to modify operators" ON operators;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'operators'
+        AND (policyname LIKE '%anon%' OR policyname LIKE '%service_role%')
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON operators';
+    END LOOP;
+END $$;
 
 CREATE POLICY "Allow anon users to read operators"
 ON operators
@@ -92,8 +136,19 @@ WITH CHECK (true);
 
 -- Routes
 ALTER TABLE routes ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon users to read routes" ON routes;
-DROP POLICY IF EXISTS "Allow anon users to modify routes" ON routes;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'routes'
+        AND (policyname LIKE '%anon%' OR policyname LIKE '%service_role%')
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON routes';
+    END LOOP;
+END $$;
 
 CREATE POLICY "Allow anon users to read routes"
 ON routes
@@ -110,8 +165,19 @@ WITH CHECK (true);
 
 -- Schedules
 ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon users to read schedules" ON schedules;
-DROP POLICY IF EXISTS "Allow anon users to modify schedules" ON schedules;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'schedules'
+        AND (policyname LIKE '%anon%' OR policyname LIKE '%service_role%')
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON schedules';
+    END LOOP;
+END $$;
 
 CREATE POLICY "Allow anon users to read schedules"
 ON schedules
@@ -128,8 +194,19 @@ WITH CHECK (true);
 
 -- Locations
 ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon users to read locations" ON locations;
-DROP POLICY IF EXISTS "Allow anon users to modify locations" ON locations;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'locations'
+        AND (policyname LIKE '%anon%' OR policyname LIKE '%service_role%')
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON locations';
+    END LOOP;
+END $$;
 
 CREATE POLICY "Allow anon users to read locations"
 ON locations
@@ -146,8 +223,19 @@ WITH CHECK (true);
 
 -- Vehicle Badges
 ALTER TABLE vehicle_badges ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon users to read vehicle_badges" ON vehicle_badges;
-DROP POLICY IF EXISTS "Allow anon users to modify vehicle_badges" ON vehicle_badges;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'vehicle_badges'
+        AND (policyname LIKE '%anon%' OR policyname LIKE '%service_role%')
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON vehicle_badges';
+    END LOOP;
+END $$;
 
 CREATE POLICY "Allow anon users to read vehicle_badges"
 ON vehicle_badges
@@ -164,8 +252,19 @@ WITH CHECK (true);
 
 -- Dispatch Records
 ALTER TABLE dispatch_records ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon users to read dispatch_records" ON dispatch_records;
-DROP POLICY IF EXISTS "Allow anon users to modify dispatch_records" ON dispatch_records;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname 
+        FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'dispatch_records'
+        AND (policyname LIKE '%anon%' OR policyname LIKE '%service_role%')
+    ) LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON dispatch_records';
+    END LOOP;
+END $$;
 
 CREATE POLICY "Allow anon users to read dispatch_records"
 ON dispatch_records
