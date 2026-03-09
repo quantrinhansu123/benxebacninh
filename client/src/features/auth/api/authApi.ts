@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
+import { isPaymentRequiredError, getSupabaseErrorMessage } from '@/lib/supabase-error-handler'
 import type { LoginCredentials, RegisterCredentials, User, AuthResponse } from '../types'
 
 export const authApi = {
@@ -23,10 +24,18 @@ export const authApi = {
         .single()
 
       if (userError) {
+        // Check for payment/quota errors
+        if (isPaymentRequiredError(userError)) {
+          const errorMsg = getSupabaseErrorMessage(userError)
+          console.error('🚨 Supabase Payment Required Error:', errorMsg)
+          throw new Error('Dịch vụ tạm thời không khả dụng do vượt quá hạn mức. Vui lòng liên hệ quản trị viên hoặc nâng cấp gói dịch vụ Supabase.')
+        }
+        
         // PGRST116 is specific for 0 rows in .single()
         if (userError.code === 'PGRST116') {
           throw new Error('Thông tin đăng nhập không chính xác. Vui lòng kiểm tra lại email và mật khẩu.')
         }
+        
         throw new Error(userError.message || 'Không thể kết nối đến database')
       }
 
