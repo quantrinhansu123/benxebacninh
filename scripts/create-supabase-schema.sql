@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash VARCHAR(255),
   name VARCHAR(255),
   phone VARCHAR(20),
+  address VARCHAR(500),
   role VARCHAR(50) DEFAULT 'user' NOT NULL,
   is_active BOOLEAN DEFAULT TRUE NOT NULL,
   email_verified BOOLEAN DEFAULT FALSE,
