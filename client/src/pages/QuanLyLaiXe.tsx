@@ -579,7 +579,7 @@ export default function QuanLyLaiXe() {
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-center">
                             <ActionMenu
                               items={[
                                 {
