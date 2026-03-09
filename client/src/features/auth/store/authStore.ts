@@ -8,7 +8,7 @@ interface AuthStoreState {
   isLoading: boolean
   login: (usernameOrEmail: string, password: string, rememberMe?: boolean) => Promise<void>
   register: (credentials: RegisterCredentials) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
   checkAuth: () => Promise<void>
   updateProfile: (data: { fullName?: string; email?: string; phone?: string }) => Promise<void>
 }
@@ -38,21 +38,28 @@ export const useAuthStore = create<AuthStoreState>((set) => ({
     }
   },
 
-  logout: () => {
-    authApi.logout()
-    set({ user: null, isAuthenticated: false })
+  logout: async () => {
+    try {
+      await authApi.logout()
+      set({ user: null, isAuthenticated: false })
+    } catch (error) {
+      console.error('Error logging out:', error)
+      // Still clear local state even if logout fails
+      set({ user: null, isAuthenticated: false })
+    }
   },
 
   checkAuth: async () => {
-    if (authApi.isAuthenticated()) {
-      try {
+    try {
+      const authenticated = authApi.isAuthenticated()
+      if (authenticated) {
         const user = await authApi.getCurrentUser()
         set({ user, isAuthenticated: true, isLoading: false })
-      } catch {
+      } else {
         set({ user: null, isAuthenticated: false, isLoading: false })
       }
-    } else {
-      set({ isLoading: false })
+    } catch {
+      set({ user: null, isAuthenticated: false, isLoading: false })
     }
   },
 

@@ -62,8 +62,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [isBaoCaoOpen, setIsBaoCaoOpen] = useState(false);
   const [isQuanLyOpen, setIsQuanLyOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     window.location.href = "/login";
   };
 

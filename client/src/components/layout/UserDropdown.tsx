@@ -23,8 +23,8 @@ export function UserDropdown({
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     setUserMenuOpen(false)
     onMenuClose?.()
     navigate("/")

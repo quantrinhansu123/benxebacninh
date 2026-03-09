@@ -30,8 +30,8 @@ export function useAuth() {
     register: async (credentials: RegisterCredentials) => {
       await register(credentials)
     },
-    logout: () => {
-      logout()
+    logout: async () => {
+      await logout()
     },
     checkAuth: async () => {
       await checkAuth()
